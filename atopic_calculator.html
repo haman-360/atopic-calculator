@@ -1172,9 +1172,15 @@
     // 混合軟膏かどうか判定
     function isMixed(d) { return !!PRESETS[d.preset].mixed; }
 
-    // 混合軟膏プラン一覧を生成（日数ごとに容器サイズを5g単位で切り上げ）
+    // 混合軟膏プラン一覧を生成
+    // plans[0] = 容器なし（5g単位切り上げ）、plans[1〜] = 容器あり（日数×容器サイズ）
     function calcMixedPlans(avgDayG, neededG) {
       const plans = [];
+      // Plan 0: 容器なし（従来通り5g単位で切り上げ）
+      const noContainerG = Math.ceil(neededG / 5) * 5 || 5;
+      plans.push({ noContainer: true, containerG: noContainerG, count: 1, totalG: noContainerG, days: null });
+
+      // Plans 1+: 容器あり（日数ごとに5g単位容器サイズ）
       const seen = new Set();
       for (const days of [2, 3, 4, 5, 6, 7]) {
         const rawG = avgDayG * days;
@@ -1185,7 +1191,7 @@
         seen.add(key);
         const count = Math.ceil(neededG / containerG);
         const totalG = count * containerG;
-        plans.push({ days, containerG, count, totalG });
+        plans.push({ noContainer: false, days, containerG, count, totalG });
       }
       return plans;
     }
@@ -1284,7 +1290,8 @@
         const rxCell = `<div class="rx-cell">
       <div class="step1">計算値: ${netG.toFixed(1)}g</div>
       ${!isMixed(d) && rxCellRounded ? `<div class="step2">↑ ${d.tubeg}g×${rxCellB}本に切り上げ</div>` : ''}
-      <div class="final"><span class="gv">${rxCellG}g</span><span class="bv">${rxCellB !== null ? rxCellB + (isMixed(d) ? '個' : '本') : ''}</span></div>
+      ${isMixed(d) && mixedPlanSel && mixedPlanSel.plan.noContainer ? `<div class="step2">↑ 5g単位で切り上げ</div>` : ''}
+      <div class="final"><span class="gv">${rxCellG}g</span><span class="bv">${isMixed(d) && mixedPlanSel && !mixedPlanSel.plan.noContainer ? rxCellB + '個' : (!isMixed(d) && rxCellB !== null ? rxCellB + '本' : '')}</span></div>
     </div>`;
         // 混合軟膏プランUI
         let mixedPlanHtml = '';
@@ -1292,9 +1299,17 @@
           const { plans, idx } = mixedPlanSel;
           const drugIdx = drugs.indexOf(d);
           mixedPlanHtml = `<div class="mixed-plans" style="margin-top:10px;">
-            <div class="mixed-plans-head">🧪 容器サイズを選択（混合軟膏）</div>` +
+            <div class="mixed-plans-head">🧪 処方スタイルを選択（混合軟膏）</div>` +
             plans.map((p, pi) => {
               const sel = pi === idx;
+              if (p.noContainer) {
+                return `<div class="mixed-plan-row${sel ? ' selected' : ''}" onclick="selectMixedPlan(${drugIdx},${pi})" style="${sel ? '' : ''}">
+                  <div class="mixed-plan-radio"></div>
+                  <div class="mixed-plan-days" style="color:var(--text2);">${p.totalG}g</div>
+                  <div class="mixed-plan-detail">容器なし（従来通り ${p.totalG}g で処方）<br><span style="color:var(--text3);">薬局で容器指定なし</span></div>
+                  <span class="mixed-plan-badge">${sel ? '✓ 選択中' : '選択'}</span>
+                </div>`;
+              }
               return `<div class="mixed-plan-row${sel ? ' selected' : ''}" onclick="selectMixedPlan(${drugIdx},${pi})">
                 <div class="mixed-plan-radio"></div>
                 <div class="mixed-plan-days">${p.containerG}g × ${p.count}個</div>
@@ -1336,8 +1351,13 @@
           let chain, unitLabel;
           if (r.isMixed && r.mixedPlan) {
             const p = r.mixedPlan;
-            chain = `必要 ${r.neededG.toFixed(1)}g − 残 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g → ${p.containerG}g×${p.count}個`;
-            unitLabel = `<span class="rtag" style="background:var(--amber-bg);color:var(--amber-text);">${p.containerG}g × ${p.count}個で調剤</span>`;
+            if (p.noContainer) {
+              chain = `必要 ${r.neededG.toFixed(1)}g − 残 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g → ${p.totalG}gに切り上げ`;
+              unitLabel = `<span class="rtag">容器指定なし</span>`;
+            } else {
+              chain = `必要 ${r.neededG.toFixed(1)}g − 残 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g → ${p.containerG}g×${p.count}個`;
+              unitLabel = `<span class="rtag" style="background:var(--amber-bg);color:var(--amber-text);">${p.containerG}g × ${p.count}個で調剤</span>`;
+            }
           } else {
             chain = r.prescribeB !== null
               ? `必要 ${r.neededG.toFixed(1)}g − 残 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g → ${r.tubeg}g×${r.prescribeB}本`
@@ -1392,8 +1412,12 @@
         txt += `必要量 ${r.neededG.toFixed(1)}g − 残量 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g。\n`;
         if (r.isMixed && r.mixedPlan) {
           const p = r.mixedPlan;
-          txt += `混合軟膏 ${r.prescribeG}g を処方（${p.containerG}g × ${p.count}個で調剤。${p.days}日で1個使い切るペース）。\n`;
-          txt += `※薬局への指示：${p.containerG}g入り容器 ${p.count}ケースで調剤してください。\n`;
+          if (p.noContainer) {
+            txt += `混合軟膏 ${r.prescribeG}g を処方（容器指定なし）。\n`;
+          } else {
+            txt += `混合軟膏 ${r.prescribeG}g を処方（${p.containerG}g × ${p.count}個で調剤。${p.days}日で1個使い切るペース）。\n`;
+            txt += `※薬局への指示：${p.containerG}g入り容器 ${p.count}ケースで調剤してください。\n`;
+          }
         } else if (r.rounded && r.prescribeB !== null) {
           txt += `チューブ規格 ${r.tubeg}g × ${r.prescribeB}本 = ${r.prescribeG}g に切り上げ、今回 ${r.prescribeG}g（${r.prescribeB}本）を処方。\n`;
         } else {
@@ -1528,10 +1552,16 @@
             const planSel = getSelectedMixedPlan(d, avgDayG, Math.max(0, neededG - d.remainG));
             if (planSel) {
               const p = planSel.plan;
-              tubeRateHtml = `<div style="margin-top:8px;background:#faeeda;border:1px solid #f0c060;border-radius:6px;padding:8px 12px;font-size:12px;color:#633806;">
-                🧪 <strong style="font-size:14px;color:#0f6e56;">${p.containerG}g入り容器</strong>を<strong style="font-size:14px;color:#0f6e56;">${p.count}個</strong>お渡しします<br>
-                <span style="color:#6b6760;font-size:12px;">${p.days}日ごとに1個使い切るペースです（1日 ${(onceTotal * (taperPhases ? taperPhases.phase1.freqVal : freqVal)).toFixed(1)}g）</span>
-              </div>`;
+              if (p.noContainer) {
+                tubeRateHtml = `<div style="margin-top:8px;background:#f0efe9;border-radius:6px;padding:7px 10px;font-size:12px;color:#6b6760;">
+                  💊 <strong style="color:#0f6e56;">${p.totalG}g</strong> を処方（容器指定なし）
+                </div>`;
+              } else {
+                tubeRateHtml = `<div style="margin-top:8px;background:#faeeda;border:1px solid #f0c060;border-radius:6px;padding:8px 12px;font-size:12px;color:#633806;">
+                  🧪 <strong style="font-size:14px;color:#0f6e56;">${p.containerG}g入り容器</strong>を<strong style="font-size:14px;color:#0f6e56;">${p.count}個</strong>お渡しします<br>
+                  <span style="color:#6b6760;font-size:12px;">${p.days}日ごとに1個使い切るペースです（1日 ${(onceTotal * (taperPhases ? taperPhases.phase1.freqVal : freqVal)).toFixed(1)}g）</span>
+                </div>`;
+              }
             }
           } else if (d.tubeg > 0) {
             const daysPerTube = d.tubeg / (onceTotal * avgFreq);
@@ -1609,7 +1639,11 @@
             const planSel = getSelectedMixedPlan(d, avgDayG, Math.max(0, neededG - d.remainG));
             if (planSel) {
               const p = planSel.plan;
-              txt += `   ＊${p.containerG}g入り容器を${p.count}個。${p.days}日ごとに1個使い切るペース\n`;
+              if (p.noContainer) {
+                txt += `   ＊${p.totalG}g を処方（容器指定なし）\n`;
+              } else {
+                txt += `   ＊${p.containerG}g入り容器を${p.count}個。${p.days}日ごとに1個使い切るペース\n`;
+              }
             }
           } else if (d.tubeg > 0 && onceTotal > 0) {
             const daysPerTube = d.tubeg / (onceTotal * avgFreq);
