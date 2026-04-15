@@ -297,11 +297,71 @@
       color: var(--green-text);
     }
 
+    .part-chip.custom {
+      border-color: var(--amber);
+      background: var(--amber-bg);
+      color: var(--amber-text);
+    }
+
     .part-chip input[type=checkbox] {
       width: 14px;
       height: 14px;
       accent-color: var(--green);
       flex-shrink: 0;
+    }
+
+    .ftu-adjust-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    .ftu-adjust-row label {
+      font-size: 11px;
+      color: var(--text2);
+      margin: 0;
+      min-width: 0;
+      white-space: nowrap;
+    }
+
+    .ftu-adjust-row input[type=number] {
+      width: 64px;
+      padding: 5px 7px;
+      font-size: 13px;
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+
+    .ftu-adjust-row input[type=number].custom-val {
+      border-color: var(--amber);
+      background: var(--amber-bg);
+      color: var(--amber-text);
+      font-weight: 600;
+    }
+
+    .ftu-adjust-row .ftu-default-hint {
+      font-size: 10px;
+      color: var(--text3);
+    }
+
+    .ftu-adjust-row .ftu-reset-btn {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      border: 1px solid var(--amber);
+      background: transparent;
+      color: var(--amber);
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
     }
 
     .sides-wrap {
@@ -813,7 +873,7 @@
 
     function newDrug(pi = 0) {
       const parts = {};
-      PARTS.forEach(p => { parts[p.key] = { checked: false, sides: 2 }; });
+      PARTS.forEach(p => { parts[p.key] = { checked: false, sides: 2, customFTU: null }; });
       return {
         preset: pi, tubeg: PRESETS[pi].tubeg, customName: "",
         givenG: PRESETS[pi].tubeg * 4, remainG: 0, freqIdx: 0, parts
@@ -841,15 +901,33 @@
         const remB = toB(d.remainG, d.tubeg);
         const consumed = Math.max(0, d.givenG - d.remainG).toFixed(1);
         let partsHtml = '';
+        const ageKey = document.getElementById('globalAge').value;
+        const ftuDefaults = FTU_AGE[ageKey];
         PARTS.forEach(pt => {
           const st = d.parts[pt.key], on = st.checked;
+          const defaultFTU = ftuDefaults[pt.key];
+          const isCustom = st.customFTU !== null;
+          const dispFTU = isCustom ? st.customFTU : defaultFTU;
+          const chipClass = on ? (isCustom ? 'part-chip on custom' : 'part-chip on') : 'part-chip';
           const sh = pt.bilateral && on ? `<div class="sides-wrap" onclick="event.stopPropagation()">
         <button class="sides-btn${st.sides === 1 ? ' on' : ''}" onclick="setSides(${i},'${pt.key}',1)">片</button>
         <button class="sides-btn${st.sides === 2 ? ' on' : ''}" onclick="setSides(${i},'${pt.key}',2)">両</button>
       </div>`: '';
-          partsHtml += `<div class="part-chip${on ? ' on' : ''}" onclick="togglePart(${i},'${pt.key}')">
-        <input type="checkbox"${on ? ' checked' : ''} onclick="event.stopPropagation();togglePart(${i},'${pt.key}')">
-        <span style="flex:1">${pt.label}</span>${sh}</div>`;
+          // FTU adjust row (shown only when part is checked)
+          const ftuRow = on ? `<div class="ftu-adjust-row" onclick="event.stopPropagation()">
+        <label>FTU:</label>
+        <input type="number" class="${isCustom ? 'custom-val' : ''}" value="${dispFTU}" min="0.5" max="20" step="0.5" inputmode="decimal"
+          oninput="onFTUInput(${i},'${pt.key}',this.value,${defaultFTU})" onclick="event.stopPropagation()">
+        <span class="ftu-default-hint">目安: ${defaultFTU} FTU</span>
+        ${isCustom ? `<button class="ftu-reset-btn" onclick="event.stopPropagation();resetFTU(${i},'${pt.key}')">リセット</button>` : ''}
+      </div>`: '';
+          partsHtml += `<div>
+        <div class="${chipClass}" onclick="togglePart(${i},'${pt.key}')">
+          <input type="checkbox"${on ? ' checked' : ''} onclick="event.stopPropagation();togglePart(${i},'${pt.key}')">
+          <span style="flex:1">${pt.label}</span>${sh}
+        </div>
+        ${ftuRow}
+      </div>`;
         });
         el.innerHTML += `<div class="drug-block">
       <div class="drug-block-header">
@@ -959,10 +1037,26 @@
     function addDrug() { drugs.push(newDrug(0)); renderDrugs(); calc(); }
     function removeDrug(i) { drugs.splice(i, 1); renderDrugs(); calc(); }
 
+    function onFTUInput(i, key, val, defaultVal) {
+      const v = parseFloat(val);
+      if (isNaN(v) || v <= 0) { drugs[i].parts[key].customFTU = null; }
+      else { drugs[i].parts[key].customFTU = (v === defaultVal) ? null : v; }
+      // update chip color without full re-render (just re-render)
+      renderDrugs(); calc();
+    }
+    function resetFTU(i, key) {
+      drugs[i].parts[key].customFTU = null;
+      renderDrugs(); calc();
+    }
+
     function calcFTU(d, ageKey, nd) {
       const fd = FTU_AGE[ageKey], gf = PRESETS[d.preset].gPerFTU, fr = FREQS[d.freqIdx].val;
       let t = 0;
-      PARTS.forEach(p => { if (!d.parts[p.key].checked) return; t += fd[p.key] * (p.bilateral ? d.parts[p.key].sides : 1); });
+      PARTS.forEach(p => {
+        if (!d.parts[p.key].checked) return;
+        const ftu = d.parts[p.key].customFTU !== null ? d.parts[p.key].customFTU : fd[p.key];
+        t += ftu * (p.bilateral ? d.parts[p.key].sides : 1);
+      });
       return t * gf * fr * nd;
     }
     function dateDiff(a, b) { if (!a || !b) return null; return Math.round((new Date(b) - new Date(a)) / 86400000); }
@@ -1006,7 +1100,10 @@
         const ru = roundUpTube(netG, d.tubeg);
         const ptags = PARTS.filter(p => d.parts[p.key].checked).map(p => {
           const s = p.bilateral ? (d.parts[p.key].sides === 2 ? '両' : '片') : '';
-          return `<span class="ftu-tag">${p.label}${s ? `(${s})` : ''}</span>`;
+          const isCustom = d.parts[p.key].customFTU !== null;
+          const ftuVal = isCustom ? d.parts[p.key].customFTU : FTU_AGE[ak][p.key];
+          const customMark = isCustom ? `<span style="color:var(--amber);font-weight:700;">*</span>` : '';
+          return `<span class="ftu-tag" style="${isCustom ? 'background:var(--amber-bg);color:var(--amber-text);' : ''}">${p.label}${s ? `(${s})` : ''} ${ftuVal}FTU${isCustom ? '*' : ''}</span>`;
         }).join('');
         const ftuCell = hasFTU ? `<div>${ptags}</div><div style="font-size:11px;color:var(--text3);margin-top:3px;">${FREQS[d.freqIdx].label} → ${ftuG.toFixed(1)}g</div>`
           : `<span style="font-size:11px;color:var(--text3);">部位未設定<br>消費ペース</span>`;
@@ -1075,11 +1172,12 @@
             const st = r.drugRef.parts[p.key];
             if (!st.checked) return;
             const sides = p.bilateral ? st.sides : 1;
-            const ftu = ftuData[p.key] * sides;
+            const ftu = (st.customFTU !== null ? st.customFTU : ftuData[p.key]) * sides;
             const gOnce = ftu * r.gPerFTU;
             onceTotal += gOnce;
             const sLabel = p.bilateral ? (sides === 2 ? '（両側）' : '（片側）') : '';
-            txt += `  ${p.label}${sLabel}: 1回 ${gOnce.toFixed(1)}g\n`;
+            const customNote = st.customFTU !== null ? `（調整: ${st.customFTU}FTU）` : `（${ftuData[p.key]}FTU）`;
+            txt += `  ${p.label}${sLabel}: 1回 ${gOnce.toFixed(1)}g ${customNote}\n`;
           });
           const dayTotal = onceTotal * r.freqVal;
           txt += `  → 1回合計 ${onceTotal.toFixed(1)}g、1日合計 ${dayTotal.toFixed(1)}g（${r.freq}）\n`;
@@ -1150,7 +1248,7 @@
         checkedParts.forEach(p => {
           const st = d.parts[p.key];
           const sides = p.bilateral ? st.sides : 1;
-          const ftu = ftuData[p.key] * sides;
+          const ftu = (st.customFTU !== null ? st.customFTU : ftuData[p.key]) * sides;
           const gOnce = ftu * gPerFTU;
           onceTotal += gOnce;
           const sLabel = p.bilateral ? (sides === 2 ? '（両側）' : '（片側）') : '';
@@ -1203,7 +1301,7 @@
         checkedParts.forEach(p => {
           const st = d.parts[p.key];
           const sides = p.bilateral ? st.sides : 1;
-          const gOnce = ftuData[p.key] * sides * gPerFTU;
+          const gOnce = (st.customFTU !== null ? st.customFTU : ftuData[p.key]) * sides * gPerFTU;
           onceTotal += gOnce;
           const sLabel = p.bilateral ? (sides === 2 ? '（両側）' : '（片側）') : '';
           txt += `   ${p.label}${sLabel}: 1回 ${gOnce.toFixed(1)}g\n`;
