@@ -666,6 +666,110 @@
       }
     }
 
+    /* 混合軟膏プランセレクター */
+    .mixed-plans {
+      margin-top: 10px;
+      border: 1px solid var(--amber);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .mixed-plans-head {
+      background: var(--amber-bg);
+      padding: 7px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--amber-text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .mixed-plan-row {
+      display: flex;
+      align-items: center;
+      padding: 9px 12px;
+      border-top: 1px solid var(--border);
+      gap: 10px;
+      cursor: pointer;
+      background: var(--surface);
+      transition: background .12s;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .mixed-plan-row:hover {
+      background: var(--surface2);
+    }
+
+    .mixed-plan-row.selected {
+      background: var(--green-bg);
+      border-left: 3px solid var(--green);
+    }
+
+    .mixed-plan-radio {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid var(--border2);
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .mixed-plan-row.selected .mixed-plan-radio {
+      border-color: var(--green);
+      background: var(--green);
+    }
+
+    .mixed-plan-radio::after {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: white;
+      display: none;
+    }
+
+    .mixed-plan-row.selected .mixed-plan-radio::after {
+      display: block;
+    }
+
+    .mixed-plan-days {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--teal);
+      min-width: 60px;
+    }
+
+    .mixed-plan-detail {
+      flex: 1;
+      font-size: 12px;
+      color: var(--text2);
+      line-height: 1.6;
+    }
+
+    .mixed-plan-total {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--teal);
+      white-space: nowrap;
+    }
+
+    .mixed-plan-badge {
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: var(--green-bg);
+      color: var(--green-text);
+      white-space: nowrap;
+    }
+
+    .mixed-plan-row.selected .mixed-plan-badge {
+      background: var(--green);
+      color: white;
+    }
+
     @media(max-width:480px) {
       .main {
         padding: 10px;
@@ -791,8 +895,8 @@
       { name: "ベタメタゾン軟膏 10g", tubeg: 10, gPerFTU: 0.3, custom: false },
       { name: "ベタメタゾンクリーム 30g", tubeg: 30, gPerFTU: 0.5, custom: false },
       // 混合軟膏
-      { name: "ロコイド/ヘパリン混合軟膏 10g", tubeg: 10, gPerFTU: 0.5, custom: false },
-      { name: "ベタメタゾン/ヘパリン混合軟膏 10g", tubeg: 10, gPerFTU: 0.5, custom: false },
+      { name: "ロコイド/ヘパリン混合軟膏 10g", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
+      { name: "ベタメタゾン/ヘパリン混合軟膏 10g", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
       // 保湿剤（1FTU≒0.5g）
       { name: "ヒルドイドクリーム 25g", tubeg: 25, gPerFTU: 0.5, custom: false },
       { name: "ヒルドイドソフト軟膏 25g", tubeg: 25, gPerFTU: 0.5, custom: false },
@@ -831,6 +935,8 @@
         taper: false,       // 漸減モードON/OFF
         taperDate: "",      // 切り替え日
         taperFreqIdx: 1,    // 後半の頻度インデックス（デフォルト1日1回）
+        // 混合軟膏プラン選択
+        mixedPlanIdx: 0,    // 選択中のプランインデックス
       };
     }
     const drugs = [newDrug(0)];
@@ -1063,6 +1169,35 @@
     }
     function dateDiff(a, b) { if (!a || !b) return null; return Math.round((new Date(b) - new Date(a)) / 86400000); }
 
+    // 混合軟膏かどうか判定
+    function isMixed(d) { return !!PRESETS[d.preset].mixed; }
+
+    // 混合軟膏プラン一覧を生成（日数ごとに容器サイズを5g単位で切り上げ）
+    function calcMixedPlans(avgDayG, neededG) {
+      const plans = [];
+      const seen = new Set();
+      for (const days of [2, 3, 4, 5, 6, 7]) {
+        const rawG = avgDayG * days;
+        const containerG = Math.ceil(rawG / 5) * 5;
+        if (containerG < 5) continue;
+        const key = containerG + 'g';
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const count = Math.ceil(neededG / containerG);
+        const totalG = count * containerG;
+        plans.push({ days, containerG, count, totalG });
+      }
+      return plans;
+    }
+
+    // 選択中の混合プランを取得（なければ最初のプラン）
+    function getSelectedMixedPlan(d, avgDayG, neededG) {
+      const plans = calcMixedPlans(avgDayG, neededG);
+      if (!plans.length) return null;
+      const idx = Math.min(d.mixedPlanIdx || 0, plans.length - 1);
+      return { plan: plans[idx], plans, idx };
+    }
+
     function calc() {
       const lv = document.getElementById('lastDate').value;
       const tv = document.getElementById('todayDate').value;
@@ -1127,25 +1262,65 @@
           taperHtml
           : `<span style="font-size:11px;color:var(--text3);">部位未設定<br>消費ペース</span>`;
         const rounded = ru.b !== null && ru.g > netG + 0.01;
+
+        // 混合軟膏プランセレクター
+        let mixedPlanSel = null;
+        let rxCellG = ru.g, rxCellB = ru.b, rxCellRounded = rounded;
+        if (isMixed(d) && hasFTU) {
+          const avgDayG = (() => {
+            if (taperPhases) {
+              return (taperPhases.phase1.freqVal * taperPhases.phase1.days + taperPhases.phase2.freqVal * taperPhases.phase2.days) / nextDays * calcPartDetails(d, ak).reduce((s, p) => s + p.gOnce, 0);
+            }
+            return calcPartDetails(d, ak).reduce((s, p) => s + p.gOnce, 0) * FREQS[d.freqIdx].val;
+          })();
+          mixedPlanSel = getSelectedMixedPlan(d, avgDayG, netG);
+          if (mixedPlanSel) {
+            rxCellG = mixedPlanSel.plan.totalG;
+            rxCellB = mixedPlanSel.plan.count;
+            rxCellRounded = true;
+          }
+        }
+
         const rxCell = `<div class="rx-cell">
       <div class="step1">計算値: ${netG.toFixed(1)}g</div>
-      ${rounded ? `<div class="step2">↑ ${d.tubeg}g×${ru.b}本に切り上げ</div>` : ''}
-      <div class="final"><span class="gv">${ru.g}g</span><span class="bv">${ru.b !== null ? ru.b + '本' : ''}</span></div>
+      ${!isMixed(d) && rxCellRounded ? `<div class="step2">↑ ${d.tubeg}g×${rxCellB}本に切り上げ</div>` : ''}
+      <div class="final"><span class="gv">${rxCellG}g</span><span class="bv">${rxCellB !== null ? rxCellB + (isMixed(d) ? '個' : '本') : ''}</span></div>
     </div>`;
+        // 混合軟膏プランUI
+        let mixedPlanHtml = '';
+        if (mixedPlanSel) {
+          const { plans, idx } = mixedPlanSel;
+          const drugIdx = drugs.indexOf(d);
+          mixedPlanHtml = `<div class="mixed-plans" style="margin-top:10px;">
+            <div class="mixed-plans-head">🧪 容器サイズを選択（混合軟膏）</div>` +
+            plans.map((p, pi) => {
+              const sel = pi === idx;
+              return `<div class="mixed-plan-row${sel ? ' selected' : ''}" onclick="selectMixedPlan(${drugIdx},${pi})">
+                <div class="mixed-plan-radio"></div>
+                <div class="mixed-plan-days">${p.containerG}g × ${p.count}個</div>
+                <div class="mixed-plan-detail">${p.containerG}g容器を<strong>${p.days}日</strong>で使い切るペース<br>合計 ${p.totalG}g</div>
+                <span class="mixed-plan-badge">${sel ? '✓ 選択中' : '選択'}</span>
+              </div>`;
+            }).join('') +
+            `</div>`;
+        }
+
         tbl += `<tr>
       <td style="font-weight:600;font-size:12px;">${pname}</td>
       <td>${perDayG.toFixed(2)}g/日</td>
-      <td>${ftuCell}</td>
+      <td>${ftuCell}${mixedPlanHtml}</td>
       <td>${neededG.toFixed(1)}g<br><span style="font-size:11px;color:var(--text3);">${d.tubeg > 0 ? (neededG / d.tubeg).toFixed(1) + '本' : ''}</span></td>
       <td>${d.remainG.toFixed(1)}g<br><span style="font-size:11px;color:var(--text3);">${d.tubeg > 0 ? (d.remainG / d.tubeg).toFixed(1) + '本' : ''}</span></td>
       <td>${rxCell}</td>
     </tr>`;
         rxItems.push({
           name: pname, tubeg: d.tubeg, givenG: d.givenG, remainG: d.remainG,
-          neededG, netG, prescribeG: ru.g, prescribeB: ru.b, rounded,
+          neededG, netG, prescribeG: rxCellG, prescribeB: rxCellB, rounded: rxCellRounded,
           perDayG, freq: FREQS[d.freqIdx].label, freqVal: FREQS[d.freqIdx].val,
           ftuG, hasFTU, gPerFTU: PRESETS[d.preset].gPerFTU,
           drugRef: d, taperPhases,
+          isMixed: isMixed(d),
+          mixedPlan: mixedPlanSel ? mixedPlanSel.plan : null,
           partNames: PARTS.filter(p => d.parts[p.key].checked).map(p => {
             const s = p.bilateral ? (d.parts[p.key].sides === 2 ? '両側' : '片側') : '';
             return p.label + (s ? `(${s})` : '');
@@ -1156,15 +1331,23 @@
 
       let rxHtml = '';
       if (rxItems.length) {
-        rxHtml = `<div class="rx-box"><div class="rx-head">処方箋記載イメージ　（次回${nextDays}日分）</div>`;
+        rxHtml += `<div class="rx-box"><div class="rx-head">処方箋記載イメージ　（次回${nextDays}日分）</div>`;
         rxItems.forEach(r => {
-          const chain = r.prescribeB !== null
-            ? `必要 ${r.neededG.toFixed(1)}g − 残 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g → ${r.tubeg}g×${r.prescribeB}本`
-            : `必要 ${r.neededG.toFixed(1)}g − 残 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g`;
+          let chain, unitLabel;
+          if (r.isMixed && r.mixedPlan) {
+            const p = r.mixedPlan;
+            chain = `必要 ${r.neededG.toFixed(1)}g − 残 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g → ${p.containerG}g×${p.count}個`;
+            unitLabel = `<span class="rtag" style="background:var(--amber-bg);color:var(--amber-text);">${p.containerG}g × ${p.count}個で調剤</span>`;
+          } else {
+            chain = r.prescribeB !== null
+              ? `必要 ${r.neededG.toFixed(1)}g − 残 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g → ${r.tubeg}g×${r.prescribeB}本`
+              : `必要 ${r.neededG.toFixed(1)}g − 残 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g`;
+            unitLabel = r.rounded ? '<span class="rtag">切り上げ</span>' : '';
+          }
           rxHtml += `<div class="rx-row">
         <div class="rname">${r.name}</div>
         <div class="rchain">${chain}</div>
-        ${r.rounded ? '<span class="rtag">切り上げ</span>' : ''}
+        ${unitLabel}
         <div class="rgval">${r.prescribeG}g</div>
       </div>`;
         });
@@ -1207,13 +1390,17 @@
           txt += `次回${nextDays}日で ${r.neededG.toFixed(1)}g 必要（消費ペースより算出）。\n`;
         }
         txt += `必要量 ${r.neededG.toFixed(1)}g − 残量 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g。\n`;
-        if (r.rounded && r.prescribeB !== null) {
+        if (r.isMixed && r.mixedPlan) {
+          const p = r.mixedPlan;
+          txt += `混合軟膏 ${r.prescribeG}g を処方（${p.containerG}g × ${p.count}個で調剤。${p.days}日で1個使い切るペース）。\n`;
+          txt += `※薬局への指示：${p.containerG}g入り容器 ${p.count}ケースで調剤してください。\n`;
+        } else if (r.rounded && r.prescribeB !== null) {
           txt += `チューブ規格 ${r.tubeg}g × ${r.prescribeB}本 = ${r.prescribeG}g に切り上げ、今回 ${r.prescribeG}g（${r.prescribeB}本）を処方。\n`;
         } else {
           txt += `今回 ${r.prescribeG}g を処方。\n`;
         }
-        // 消費ペースの目安
-        if (r.tubeg > 0 && r.hasFTU) {
+        // 消費ペースの目安（非混合のみ）
+        if (!r.isMixed && r.tubeg > 0 && r.hasFTU) {
           const onceTotalG = calcPartDetails(r.drugRef, document.getElementById('globalAge').value).reduce((s, p) => s + p.gOnce, 0);
           const avgFreqVal = r.taperPhases
             ? (r.taperPhases.phase1.freqVal * r.taperPhases.phase1.days + r.taperPhases.phase2.freqVal * r.taperPhases.phase2.days) / nextDays
@@ -1239,6 +1426,11 @@
           el.textContent = '';
         }
       });
+    }
+
+    function selectMixedPlan(drugIdx, planIdx) {
+      drugs[drugIdx].mixedPlanIdx = planIdx;
+      calc();
     }
 
     function switchTab(id, btn) {
@@ -1292,6 +1484,8 @@
         // build per-part rows using calcPartDetails
         const partDeets = calcPartDetails(d, ageKey);
         let onceTotal = partDeets.reduce((s, p) => s + p.gOnce, 0);
+        const taperPhases = calcTaperPhases(d, ageKey, tv, nv);
+        const neededG = nextDays > 0 ? calcFTU(d, ageKey, nextDays, tv, nv) : 0;
         let partRowsHtml = '';
         partDeets.forEach(p => {
           const ftuDisp = +(p.ftuOnce).toFixed(1);
@@ -1302,7 +1496,6 @@
             `</div>`;
         });
         const dayTotal = onceTotal * freqVal;
-        const taperPhases = calcTaperPhases(d, ageKey, tv, nv);
 
         // 漸減スケジュール表示
         const taperScheduleHtml = taperPhases
@@ -1323,17 +1516,30 @@
             </div>`
           : '';
 
-        // 消費ペース（◯日で1本）
+        // 消費ペース表示（混合軟膏は容器単位、通常は本単位）
         let tubeRateHtml = '';
-        if (d.tubeg > 0 && onceTotal > 0) {
+        if (onceTotal > 0) {
           const avgFreq = taperPhases && nextDays > 0
             ? (taperPhases.phase1.freqVal * taperPhases.phase1.days + taperPhases.phase2.freqVal * taperPhases.phase2.days) / nextDays
             : freqVal;
-          const daysPerTube = d.tubeg / (onceTotal * avgFreq);
-          const dpt = Math.round(daysPerTube * 10) / 10;
-          tubeRateHtml = `<div style="margin-top:8px;background:#f0efe9;border-radius:6px;padding:7px 10px;font-size:12px;color:#6b6760;">
-            💊 1本（${d.tubeg}g）を約 <strong style="color:#0f6e56;font-size:14px;">${dpt}日</strong> で使い切るペースです
-          </div>`;
+          if (isMixed(d)) {
+            // 混合軟膏：選択中プランの容器サイズと日数を表示
+            const avgDayG = onceTotal * avgFreq;
+            const planSel = getSelectedMixedPlan(d, avgDayG, Math.max(0, neededG - d.remainG));
+            if (planSel) {
+              const p = planSel.plan;
+              tubeRateHtml = `<div style="margin-top:8px;background:#faeeda;border:1px solid #f0c060;border-radius:6px;padding:8px 12px;font-size:12px;color:#633806;">
+                🧪 <strong style="font-size:14px;color:#0f6e56;">${p.containerG}g入り容器</strong>を<strong style="font-size:14px;color:#0f6e56;">${p.count}個</strong>お渡しします<br>
+                <span style="color:#6b6760;font-size:12px;">${p.days}日ごとに1個使い切るペースです（1日 ${(onceTotal * (taperPhases ? taperPhases.phase1.freqVal : freqVal)).toFixed(1)}g）</span>
+              </div>`;
+            }
+          } else if (d.tubeg > 0) {
+            const daysPerTube = d.tubeg / (onceTotal * avgFreq);
+            const dpt = Math.round(daysPerTube * 10) / 10;
+            tubeRateHtml = `<div style="margin-top:8px;background:#f0efe9;border-radius:6px;padding:7px 10px;font-size:12px;color:#6b6760;">
+              💊 1本（${d.tubeg}g）を約 <strong style="color:#0f6e56;font-size:14px;">${dpt}日</strong> で使い切るペースです
+            </div>`;
+          }
         }
 
         const summaryHtml = partDeets.length
@@ -1391,12 +1597,21 @@
           txt += `   ${p.label}: ${ftuDisp} FTU（${p.gOnce.toFixed(2)}g） / 1回\n`;
         });
         if (ptDeets.length) {
-          const avgFreq = taperPhases && dateDiff(tv, nv) > 0
-            ? (taperPhases.phase1.freqVal * taperPhases.phase1.days + taperPhases.phase2.freqVal * taperPhases.phase2.days) / dateDiff(tv, nv)
+          const nd = dateDiff(tv, nv) || 0;
+          const avgFreq = taperPhases && nd > 0
+            ? (taperPhases.phase1.freqVal * taperPhases.phase1.days + taperPhases.phase2.freqVal * taperPhases.phase2.days) / nd
             : freqVal;
           const dayTotal = onceTotal * (taperPhases ? taperPhases.phase1.freqVal : freqVal);
           txt += `   → 1回合計 ${onceTotal.toFixed(2)}g、1日合計 ${dayTotal.toFixed(2)}g（前半）\n`;
-          if (d.tubeg > 0 && onceTotal > 0) {
+          if (isMixed(d) && onceTotal > 0) {
+            const avgDayG = onceTotal * avgFreq;
+            const neededG = nd > 0 ? calcFTU(d, ageKey, nd, tv, nv) : 0;
+            const planSel = getSelectedMixedPlan(d, avgDayG, Math.max(0, neededG - d.remainG));
+            if (planSel) {
+              const p = planSel.plan;
+              txt += `   ＊${p.containerG}g入り容器を${p.count}個。${p.days}日ごとに1個使い切るペース\n`;
+            }
+          } else if (d.tubeg > 0 && onceTotal > 0) {
             const daysPerTube = d.tubeg / (onceTotal * avgFreq);
             txt += `   ＊1本（${d.tubeg}g）を約${(Math.round(daysPerTube * 10) / 10)}日で使い切るペース\n`;
           }
