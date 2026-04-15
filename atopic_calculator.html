@@ -1282,7 +1282,7 @@
           mixedPlanSel = getSelectedMixedPlan(d, avgDayG, netG);
           if (mixedPlanSel) {
             rxCellG = mixedPlanSel.plan.totalG;
-            rxCellB = mixedPlanSel.plan.count;
+            rxCellB = mixedPlanSel.plan.noContainer ? null : mixedPlanSel.plan.count;
             rxCellRounded = true;
           }
         }
