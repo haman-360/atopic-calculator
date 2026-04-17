@@ -172,6 +172,11 @@ table.gantt th,table.gantt td{border:1px solid var(--border);padding:0;vertical-
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
       <div><label>患者 ID</label><input type="text" id="pid" placeholder="00000" maxlength="10" oninput="calcAll()"></div>
       <div><label>患者名（任意）</label><input type="text" id="pname" placeholder="田中 太郎" oninput="calcAll()"></div>
+      <div>
+        <label>次回受診予定日（スケジュール終了日）</label>
+        <input type="date" id="nextDate" oninput="onNextDateChange()">
+        <div id="next-badge" style="font-size:12px;color:var(--text3);margin-top:4px;"></div>
+      </div>
       <div><label>年齢グループ</label>
         <select id="globalAge" onchange="calcAll()">
           <option value="infant">3〜6か月</option>
@@ -211,13 +216,10 @@ table.gantt th,table.gantt td{border:1px solid var(--border);padding:0;vertical-
 <!-- ======== STEP 2: 受診日・残量 ======== -->
 <div id="step1" style="display:none;">
   <div class="card">
-    <div class="card-title"><span class="icon">📅</span>受診日・次回受診日</div>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;">
+    <div class="card-title"><span class="icon">📅</span>受診日</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;">
       <div><label>今日の受診日</label><input type="date" id="todayDate" oninput="calcAll()"></div>
-      <div><label>次回受診予定日</label>
-        <input type="date" id="nextDate" oninput="calcAll()">
-        <div id="next-badge" style="font-size:12px;color:var(--text3);margin-top:4px;"></div>
-      </div>
+      <div id="step2-date-summary" style="font-size:13px;color:var(--teal);font-weight:600;padding-bottom:8px;"></div>
     </div>
   </div>
 
@@ -379,8 +381,9 @@ function uniqueDrugs(){
   return list;
 }
 function numDays(){
-  const tv=document.getElementById('todayDate').value;
-  const nv=document.getElementById('nextDate').value;
+  const tv=document.getElementById('todayDate')?.value||fmt(new Date());
+  const nv=document.getElementById('nextDate')?.value;
+  if(!nv)return null;
   const d=dateDiff(tv,nv);
   return(d&&d>0)?d:null;
 }
@@ -429,7 +432,7 @@ function renderRows(){
       </div>
       <div>
         <label>〜終了日目</label>
-        <input type="number" value="${r.endOffset===null?nd-1:r.endOffset}" min="0" max="${nd-1}" step="1" oninput="rows[${i}].endOffset=parseInt(this.value);calcAll()">
+        <input type="number" value="${r.endOffset===null?nd-1:r.endOffset}" min="0" max="${nd-1}" step="1" oninput="rows[${i}].endOffset=Math.min(parseInt(this.value)||0,nd-1);calcAll()" style="${r.endOffset===null||r.endOffset>=nd-1?'border-color:var(--green)':''}">
       </div>
       <button class="btn-danger" onclick="rows.splice(${i},1);renderRows();calcAll();">×</button>
     </div>
@@ -820,18 +823,31 @@ function showCopied(){
   n.style.display='inline';setTimeout(()=>n.style.display='none',2000);
 }
 
-// ===== next badge =====
+// ===== next badge / date handlers =====
 function updateBadge(){
   const tv=document.getElementById('todayDate').value;
   const nv=document.getElementById('nextDate').value;
   const nb=document.getElementById('next-badge');
+  if(!nb)return;
   const nd=dateDiff(tv,nv);
   if(nd&&nd>0)nb.innerHTML=`<span style="color:var(--teal);font-weight:600;">今日から ${nd} 日後</span>`;
   else if(nv)nb.innerHTML=`<span style="color:var(--red);">日付を確認してください</span>`;
-  else nb.textContent='';
+  else nb.textContent='次回受診日を選ぶと終了日が確定します';
+  // step2のサマリー更新
+  const s2=document.getElementById('step2-date-summary');
+  if(s2){
+    if(nd&&nd>0)s2.textContent=`次回受診: ${nv} （${nd}日後）`;
+    else s2.textContent='';
+  }
+}
+// 次回受診日変更時: 終了日がnullの行は自動追従（endOffset=nd-1 を維持）
+function onNextDateChange(){
+  updateBadge();
+  // endOffset=nullの行はnumDays-1を維持するので再描画だけでOK
+  renderRows();calcAll();
 }
 document.getElementById('todayDate').addEventListener('input',()=>{updateBadge();calcAll();});
-document.getElementById('nextDate').addEventListener('input',()=>{updateBadge();calcAll();});
+document.getElementById('nextDate').addEventListener('input',onNextDateChange);
 
 // ===== サンプル =====
 function loadSample(){
