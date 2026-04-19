@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>アトピー外来 処方支援</title>
+<style>
+:root {
+  --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e0ddd4;--border2:#c8c4b8;
+  --text:#1a1916;--text2:#6b6760;--text3:#9b9890;
+  --teal:#0f6e56;--green:#1d9e75;--green-bg:#e1f5ee;--green-text:#085041;
+  --amber:#b87515;--amber-bg:#faeeda;--amber-text:#633806;
+  --red:#c0392b;--red-bg:#fcebeb;--red-text:#501313;
+  --blue:#185fa5;--blue-bg:#e6f1fb;--blue-text:#042c53;
+  --radius:10px;--radius-sm:6px;--cell-h:38px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;padding-bottom:80px;}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:11px 18px;position:sticky;top:0;z-index:300;display:flex;align-items:center;gap:12px;}
+header h1{font-size:15px;font-weight:700;}
+.sub{font-size:11px;color:var(--text2);}
+.main{max-width:980px;margin:0 auto;padding:14px 12px;}
+
+/* ステップナビ */
+.step-nav{display:flex;gap:0;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.step-btn{flex:1;padding:11px 6px;font-size:12px;font-weight:600;font-family:inherit;border:none;background:transparent;cursor:pointer;color:var(--text3);display:flex;flex-direction:column;align-items:center;gap:3px;border-right:1px solid var(--border);transition:background .15s;}
+.step-btn:last-child{border-right:none;}
+.step-btn.on{background:var(--green-bg);color:var(--green-text);}
+.step-btn.done{color:var(--teal);}
+.step-num{width:20px;height:20px;border-radius:50%;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:11px;}
+.step-btn.on .step-num{background:var(--green);border-color:var(--green);color:white;}
+.step-btn.done .step-num{background:var(--teal);border-color:var(--teal);color:white;}
+
+/* カード */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;}
+.card-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;gap:7px;}
+.card-title .icon{width:20px;height:20px;background:var(--green-bg);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;}
+
+/* フォーム */
+label{display:block;font-size:11px;font-weight:500;color:var(--text2);margin-bottom:4px;}
+input[type=text],input[type=date],input[type=number],select{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;-webkit-appearance:none;appearance:none;}
+input:focus,select:focus{outline:none;border-color:var(--green);}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6760' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:26px;}
+
+/* ボタン */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;border:none;font-weight:500;-webkit-tap-highlight-color:transparent;}
+.btn-green{background:var(--green);color:white;}
+.btn-green:hover{background:var(--teal);}
+.btn-ghost{background:var(--surface);border:1px solid var(--border);color:var(--text2);}
+.btn-danger{background:transparent;border:none;color:var(--red);font-size:12px;padding:4px 6px;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+
+/* 行エディタ */
+.row-editor{border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:var(--surface2);position:relative;}
+.row-editor-grid{display:grid;grid-template-columns:80px 1fr 110px 80px 80px 28px;gap:7px;align-items:end;}
+@media(max-width:640px){.row-editor-grid{grid-template-columns:1fr 1fr;gap:6px;}}
+.color-swatch{width:20px;height:20px;border-radius:4px;cursor:pointer;border:2px solid transparent;flex-shrink:0;}
+.color-swatch.sel{border-color:var(--text);}
+.color-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px;align-items:center;}
+.taper-badge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--amber-bg);color:var(--amber-text);cursor:pointer;font-weight:600;white-space:nowrap;}
+.taper-badge.on{background:var(--amber);color:white;}
+.taper-sub{margin-top:8px;padding:8px;background:var(--amber-bg);border-radius:var(--radius-sm);}
+.taper-phases{display:flex;flex-direction:column;gap:5px;}
+.taper-phase{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.6);border-radius:var(--radius-sm);padding:6px 8px;flex-wrap:wrap;}
+.taper-phase-num{font-size:11px;font-weight:700;color:var(--amber-text);width:18px;flex-shrink:0;}
+.taper-phase-date{font-size:11px;color:var(--teal);font-weight:600;white-space:nowrap;}
+.taper-phase-rest{font-size:11px;color:var(--text3);font-style:italic;}
+.taper-phase-warn{font-size:11px;color:var(--red);font-weight:600;}
+.taper-add-btn{font-size:11px;padding:4px 10px;border-radius:var(--radius-sm);border:1px dashed var(--amber-text);background:transparent;color:var(--amber-text);cursor:pointer;font-family:inherit;margin-top:4px;}
+.taper-del-btn{font-size:11px;padding:2px 6px;border:none;background:transparent;color:var(--red);cursor:pointer;flex-shrink:0;}
+.phase-days-input{width:52px;padding:4px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;text-align:center;}
+.phase-freq-select{padding:4px 22px 4px 7px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6760' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;-webkit-appearance:none;appearance:none;}
+
+/* 残量ボタン */
+.remain-block{padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);margin-bottom:8px;}
+.remain-drug-name{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.remain-btns{display:flex;gap:6px;flex-wrap:wrap;}
+.remain-btn{padding:8px 12px;border-radius:var(--radius-sm);border:2px solid var(--border);background:var(--surface);font-size:12px;font-family:inherit;cursor:pointer;font-weight:500;color:var(--text2);transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:72px;-webkit-tap-highlight-color:transparent;}
+.remain-btn:hover{border-color:var(--border2);}
+.remain-btn.sel-0{border-color:var(--red);background:var(--red-bg);color:var(--red-text);}
+.remain-btn.sel-1{border-color:#d98c2a;background:#fff3dc;color:#5c3500;}
+.remain-btn.sel-2{border-color:var(--blue);background:var(--blue-bg);color:var(--blue-text);}
+.remain-btn.sel-3{border-color:var(--teal);background:var(--green-bg);color:var(--green-text);}
+.remain-btn .ricon{font-size:16px;}
+.remain-btn .rlabel{font-size:12px;font-weight:600;}
+.remain-btn .rpct{font-size:10px;color:var(--text3);}
+.remain-btn.sel-0 .rpct,.remain-btn.sel-1 .rpct,.remain-btn.sel-2 .rpct,.remain-btn.sel-3 .rpct{color:currentColor;opacity:.7;}
+.remain-manual{display:flex;align-items:center;gap:6px;margin-top:7px;}
+.remain-g-disp{font-size:12px;color:var(--teal);font-weight:600;margin-top:5px;}
+/* 混合軟膏用容器入力 */
+.container-btns{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+.cont-btn{padding:6px 10px;border-radius:var(--radius-sm);border:2px solid var(--border);background:var(--surface);font-size:12px;font-family:inherit;cursor:pointer;color:var(--text2);font-weight:500;}
+.cont-btn.sel{border-color:var(--teal);background:var(--green-bg);color:var(--green-text);}
+
+/* ガント */
+.gantt-outer{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table.gantt{border-collapse:collapse;font-size:11px;table-layout:fixed;}
+table.gantt th,table.gantt td{border:1px solid var(--border);padding:0;vertical-align:middle;}
+.col-part{width:66px;}.col-drug{width:130px;}.col-freq{width:54px;}.col-day{width:32px;}
+.th-part,.th-drug,.th-freq{background:var(--surface2);padding:5px 6px;font-size:10px;font-weight:600;color:var(--text2);}
+.th-day{background:var(--surface2);text-align:center;padding:2px 1px;line-height:1.3;}
+.th-day .md{font-size:9px;font-weight:600;}
+.th-day .dow{font-size:8px;color:var(--text3);}
+.th-day.sunday .dow{color:#c0392b;}.th-day.saturday .dow{color:#185fa5;}
+.th-day.today-hd{background:var(--green-bg);}
+.td-part{padding:4px 6px;font-size:11px;font-weight:600;background:var(--surface);}
+.td-drug{padding:3px 5px;font-size:10px;color:var(--text2);background:var(--surface);line-height:1.4;}
+.td-freq{padding:2px 3px;font-size:9px;color:var(--text2);background:var(--surface);text-align:center;line-height:1.4;}
+.day-cell{width:32px;height:var(--cell-h);position:relative;background:var(--surface);}
+.fill-block{position:absolute;left:2px;right:2px;bottom:2px;border-radius:2px;}
+.today-col{background:#edf7f3 !important;}
+
+/* 処方結果 */
+.rx-box{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;}
+.rx-head{background:var(--surface2);padding:8px 13px;font-size:12px;font-weight:600;color:var(--text2);}
+.rx-row{display:flex;align-items:center;padding:10px 13px;border-top:1px solid var(--border);gap:10px;flex-wrap:wrap;}
+.rx-name{font-size:13px;font-weight:700;flex:1;min-width:130px;}
+.rx-chain{font-size:11px;color:var(--text3);flex:2;line-height:1.7;}
+.rx-g{font-size:22px;font-weight:700;color:var(--teal);white-space:nowrap;}
+.rx-tag{font-size:11px;background:var(--amber-bg);color:var(--amber-text);padding:2px 8px;border-radius:10px;white-space:nowrap;}
+.rx-guide{font-size:12px;background:var(--green-bg);color:var(--green-text);padding:4px 10px;border-radius:var(--radius-sm);margin-top:5px;width:100%;}
+
+/* タブ */
+.tabs{display:flex;gap:2px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;margin-bottom:14px;}
+.tab-btn{flex:1;padding:8px;font-size:12px;font-family:inherit;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text2);cursor:pointer;font-weight:500;}
+.tab-btn.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1);}
+
+/* テキスト出力 */
+.text-out{width:100%;min-height:160px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:12px;line-height:1.85;background:var(--surface2);color:var(--text);resize:vertical;}
+
+/* 患者向けカード */
+.pt-header{background:var(--teal);color:white;padding:13px 16px;border-radius:var(--radius) var(--radius) 0 0;}
+.pt-header h2{font-size:15px;font-weight:700;margin-bottom:2px;}
+.pt-drug-row{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;}
+.pt-drug-row:last-child{border-bottom:none;}
+.pt-num{width:26px;height:26px;background:var(--green-bg);color:var(--green-text);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px;}
+
+/* 印刷 */
+@media print{
+  header,.step-nav,.no-print{display:none!important;}
+  body{background:white;padding:0;}
+  .main{padding:0;max-width:none;}
+  .card{border:none;padding:0;margin-bottom:8px;box-shadow:none;}
+  @page{size:A4 landscape;margin:12mm 10mm;}
+  :root{--cell-h:30px;}
+  .gantt-outer{overflow:visible;}
+  .today-col{background:white!important;}
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>アトピー外来 処方支援</h1>
+    <div class="sub">はまこどもクリニック</div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <button class="btn btn-ghost btn-sm no-print" onclick="loadSample()">サンプル</button>
+    <button class="btn btn-ghost btn-sm no-print" onclick="window.print()">🖨 印刷</button>
+  </div>
+</header>
+
+<div class="main">
+
+<!-- ステップナビ -->
+<div class="step-nav no-print">
+  <button class="step-btn on" id="nav0" onclick="goStep(0)">
+    <div class="step-num">1</div><span>塗り方を決める</span>
+  </button>
+  <button class="step-btn" id="nav1" onclick="goStep(1)">
+    <div class="step-num">2</div><span>受診日・残量</span>
+  </button>
+  <button class="step-btn" id="nav2" onclick="goStep(2)">
+    <div class="step-num">3</div><span>処方・記録・共有</span>
+  </button>
+</div>
+
+<!-- ======== STEP 1: 塗り方 ======== -->
+<div id="step0">
+  <div class="card">
+    <div class="card-title"><span class="icon">👤</span>患者情報</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
+      <div><label>患者 ID</label><input type="text" id="pid" placeholder="00000" maxlength="10" oninput="calcAll()"></div>
+      <div><label>患者名（任意）</label><input type="text" id="pname" placeholder="田中 太郎" oninput="calcAll()"></div>
+      <div>
+        <label>次回受診予定日（スケジュール終了日）</label>
+        <input type="date" id="nextDate" oninput="onNextDateChange()">
+        <div id="next-badge" style="font-size:12px;color:var(--text3);margin-top:4px;"></div>
+      </div>
+      <div><label>年齢グループ</label>
+        <select id="globalAge" onchange="calcAll()">
+          <option value="infant">3〜6か月</option>
+          <option value="child1">1〜2歳</option>
+          <option value="child3">3〜5歳</option>
+          <option value="child10">6〜10歳</option>
+          <option value="adult">成人</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="icon">📋</span>塗り方の設定
+      <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">（薬剤・部位・頻度・期間を入力）</span>
+    </div>
+    <div id="rows-wrap"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="addRow()">＋ 行を追加</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="if(confirm('全行を削除しますか？')){rows=[];renderRows();calcAll();}">🗑 クリア</button>
+    </div>
+  </div>
+
+  <!-- プレビューガント -->
+  <div class="card" id="gantt-preview-card">
+    <div class="card-title"><span class="icon">📅</span>スケジュールプレビュー
+      <span id="gantt-range" style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;"></span>
+    </div>
+    <div class="gantt-outer"><table class="gantt" id="gantt-table"></table></div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;margin-top:4px;" class="no-print">
+    <button class="btn btn-green" onclick="goStep(1)">次へ：受診日・残量を入力 →</button>
+  </div>
+</div>
+
+<!-- ======== STEP 2: 受診日・残量 ======== -->
+<div id="step1" style="display:none;">
+  <div class="card">
+    <div class="card-title"><span class="icon">📅</span>受診日</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;">
+      <div><label>今日の受診日</label><input type="date" id="todayDate" oninput="calcAll()"></div>
+      <div id="step2-date-summary" style="font-size:13px;color:var(--teal);font-weight:600;padding-bottom:8px;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="icon">💊</span>現在の残量
+      <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">（患者さんに確認）</span>
+    </div>
+    <div id="remain-list"></div>
+    <div id="remain-empty" style="font-size:13px;color:var(--text3);padding:10px 0;">ステップ1で薬剤を追加してください。</div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;margin-top:4px;flex-wrap:wrap;gap:8px;" class="no-print">
+    <button class="btn btn-ghost" onclick="goStep(0)">← 戻る</button>
+    <button class="btn btn-green" onclick="goStep(2)">次へ：処方・記録・共有 →</button>
+  </div>
+</div>
+
+<!-- ======== STEP 3: 処方・記録・共有 ======== -->
+<div id="step2" style="display:none;">
+  <div class="tabs no-print">
+    <button class="tab-btn on" onclick="switchTab('rx',this)">📋 処方箋</button>
+    <button class="tab-btn" onclick="switchTab('gantt',this)">📅 患者向けガント</button>
+    <button class="tab-btn" onclick="switchTab('karte',this)">📝 カルテ記録</button>
+  </div>
+
+  <!-- 処方タブ -->
+  <div id="panel-rx">
+    <div id="rx-area"></div>
+  </div>
+
+  <!-- ガントタブ -->
+  <div id="panel-gantt" style="display:none;">
+    <div class="card" id="print-gantt-card">
+      <div id="print-header" style="display:none;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:2px solid var(--teal);margin-bottom:10px;">
+          <div>
+            <div style="font-size:17px;font-weight:700;color:var(--teal);">軟膏 塗布スケジュール</div>
+            <div style="font-size:11px;color:var(--text2);">はまこどもクリニック</div>
+          </div>
+          <div id="print-meta" style="text-align:right;font-size:12px;line-height:1.8;"></div>
+        </div>
+        <div style="font-size:11px;background:var(--green-bg);color:var(--green-text);padding:6px 11px;border-radius:var(--radius-sm);margin-bottom:10px;">
+          <strong>棒の高さ = 塗る量の目安。</strong>　1 FTU（フィンガーチップユニット）= 人差し指の先から第1関節まで絞り出した量。棒が低いほど少量・低頻度です。
+        </div>
+      </div>
+      <div class="gantt-outer"><table class="gantt" id="gantt-table2"></table></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;" class="no-print">
+      <button class="btn btn-green" onclick="printGantt()">🖨 患者向けに印刷</button>
+    </div>
+  </div>
+
+  <!-- カルテタブ -->
+  <div id="panel-karte" style="display:none;">
+    <div class="card">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">下のテキストをコピーして電子カルテに貼り付けてください。</p>
+      <textarea id="karte-text" class="text-out" readonly></textarea>
+      <div style="display:flex;gap:10px;margin-top:10px;align-items:center;">
+        <button class="btn btn-green btn-sm" onclick="copyKarte()">📋 コピー</button>
+        <span id="copy-notice" style="font-size:12px;color:var(--teal);display:none;">コピーしました！</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-start;margin-top:4px;" class="no-print">
+    <button class="btn btn-ghost" onclick="goStep(1)">← 戻る</button>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ===== データ定義 =====
+const PRESETS=[
+  {name:"ロコイド軟膏 10g",       tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"リンデロンV軟膏 10g",    tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"アンテベート軟膏 10g",   tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"ベタメタゾン軟膏 10g",   tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"モイゼルト軟膏 28g",     tubeg:28, gPerFTU:0.35,mixed:false},
+  {name:"コレクチム軟膏 10g",     tubeg:10, gPerFTU:0.5, mixed:false},
+  {name:"プロトピック軟膏 5g",    tubeg:5,  gPerFTU:0.2, mixed:false},
+  {name:"ヒルドイドクリーム 25g", tubeg:25, gPerFTU:0.5, mixed:false},
+  {name:"ヒルドイドソフト軟膏 25g",tubeg:25,gPerFTU:0.5, mixed:false},
+  {name:"ロコイド/ヘパリン混合 10g",  tubeg:10, gPerFTU:0.5, mixed:true},
+  {name:"ベタメタゾン/ヘパリン混合 10g",tubeg:10,gPerFTU:0.5,mixed:true},
+  {name:"その他（手入力）",        tubeg:10, gPerFTU:0.5, mixed:false, custom:true},
+];
+const FREQS=[
+  {label:"1日2回",  val:2,    fillRatio:1.0, showEvery:1, dow:null},
+  {label:"1日1回",  val:1,    fillRatio:0.5, showEvery:1, dow:null},
+  {label:"2日に1回",val:0.5,  fillRatio:0.5, showEvery:2, dow:null},
+  {label:"週3回",   val:3/7,  fillRatio:0.5, showEvery:2, dow:null},
+  {label:"週2回 月木",val:2/7,fillRatio:0.5, showEvery:1, dow:[1,4]},
+  {label:"週2回 火金",val:2/7,fillRatio:0.5, showEvery:1, dow:[2,5]},
+  {label:"週1回",   val:1/7,  fillRatio:0.5, showEvery:7, dow:null},
+];
+const PARTS=[
+  {key:"face",    label:"顔・首",       bilateral:false},
+  {key:"trunk_f", label:"体幹前面",     bilateral:false},
+  {key:"trunk_b", label:"体幹後面",     bilateral:false},
+  {key:"arm",     label:"腕",   bilateral:true, sideNames:['右腕','左腕','両腕']},
+  {key:"leg",     label:"足",   bilateral:true, sideNames:['右足','左足','両足']},
+];
+const FTU_AGE={
+  adult:  {face:2.5,arm:4.0,trunk_f:7.0,trunk_b:7.0,leg:8.0},
+  child10:{face:2.0,arm:2.5,trunk_f:3.5,trunk_b:5.0,leg:4.5},
+  child3: {face:1.5,arm:2.0,trunk_f:3.0,trunk_b:3.5,leg:3.0},
+  child1: {face:1.5,arm:1.5,trunk_f:2.0,trunk_b:3.0,leg:2.0},
+  infant: {face:1.0,arm:1.0,trunk_f:1.0,trunk_b:1.5,leg:1.5},
+};
+const COLORS=[
+  {bg:"#5DCAA5",fg:"#04342C"},
+  {bg:"#85B7EB",fg:"#042C53"},
+  {bg:"#FAC775",fg:"#412402"},
+  {bg:"#AFA9EC",fg:"#26215C"},
+  {bg:"#F0997B",fg:"#4A1B0C"},
+  {bg:"#B4B2A9",fg:"#2C2C2A"},
+];
+// 残量パーセント
+const REMAIN_OPTS=[
+  {key:0, label:"ほぼない",     icon:"▁", pct:0.05, cls:"sel-0"},
+  {key:1, label:"少し残ってる", icon:"▃", pct:0.25, cls:"sel-1"},
+  {key:2, label:"半分くらい",   icon:"▅", pct:0.50, cls:"sel-2"},
+  {key:3, label:"次回分まである",icon:"▇",pct:1.00, cls:"sel-3"},
+];
+
+// ===== 状態 =====
+let rows=[], rowId=0;
+// remainState: {drugKey: {optKey, customG, containers}}
+let remainState={};
+// mixedPlanState: {drugKey: planIndex} — 混合軟膏の処方プラン選択（-1=未選択, 0=容器なし, 1〜=容器プラン）
+let mixedPlanState={};
+
+function newRow(){
+  return {
+    id:rowId++, presetIdx:0, customName:"",
+    part:"顔", sides:'right',
+    partKey:"face",
+    freqIdx:0, colorIdx:rows.length%COLORS.length,
+    startOffset:0, endOffset:null,
+    taper:false,
+    taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:null}],
+  };
+}
+
+// ===== ユーティリティ =====
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(d){if(!d)return'';return d.getFullYear()+'-'+zp(d.getMonth()+1)+'-'+zp(d.getDate());}
+function zp(n){return n<10?'0'+n:n;}
+function parseDate(s){if(!s)return null;const p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function dateDiff(a,b){if(!a||!b)return null;return Math.round((parseDate(b)-parseDate(a))/86400000);}
+function isToday(d){const t=new Date();return d.getFullYear()===t.getFullYear()&&d.getMonth()===t.getMonth()&&d.getDate()===t.getDate();}
+function getDrugName(r){return PRESETS[r.presetIdx].custom?(r.customName||'（薬剤名未入力）'):PRESETS[r.presetIdx].name;}
+// 同じプリセットの行をグループ化してユニーク薬剤リスト
+function uniqueDrugs(){
+  const seen={},list=[];
+  rows.forEach(r=>{
+    const k=r.presetIdx+'|'+(PRESETS[r.presetIdx].custom?r.customName:'');
+    if(!seen[k]){seen[k]=true;list.push({row:r,key:k});}
+  });
+  return list;
+}
+function numDays(){
+  const tv=document.getElementById('todayDate')?.value||fmt(new Date());
+  const nv=document.getElementById('nextDate')?.value;
+  if(!nv)return null;
+  const d=dateDiff(tv,nv);
+  return(d&&d>0)?d:null;
+}
+
+// ===== ステップ切替 =====
+function goStep(n){
+  [0,1,2].forEach(i=>{
+    document.getElementById('step'+i).style.display=i===n?'block':'none';
+    const nb=document.getElementById('nav'+i);
+    nb.className='step-btn'+(i===n?' on':i<n?' done':'');
+  });
+  if(n===1)renderRemain();
+  if(n===2){calcAll();renderStep3();}
+}
+
+// ===== STEP1: 行エディタ =====
+function renderRows(){
+  const wrap=document.getElementById('rows-wrap');
+  const nd=numDays()||14;
+  wrap.innerHTML='';
+  rows.forEach((r,i)=>{
+    const pOpts=PRESETS.map((p,pi)=>`<option value="${pi}"${pi===r.presetIdx?' selected':''}>${p.name}</option>`).join('');
+    const fOpts=FREQS.map((f,fi)=>`<option value="${fi}"${fi===r.freqIdx?' selected':''}>${f.label}</option>`).join('');
+    const partOpts=PARTS.map(p=>`<option value="${p.key}"${p.key===r.partKey?' selected':''}>${p.label}</option>`).join('');
+
+    const div=document.createElement('div');
+    div.className='row-editor';
+    div.innerHTML=`<div class="row-editor-grid">
+      <div>
+        <label>部位</label>
+        <select onchange="rows[${i}].partKey=this.value;rows[${i}].part=PARTS.find(p=>p.key===this.value).label;renderRows();calcAll()">${partOpts}</select>
+      </div>
+      <div>
+        <label>薬剤</label>
+        <select onchange="onPreset(${i},this.value)">${pOpts}</select>
+        ${PRESETS[r.presetIdx].custom?`<input type="text" value="${esc(r.customName)}" placeholder="薬剤名" style="margin-top:5px;" oninput="rows[${i}].customName=this.value;calcAll()">`:''} 
+      </div>
+      <div>
+        <label>${r.taper?'第1フェーズ頻度':'頻度'}</label>
+        <select onchange="rows[${i}].freqIdx=parseInt(this.value);if(rows[${i}].taper&&rows[${i}].taperPhases.length)rows[${i}].taperPhases[0].freqIdx=parseInt(this.value);calcAll()">${fOpts}</select>
+      </div>
+      <div>
+        <label>${PARTS.find(p=>p.key===r.partKey)?.bilateral?'左右':''}開始日目〜</label>
+        ${PARTS.find(p=>p.key===r.partKey)?.bilateral?
+          (()=>{const pt=PARTS.find(p=>p.key===r.partKey);const sn=pt.sideNames;
+           return `<select onchange="rows[${i}].sides=this.value;calcAll()">
+            <option value="right"${r.sides==='right'?' selected':''}>${sn[0]}</option>
+            <option value="left"${r.sides==='left'?' selected':''}>${sn[1]}</option>
+            <option value="both"${r.sides==='both'?' selected':''}>${sn[2]}</option>
+           </select>`;})()
+          :`<input type="number" value="${r.startOffset}" min="0" max="${nd-1}" step="1" oninput="rows[${i}].startOffset=Math.max(0,parseInt(this.value)||0);calcAll()">`}
+      </div>
+      ${!r.taper?`<div>
+        <label>〜終了日目</label>
+        <input type="number" value="${r.endOffset===null?nd-1:r.endOffset}" min="0" max="${nd-1}" step="1" oninput="rows[${i}].endOffset=Math.min(parseInt(this.value)||0,nd-1);calcAll()" style="${r.endOffset===null||r.endOffset>=nd-1?'border-color:var(--green)':''}">
+      </div>`:'<div></div>'}
+      <button class="btn-danger" onclick="rows.splice(${i},1);renderRows();calcAll();">×</button>
+    </div>
+    <div class="color-row">
+      ${COLORS.map((c,ci)=>`<div class="color-swatch${ci===r.colorIdx?' sel':''}" style="background:${c.bg};" onclick="rows[${i}].colorIdx=${ci};renderRows();calcAll()"></div>`).join('')}
+      <span class="taper-badge${r.taper?' on':''}" onclick="rows[${i}].taper=!rows[${i}].taper;renderRows();calcAll();">漸減設定</span>
+    </div>
+    ${r.taper?buildTaperPhasesHtml(i,r,nd):''}`;
+    wrap.appendChild(div);
+  });
+  renderGantt('gantt-table');
+}
+
+function buildTaperPhasesHtml(i,r,nd){
+  const tv=document.getElementById('todayDate')?.value||fmt(new Date());
+  const phases=r.taperPhases||[];
+  const totalSlots=nd-r.startOffset;
+  let usedDays=0;
+  const phaseInfo=phases.map((ph,pi)=>{
+    const isLast=pi===phases.length-1;
+    const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+    const startOff=r.startOffset+usedDays;
+    const endOff=Math.min(startOff+days-1,nd-1);
+    let dateStr='';
+    if(tv&&days>0){
+      const sd=addDays(parseDate(tv),startOff);
+      const ed=addDays(parseDate(tv),endOff);
+      dateStr=`${sd.getMonth()+1}/${sd.getDate()}〜${ed.getMonth()+1}/${ed.getDate()}`;
+    }
+    if(!isLast)usedDays+=ph.days||0;
+    return{days,isLast,dateStr,valid:days>0};
+  });
+  const overflow=(phases.slice(0,-1).reduce((s,p)=>s+(p.days||0),0))>=(totalSlots);
+  const phaseRows=phases.map((ph,pi)=>{
+    const info=phaseInfo[pi];
+    const fOpts=FREQS.map((f,fi)=>`<option value="${fi}"${fi===ph.freqIdx?' selected':''}>${f.label}</option>`).join('');
+    const canDel=phases.length>1;
+    let rightPart='';
+    if(info.isLast){
+      rightPart=overflow
+        ?`<span class="taper-phase-warn">⚠ 前のフェーズで期間が超過</span>`
+        :`<span class="taper-phase-rest">残り ${info.days}日</span>`;
+    }else{
+      rightPart=`<input class="phase-days-input" type="number" min="1" max="${nd}" value="${ph.days||7}" oninput="rows[${i}].taperPhases[${pi}].days=Math.max(1,parseInt(this.value)||1);renderRows();calcAll()"> <span style="font-size:11px;color:var(--text2);">日間</span>`;
+    }
+    return `<div class="taper-phase">
+      <span class="taper-phase-num">P${pi+1}</span>
+      <select class="phase-freq-select" onchange="rows[${i}].taperPhases[${pi}].freqIdx=parseInt(this.value);${pi===0?`rows[${i}].freqIdx=parseInt(this.value);`:''}renderRows();calcAll()">${fOpts}</select>
+      <span style="font-size:11px;color:var(--text2);">×</span>
+      ${rightPart}
+      ${info.dateStr&&info.valid?`<span class="taper-phase-date">${info.dateStr}</span>`:''}
+      ${canDel?`<button class="taper-del-btn" onclick="rows[${i}].taperPhases.splice(${pi},1);renderRows();calcAll();">✕</button>`:''}
+    </div>`;
+  }).join('');
+  const canAdd=phases.length<5&&!overflow;
+  return `<div class="taper-sub">
+    <div style="font-size:11px;font-weight:600;color:var(--amber-text);margin-bottom:6px;">📉 漸減スケジュール（今日から）</div>
+    <div class="taper-phases">${phaseRows}</div>
+    ${canAdd?`<button class="taper-add-btn" onclick="rows[${i}].taperPhases.splice(rows[${i}].taperPhases.length-1,0,{freqIdx:rows[${i}].taperPhases[Math.max(0,rows[${i}].taperPhases.length-2)].freqIdx,days:7});renderRows();calcAll();">＋ フェーズを追加</button>`:''}
+  </div>`;
+}
+
+function onPreset(i,v){
+  rows[i].presetIdx=parseInt(v);
+  rows[i].customName='';
+  renderRows();calcAll();
+}
+function addRow(){rows.push(newRow());renderRows();calcAll();}
+
+// ===== STEP2: 残量 =====
+function drugKey(r){return r.presetIdx+'|'+(PRESETS[r.presetIdx].custom?r.customName:'');}
+
+function renderRemain(){
+  const list=document.getElementById('remain-list');
+  const empty=document.getElementById('remain-empty');
+  const uds=uniqueDrugs();
+  if(!uds.length){list.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+
+  list.innerHTML=uds.map(({row:r,key:k})=>{
+    const pre=PRESETS[r.presetIdx];
+    const mixed=pre.mixed;
+    const nd=numDays()||14;
+    const state=remainState[k]||{optKey:-1,customG:null,containers:null};
+
+    // 混合軟膏は容器単位で聞く
+    if(mixed){
+      // 前回処方推定（今回の計算から逆算は無理なのでシンプルに）
+      const contBtns=[0,1,2,3,4,5].map(n=>`<button class="cont-btn${state.containers===n?' sel':''}" onclick="setContainers('${k}',${n})">${n===0?'なし':n+'個'}</button>`).join('');
+      return `<div class="remain-block">
+        <div class="remain-drug-name">
+          <span style="width:22px;height:22px;background:${COLORS[r.colorIdx].bg};border-radius:4px;display:inline-block;"></span>
+          ${esc(getDrugName(r))}
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">未開封の容器は何個ありますか？</div>
+        <div class="container-btns">${contBtns}</div>
+        ${state.containers!==null?`<div class="remain-g-disp">残量: 約 ${(state.containers*pre.tubeg).toFixed(0)}g（${state.containers}容器分）</div>`:''}
+      </div>`;
+    }
+
+    // 通常軟膏
+    const optBtns=REMAIN_OPTS.map(o=>`<button class="remain-btn${state.optKey===o.key?' '+o.cls:''}" onclick="setRemain('${k}',${o.key})">
+      <span class="ricon">${o.icon}</span>
+      <span class="rlabel">${o.label}</span>
+      <span class="rpct">${Math.round(o.pct*100)}%</span>
+    </button>`).join('');
+    const gDisp=calcRemainG(k);
+    return `<div class="remain-block">
+      <div class="remain-drug-name">
+        <span style="width:22px;height:22px;background:${COLORS[r.colorIdx].bg};border-radius:4px;display:inline-block;"></span>
+        ${esc(getDrugName(r))}
+      </div>
+      <div class="remain-btns">${optBtns}</div>
+      ${gDisp!==null?`<div class="remain-g-disp">残量: 約 ${gDisp.toFixed(1)}g</div>`:'<div class="remain-g-disp" style="color:var(--text3);">上から選択してください</div>'}
+    </div>`;
+  }).join('');
+}
+
+function setRemain(k,optKey){
+  if(!remainState[k])remainState[k]={optKey:-1,customG:null,containers:null};
+  remainState[k].optKey=optKey;
+  remainState[k].customG=null;
+  renderRemain();
+}
+function setContainers(k,n){
+  if(!remainState[k])remainState[k]={optKey:-1,customG:null,containers:null};
+  remainState[k].containers=n;
+  renderRemain();
+}
+
+function calcRemainG(k){
+  const state=remainState[k];
+  if(!state)return null;
+  const ud=uniqueDrugs().find(u=>u.key===k);
+  if(!ud)return null;
+  const pre=PRESETS[ud.row.presetIdx];
+  if(pre.mixed){
+    return state.containers!==null?state.containers*pre.tubeg:null;
+  }
+  if(state.customG!==null)return state.customG;
+  if(state.optKey<0)return null;
+  // 残量 = プリセット% × チューブ1本分（この薬の標準1本）
+  const opt=REMAIN_OPTS.find(o=>o.key===state.optKey);
+  return opt?opt.pct*pre.tubeg:null;
+}
+
+// ===== ガント描画 =====
+function getPhaseAt(row,dayIdx,nd){
+  if(!row.taper||!row.taperPhases||!row.taperPhases.length){
+    return{freqIdx:row.freqIdx,fillRatio:FREQS[row.freqIdx].fillRatio};
+  }
+  const phases=row.taperPhases;
+  const totalSlots=nd-row.startOffset;
+  let cursor=row.startOffset;
+  let usedDays=0;
+  for(let pi=0;pi<phases.length;pi++){
+    const isLast=pi===phases.length-1;
+    const days=isLast?Math.max(0,totalSlots-usedDays):(phases[pi].days||0);
+    if(dayIdx>=cursor&&dayIdx<cursor+days){
+      return{freqIdx:phases[pi].freqIdx,fillRatio:FREQS[phases[pi].freqIdx].fillRatio};
+    }
+    if(!isLast){cursor+=phases[pi].days||0;usedDays+=phases[pi].days||0;}
+  }
+  return{freqIdx:row.freqIdx,fillRatio:FREQS[row.freqIdx].fillRatio};
+}
+
+function shouldShow(row,dayIdx,startDate,nd){
+  const endOff=row.endOffset===null?nd-1:row.endOffset;
+  if(dayIdx<row.startOffset||dayIdx>endOff)return false;
+  const phase=getPhaseAt(row,dayIdx,nd);
+  const freq=FREQS[phase.freqIdx];
+  if(freq.dow){
+    if(!startDate)return true;
+    return freq.dow.includes(addDays(startDate,dayIdx).getDay());
+  }
+  return(dayIdx-row.startOffset)%freq.showEvery===0;
+}
+
+function renderGantt(tableId){
+  const tbl=document.getElementById(tableId);
+  if(!tbl)return;
+  const tv=document.getElementById('todayDate').value;
+  const start=parseDate(tv);
+  const nd=numDays()||14;
+  const DOW=['日','月','火','水','木','金','土'];
+  const CELL_H=38;
+  let html='<thead><tr>';
+  html+=`<th class="col-part th-part">部位</th><th class="col-drug th-drug">薬剤</th><th class="col-freq th-freq">頻度</th>`;
+  for(let i=0;i<nd;i++){
+    let md='',dow='',dc='',todayCls='';
+    if(start){
+      const d=addDays(start,i);
+      md=`${d.getMonth()+1}/${d.getDate()}`;
+      const dw=d.getDay();dow=DOW[dw];
+      dc=dw===0?' sunday':dw===6?' saturday':'';
+      if(isToday(d))todayCls=' today-hd';
+    }else{md=`${i+1}日`;}
+    html+=`<th class="col-day th-day${dc}${todayCls}"><div class="md">${md}</div><div class="dow">${dow}</div></th>`;
+  }
+  html+='</tr></thead><tbody>';
+  if(!rows.length){
+    html+=`<tr><td colspan="${nd+3}" style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">行を追加してください</td></tr>`;
+  }
+  rows.forEach(row=>{
+    const c=COLORS[row.colorIdx];
+    const partLabel=PARTS.find(p=>p.key===row.partKey)?.label||row.part;
+    const sideLabel=PARTS.find(p=>p.key===row.partKey)?.bilateral?
+      (()=>{const sn=PARTS.find(p=>p.key===row.partKey).sideNames;return row.sides==='both'?`（${sn[2]}）`:row.sides==='left'?`（${sn[1]}）`:`（${sn[0]}）`;})()
+      :'';
+    let freqLabel=FREQS[row.freqIdx].label;
+    if(row.taper&&row.taperPhases&&row.taperPhases.length){
+      freqLabel=row.taperPhases.map(ph=>FREQS[ph.freqIdx].label).join('→');
+    }
+    html+='<tr>';
+    html+=`<td class="td-part">${esc(partLabel+sideLabel)}</td>`;
+    html+=`<td class="td-drug">${esc(getDrugName(row))}</td>`;
+    html+=`<td class="td-freq">${esc(freqLabel)}</td>`;
+    for(let i=0;i<nd;i++){
+      const showOn=shouldShow(row,i,start,nd);
+      const todayCls=start&&isToday(addDays(start,i))?' today-col':'';
+      const phase=getPhaseAt(row,i,nd);
+      const fillH=Math.round((CELL_H-4)*phase.fillRatio);
+      html+=showOn?`<td class="day-cell${todayCls}"><div class="fill-block" style="height:${fillH}px;background:${c.bg};"></div></td>`:`<td class="day-cell${todayCls}"></td>`;
+    }
+    html+='</tr>';
+  });
+  html+='</tbody>';
+  tbl.innerHTML=html;
+  if(tableId==='gantt-table'){
+    const rangeEl=document.getElementById('gantt-range');
+    if(rangeEl&&start)rangeEl.textContent=`${start.getMonth()+1}/${start.getDate()}〜${addDays(start,nd-1).getMonth()+1}/${addDays(start,nd-1).getDate()}（${nd}日間）`;
+  }
+}
+
+// ===== 処方計算 =====
+function calcOnceG(row){
+  const pre=PRESETS[row.presetIdx];
+  const ageKey=document.getElementById('globalAge').value;
+  const ftu=FTU_AGE[ageKey][row.partKey]||0;
+  const sides=PARTS.find(p=>p.key===row.partKey)?.bilateral?(row.sides==='both'?2:1):1;
+  return ftu*sides*pre.gPerFTU;
+}
+function calcNeededG(row){
+  const nd=numDays()||0;
+  if(!nd)return 0;
+  if(row.taper&&row.taperPhases&&row.taperPhases.length){
+    const phases=row.taperPhases;
+    const totalSlots=nd-row.startOffset;
+    let g=0,usedDays=0;
+    phases.forEach((ph,pi)=>{
+      const isLast=pi===phases.length-1;
+      const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+      if(days>0)g+=calcOnceG(row)*FREQS[ph.freqIdx].val*days;
+      if(!isLast)usedDays+=ph.days||0;
+    });
+    return g;
+  }
+  return calcOnceG(row)*FREQS[row.freqIdx].val*nd;
+}
+
+// 薬剤ごとに合算（同じプリセットの行を合計）
+function calcPerDrug(){
+  const map={};
+  rows.forEach(r=>{
+    const k=drugKey(r);
+    if(!map[k])map[k]={row:r,neededG:0,parts:[]};
+    map[k].neededG+=calcNeededG(r);
+    const partLabel=PARTS.find(p=>p.key===r.partKey)?.label||r.part;
+    const sideLabel=PARTS.find(p=>p.key===r.partKey)?.bilateral?
+      (()=>{const sn=PARTS.find(p=>p.key===r.partKey).sideNames;return r.sides==='both'?`（${sn[2]}）`:r.sides==='left'?`（${sn[1]}）`:`（${sn[0]}）`;})()
+      :'';
+    let freqNote='';
+    if(r.taper&&r.taperPhases&&r.taperPhases.length){
+      freqNote=' ['+r.taperPhases.map(ph=>FREQS[ph.freqIdx].label).join('→')+']';
+    }else{
+      freqNote=` [${FREQS[r.freqIdx].label}]`;
+    }
+    map[k].parts.push(partLabel+sideLabel+freqNote);
+  });
+  return Object.entries(map).map(([k,v])=>({...v,key:k}));
+}
+
+function roundUpTube(netG,tubeg){
+  if(tubeg<=0)return{g:Math.ceil(netG),b:null};
+  const b=Math.ceil(netG/tubeg);
+  return{g:b*tubeg,b};
+}
+
+// ===== 混合軟膏 プラン生成 =====
+// avgDayG: 1日平均消費量(g), netG: 必要総量（残量控除後）
+// 返り値: [{label, contG, count, totalG, daysPerCont}] — plans[0]は常に「容器なし」
+function calcMixedPlans(avgDayG, netG){
+  const plans=[];
+  // プラン0: 容器なし（5g単位切り上げ）
+  const noContG=Math.ceil(netG/5)*5||5;
+  plans.push({label:'容器なし（切り上げのみ）', contG:null, count:null, totalG:noContG, daysPerCont:null});
+  if(avgDayG<=0)return plans;
+  // 容器ありプラン: 1〜7日ごとに1容器を試す
+  const seen=new Set();
+  for(let days=1;days<=7;days++){
+    const rawG=avgDayG*days;
+    // 5g単位で切り上げ、最低5g
+    const contG=Math.max(5,Math.ceil(rawG/5)*5);
+    if(seen.has(contG))continue;
+    seen.add(contG);
+    const count=Math.ceil(netG/contG);
+    const totalG=contG*count;
+    plans.push({label:`${contG}g × ${count}個（計${totalG}g）`, contG, count, totalG, daysPerCont:days});
+  }
+  return plans;
+}
+
+// ===== STEP3レンダリング =====
+function calcAll(){renderRows();}
+
+function renderStep3(){
+  const nd=numDays();
+  const tv=document.getElementById('todayDate').value;
+  const nv=document.getElementById('nextDate').value;
+
+  // 処方エリア
+  const rxArea=document.getElementById('rx-area');
+  if(!nd){
+    rxArea.innerHTML='<div class="card" style="color:var(--text3);font-size:13px;">受診日と次回受診日を入力してください（ステップ2）。</div>';
+  }else{
+    const drugList=calcPerDrug();
+    let html='<div class="rx-box"><div class="rx-head">処方内容（'+nd+'日分）</div>';
+    drugList.forEach(({row:r,key:k,neededG,parts})=>{
+      const pre=PRESETS[r.presetIdx];
+      const remainG=calcRemainG(k)??0;
+      const netG=Math.max(0,neededG-remainG);
+      // 1日平均消費量
+      const onceTotalG=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+calcOnceG(ro),0);
+      const avgFreqVal=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>{
+        const nd2=numDays()||1;
+        if(ro.taper&&ro.taperPhases&&ro.taperPhases.length){
+          const totalSlots=nd2-ro.startOffset;
+          let wSum=0,usedDays=0;
+          ro.taperPhases.forEach((ph,pi)=>{
+            const isLast=pi===ro.taperPhases.length-1;
+            const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+            wSum+=FREQS[ph.freqIdx].val*days;
+            if(!isLast)usedDays+=ph.days||0;
+          });
+          return s+wSum/nd2;
+        }
+        return s+FREQS[ro.freqIdx].val;
+      },0);
+      const avgDayG=onceTotalG*avgFreqVal;
+
+      let ru, guideHtml='', planSelectorHtml='';
+      if(pre.mixed){
+        // 混合軟膏: プラン一覧生成 & 選択UI
+        const plans=calcMixedPlans(avgDayG,netG);
+        const selIdx=mixedPlanState[k]??-1;
+        // 選択プランに基づく処方量決定（未選択はプラン0をデフォルト）
+        const activePlan=plans[selIdx>=0?selIdx:0];
+        ru={g:activePlan.totalG, b:null};
+
+        // プラン選択ボタン
+        const btnHtml=plans.map((p,pi)=>{
+          const isSel=(selIdx<0&&pi===0)||selIdx===pi;
+          return `<button
+            onclick="mixedPlanState['${k}']=${pi};renderStep3();"
+            style="padding:7px 11px;border-radius:6px;font-size:11px;font-family:inherit;cursor:pointer;font-weight:${isSel?700:400};
+              border:2px solid ${isSel?'var(--teal)':'var(--border)'};
+              background:${isSel?'var(--green-bg)':'var(--surface)'};
+              color:${isSel?'var(--green-text)':'var(--text2)'};
+              white-space:nowrap;">
+            ${esc(p.label)}
+          </button>`;
+        }).join('');
+        planSelectorHtml=`<div style="margin:6px 0 2px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+          <span style="font-size:11px;color:var(--text2);white-space:nowrap;">容器選択：</span>
+          ${btnHtml}
+        </div>`;
+
+        // ガイド文
+        if(activePlan.contG!==null&&activePlan.daysPerCont!==null){
+          guideHtml=`<div class="rx-guide">💡 <strong>${activePlan.contG}g入り容器を${activePlan.count}個</strong>処方。1容器を約<strong style="font-size:16px;"> ${activePlan.daysPerCont} 日</strong>で使い切るペース。<br><span style="font-size:11px;">薬局への指示：${activePlan.contG}g × ${activePlan.count}ケースで調剤してください。</span></div>`;
+        }else{
+          // 容器なし
+          if(pre.tubeg>0&&avgDayG>0){
+            const dpt=Math.round(ru.g/avgDayG*10)/10;
+            guideHtml=`<div class="rx-guide">💡 合計 <strong>${ru.g}g</strong> 処方（容器分割なし）。約<strong style="font-size:16px;"> ${dpt} 日</strong>で使い切るペース。</div>`;
+          }
+        }
+      }else{
+        // 通常軟膏
+        ru=roundUpTube(netG,pre.tubeg);
+        if(pre.tubeg>0&&onceTotalG>0&&avgDayG>0){
+          const dpt=Math.round(pre.tubeg/avgDayG*10)/10;
+          guideHtml=`<div class="rx-guide">💡 1本（${pre.tubeg}g）を約<strong style="font-size:16px;"> ${dpt} 日</strong>で使い切るペース。</div>`;
+        }
+      }
+
+      const chain=`必要 ${neededG.toFixed(1)}g ー 残 ${remainG.toFixed(1)}g = ${netG.toFixed(1)}g → ${ru.g}g`;
+      html+=`<div class="rx-row" style="flex-wrap:wrap;">
+        <span style="width:22px;height:22px;background:${COLORS[r.colorIdx].bg};border-radius:4px;flex-shrink:0;display:inline-block;"></span>
+        <div class="rx-name">${esc(getDrugName(r))}</div>
+        <div class="rx-chain" style="flex-basis:100%;flex:none;width:100%;">${esc(parts.join('、'))}<br>${chain}${planSelectorHtml}</div>
+        ${remainG>0?`<span class="rx-tag">残 ${remainG.toFixed(0)}g 控除</span>`:''}
+        <div class="rx-g">${ru.g}g</div>
+        ${guideHtml?'</div><div class="rx-row" style="padding-top:0;">'+guideHtml:''}
+      </div>`;
+    });
+    html+='</div>';
+    rxArea.innerHTML=html;
+  }
+
+  // ガント（患者向け）
+  renderGantt('gantt-table2');
+  // 印刷ヘッダー
+  const ph=document.getElementById('print-header');
+  ph.style.display='none'; // 印刷時CSSで表示
+  const pm=document.getElementById('print-meta');
+  const pid=document.getElementById('pid').value;
+  const pname=document.getElementById('pname').value;
+  const metaLines=[];
+  if(pname||pid)metaLines.push((pname||'')+(pid?' ／ ID: '+pid:''));
+  if(tv)metaLines.push('受診日：'+tv.replace(/-/g,'/'));
+  if(nv)metaLines.push('次回受診：'+nv.replace(/-/g,'/'));
+  pm.innerHTML=metaLines.map(l=>`<div>${esc(l)}</div>`).join('');
+
+  // カルテテキスト
+  buildKarteText();
+}
+
+function buildKarteText(){
+  const tv=document.getElementById('todayDate').value||'未入力';
+  const nv=document.getElementById('nextDate').value||'未入力';
+  const nd=numDays();
+  const pid=document.getElementById('pid').value||'未入力';
+  const pname=document.getElementById('pname').value||'';
+  const ageKey=document.getElementById('globalAge').value;
+  const ageLabels={infant:'3〜6か月',child1:'1〜2歳',child3:'3〜5歳',child10:'6〜10歳',adult:'成人'};
+  let txt='【アトピー性皮膚炎 軟膏処方記録】\n';
+  txt+=`患者ID: ${pid}${pname?' / '+pname:''}　年齢: ${ageLabels[ageKey]}\n`;
+  txt+=`受診日: ${tv}　次回受診: ${nv}${nd?'（'+nd+'日後）':''}\n`;
+  txt+='─'.repeat(40)+'\n\n';
+  txt+='■ 塗り方の指示\n';
+  rows.forEach((r,i)=>{
+    const partLabel=PARTS.find(p=>p.key===r.partKey)?.label||r.part;
+    const sideLabel=PARTS.find(p=>p.key===r.partKey)?.bilateral?
+      (()=>{const sn=PARTS.find(p=>p.key===r.partKey).sideNames;return r.sides==='both'?`（${sn[2]}）`:r.sides==='left'?`（${sn[1]}）`:`（${sn[0]}）`;})()
+      :'';
+    const nd2=numDays()||14;
+    const endOff=r.endOffset===null?nd2-1:r.endOffset;
+    txt+=`${i+1}. ${partLabel}${sideLabel}：${getDrugName(r)}　`;
+    if(r.taper&&r.taperPhases&&r.taperPhases.length){
+      const totalSlots=nd2-r.startOffset;
+      let usedDays=0;
+      txt+=r.taperPhases.map((ph,pi)=>{
+        const isLast=pi===r.taperPhases.length-1;
+        const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+        if(!isLast)usedDays+=ph.days||0;
+        return `${FREQS[ph.freqIdx].label}×${days}日`;
+      }).join(' → ');
+    }else{
+      txt+=FREQS[r.freqIdx].label;
+      if(r.startOffset>0||endOff<nd2-1)txt+=`（${r.startOffset+1}〜${endOff+1}日目）`;
+    }
+    txt+='\n';
+  });
+  txt+='\n■ 処方内容\n';
+  calcPerDrug().forEach(({row:r,key:k,neededG,parts})=>{
+    const pre=PRESETS[r.presetIdx];
+    const remainG=calcRemainG(k)??0;
+    const netG=Math.max(0,neededG-remainG);
+    const onceTotalG=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+calcOnceG(ro),0);
+    const avgFreqVal=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+FREQS[ro.freqIdx].val,0);
+    const avgDayG=onceTotalG*avgFreqVal;
+    let ru, paceNote='';
+    if(pre.mixed){
+      const plans=calcMixedPlans(avgDayG,netG);
+      const selIdx=mixedPlanState[k]??-1;
+      const activePlan=plans[selIdx>=0?selIdx:0];
+      ru={g:activePlan.totalG,b:null};
+      if(activePlan.contG!==null){
+        paceNote=`  ※ ${activePlan.contG}g容器 × ${activePlan.count}個処方。1容器を約${activePlan.daysPerCont}日で使い切るペース\n`;
+        paceNote+=`  ※ 薬局への指示：${activePlan.contG}g × ${activePlan.count}ケースで調剤してください\n`;
+      }else if(avgDayG>0){
+        const dpt=Math.round(ru.g/avgDayG*10)/10;
+        paceNote=`  ※ 合計${ru.g}g処方（容器分割なし）。約${dpt}日で使い切るペース\n`;
+      }
+    }else{
+      ru=roundUpTube(netG,pre.tubeg);
+      if(pre.tubeg>0&&avgDayG>0){
+        const dpt=Math.round(pre.tubeg/avgDayG*10)/10;
+        paceNote=`  ※ 1本（${pre.tubeg}g）を約${dpt}日で使い切るペース\n`;
+      }
+    }
+    txt+=`・${getDrugName(r)}\n`;
+    txt+=`  塗布部位: ${parts.join('、')}\n`;
+    txt+=`  必要量 ${neededG.toFixed(1)}g ー 残量 ${remainG.toFixed(1)}g = 処方 ${ru.g}g`;
+    if(ru.b)txt+=`（${ru.b}本）`;
+    txt+='\n';
+    txt+=paceNote;
+  });
+  document.getElementById('karte-text').value=txt;
+}
+
+// ===== 印刷 =====
+function printGantt(){
+  document.getElementById('print-header').style.display='block';
+  window.print();
+  setTimeout(()=>document.getElementById('print-header').style.display='none',1000);
+}
+
+// ===== タブ =====
+function switchTab(id,btn){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  ['rx','gantt','karte'].forEach(t=>{
+    document.getElementById('panel-'+t).style.display=t===id?'block':'none';
+  });
+}
+
+// ===== コピー =====
+function copyKarte(){
+  const ta=document.getElementById('karte-text');
+  if(navigator.clipboard)navigator.clipboard.writeText(ta.value).then(showCopied);
+  else{ta.select();document.execCommand('copy');showCopied();}
+}
+function showCopied(){
+  const n=document.getElementById('copy-notice');
+  n.style.display='inline';setTimeout(()=>n.style.display='none',2000);
+}
+
+// ===== next badge / date handlers =====
+function updateBadge(){
+  const tv=document.getElementById('todayDate').value;
+  const nv=document.getElementById('nextDate').value;
+  const nb=document.getElementById('next-badge');
+  if(!nb)return;
+  const nd=dateDiff(tv,nv);
+  if(nd&&nd>0)nb.innerHTML=`<span style="color:var(--teal);font-weight:600;">今日から ${nd} 日後</span>`;
+  else if(nv)nb.innerHTML=`<span style="color:var(--red);">日付を確認してください</span>`;
+  else nb.textContent='次回受診日を選ぶと終了日が確定します';
+  // step2のサマリー更新
+  const s2=document.getElementById('step2-date-summary');
+  if(s2){
+    if(nd&&nd>0)s2.textContent=`次回受診: ${nv} （${nd}日後）`;
+    else s2.textContent='';
+  }
+}
+// 次回受診日変更時: 終了日がnullの行は自動追従（endOffset=nd-1 を維持）
+function onNextDateChange(){
+  updateBadge();
+  // endOffset=nullの行はnumDays-1を維持するので再描画だけでOK
+  renderRows();calcAll();
+}
+document.getElementById('todayDate').addEventListener('input',()=>{updateBadge();calcAll();});
+document.getElementById('nextDate').addEventListener('input',onNextDateChange);
+
+// ===== サンプル =====
+function loadSample(){
+  rows=[];rowId=0;
+  document.getElementById('pid').value='12345';
+  document.getElementById('pname').value='田中 太郎';
+  document.getElementById('globalAge').value='infant';
+  const today=new Date();
+  document.getElementById('todayDate').value=fmt(today);
+  document.getElementById('nextDate').value=fmt(addDays(today,21));
+  updateBadge();
+  const data=[
+    {presetIdx:9,partKey:'trunk_f',sides:'right',freqIdx:0,colorIdx:0,startOffset:0,endOffset:null,
+     taper:true,taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:7},{freqIdx:2,days:null}]},
+    {presetIdx:9,partKey:'trunk_b',sides:'right',freqIdx:1,colorIdx:0,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:1,days:null}]},
+    {presetIdx:9,partKey:'face',   sides:'right',freqIdx:2,colorIdx:1,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:2,days:null}]},
+    {presetIdx:4,partKey:'face',   sides:'right',freqIdx:0,colorIdx:2,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:0,days:null}]},
+    {presetIdx:4,partKey:'trunk_f',sides:'right',freqIdx:0,colorIdx:2,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:0,days:null}]},
+  ];
+  data.forEach(d=>{
+    const r=newRow();
+    Object.assign(r,d);
+    r.part=PARTS.find(p=>p.key===r.partKey)?.label||r.partKey;
+    rows.push(r);
+  });
+  remainState={
+    '9|':{optKey:0,customG:null,containers:null},
+    '4|':{optKey:1,customG:null,containers:null},
+  };
+  renderRows();calcAll();
+}
+
+// ===== 初期化 =====
+(function(){
+  const today=new Date();
+  document.getElementById('todayDate').value=fmt(today);
+  document.getElementById('nextDate').value=fmt(addDays(today,14));
+  updateBadge();
+  renderRows();
+  calcAll();
+})();
+</script>
+</body>
+</html>
