@@ -360,6 +360,8 @@ const REMAIN_OPTS=[
 let rows=[], rowId=0;
 // remainState: {drugKey: {optKey, customG, containers}}
 let remainState={};
+// mixedPlanState: {drugKey: planIndex} — 混合軟膏の処方プラン選択（-1=未選択, 0=容器なし, 1〜=容器プラン）
+let mixedPlanState={};
 
 function newRow(){
   return {
@@ -727,6 +729,30 @@ function roundUpTube(netG,tubeg){
   return{g:b*tubeg,b};
 }
 
+// ===== 混合軟膏 プラン生成 =====
+// avgDayG: 1日平均消費量(g), netG: 必要総量（残量控除後）
+// 返り値: [{label, contG, count, totalG, daysPerCont}] — plans[0]は常に「容器なし」
+function calcMixedPlans(avgDayG, netG){
+  const plans=[];
+  // プラン0: 容器なし（5g単位切り上げ）
+  const noContG=Math.ceil(netG/5)*5||5;
+  plans.push({label:'容器なし（切り上げのみ）', contG:null, count:null, totalG:noContG, daysPerCont:null});
+  if(avgDayG<=0)return plans;
+  // 容器ありプラン: 1〜7日ごとに1容器を試す
+  const seen=new Set();
+  for(let days=1;days<=7;days++){
+    const rawG=avgDayG*days;
+    // 5g単位で切り上げ、最低5g
+    const contG=Math.max(5,Math.ceil(rawG/5)*5);
+    if(seen.has(contG))continue;
+    seen.add(contG);
+    const count=Math.ceil(netG/contG);
+    const totalG=contG*count;
+    plans.push({label:`${contG}g × ${count}個（計${totalG}g）`, contG, count, totalG, daysPerCont:days});
+  }
+  return plans;
+}
+
 // ===== STEP3レンダリング =====
 function calcAll(){renderRows();}
 
@@ -746,8 +772,7 @@ function renderStep3(){
       const pre=PRESETS[r.presetIdx];
       const remainG=calcRemainG(k)??0;
       const netG=Math.max(0,neededG-remainG);
-      const ru=pre.mixed?{g:Math.ceil(netG/5)*5||5,b:null}:roundUpTube(netG,pre.tubeg);
-      // 容器指示（混合軟膏）
+      // 1日平均消費量
       const onceTotalG=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+calcOnceG(ro),0);
       const avgFreqVal=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>{
         const nd2=numDays()||1;
@@ -765,20 +790,58 @@ function renderStep3(){
         return s+FREQS[ro.freqIdx].val;
       },0);
       const avgDayG=onceTotalG*avgFreqVal;
-      let guideHtml='';
-      if(pre.mixed&&avgDayG>0&&ru.g>0){
-        const daysPerCont=pre.tubeg/avgDayG;
-        const dpt=Math.round(daysPerCont*10)/10;
-        guideHtml=`<div class="rx-guide">💡 1容器（${pre.tubeg}g）を約<strong style="font-size:16px;"> ${dpt} 日</strong>で使い切るペース。${Math.ceil(ru.g/pre.tubeg)}個処方。</div>`;
-      }else if(!pre.mixed&&pre.tubeg>0&&onceTotalG>0&&avgDayG>0){
-        const dpt=Math.round(pre.tubeg/avgDayG*10)/10;
-        guideHtml=`<div class="rx-guide">💡 1本（${pre.tubeg}g）を約<strong style="font-size:16px;"> ${dpt} 日</strong>で使い切るペース。</div>`;
+
+      let ru, guideHtml='', planSelectorHtml='';
+      if(pre.mixed){
+        // 混合軟膏: プラン一覧生成 & 選択UI
+        const plans=calcMixedPlans(avgDayG,netG);
+        const selIdx=mixedPlanState[k]??-1;
+        // 選択プランに基づく処方量決定（未選択はプラン0をデフォルト）
+        const activePlan=plans[selIdx>=0?selIdx:0];
+        ru={g:activePlan.totalG, b:null};
+
+        // プラン選択ボタン
+        const btnHtml=plans.map((p,pi)=>{
+          const isSel=(selIdx<0&&pi===0)||selIdx===pi;
+          return `<button
+            onclick="mixedPlanState['${k}']=${pi};renderStep3();"
+            style="padding:7px 11px;border-radius:6px;font-size:11px;font-family:inherit;cursor:pointer;font-weight:${isSel?700:400};
+              border:2px solid ${isSel?'var(--teal)':'var(--border)'};
+              background:${isSel?'var(--green-bg)':'var(--surface)'};
+              color:${isSel?'var(--green-text)':'var(--text2)'};
+              white-space:nowrap;">
+            ${esc(p.label)}
+          </button>`;
+        }).join('');
+        planSelectorHtml=`<div style="margin:6px 0 2px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+          <span style="font-size:11px;color:var(--text2);white-space:nowrap;">容器選択：</span>
+          ${btnHtml}
+        </div>`;
+
+        // ガイド文
+        if(activePlan.contG!==null&&activePlan.daysPerCont!==null){
+          guideHtml=`<div class="rx-guide">💡 <strong>${activePlan.contG}g入り容器を${activePlan.count}個</strong>処方。1容器を約<strong style="font-size:16px;"> ${activePlan.daysPerCont} 日</strong>で使い切るペース。<br><span style="font-size:11px;">薬局への指示：${activePlan.contG}g × ${activePlan.count}ケースで調剤してください。</span></div>`;
+        }else{
+          // 容器なし
+          if(pre.tubeg>0&&avgDayG>0){
+            const dpt=Math.round(ru.g/avgDayG*10)/10;
+            guideHtml=`<div class="rx-guide">💡 合計 <strong>${ru.g}g</strong> 処方（容器分割なし）。約<strong style="font-size:16px;"> ${dpt} 日</strong>で使い切るペース。</div>`;
+          }
+        }
+      }else{
+        // 通常軟膏
+        ru=roundUpTube(netG,pre.tubeg);
+        if(pre.tubeg>0&&onceTotalG>0&&avgDayG>0){
+          const dpt=Math.round(pre.tubeg/avgDayG*10)/10;
+          guideHtml=`<div class="rx-guide">💡 1本（${pre.tubeg}g）を約<strong style="font-size:16px;"> ${dpt} 日</strong>で使い切るペース。</div>`;
+        }
       }
-      const chain=`必要 ${neededG.toFixed(1)}g ー 残 ${remainG.toFixed(1)}g = ${netG.toFixed(1)}g → ${ru.g}g に切り上げ`;
-      html+=`<div class="rx-row">
+
+      const chain=`必要 ${neededG.toFixed(1)}g ー 残 ${remainG.toFixed(1)}g = ${netG.toFixed(1)}g → ${ru.g}g`;
+      html+=`<div class="rx-row" style="flex-wrap:wrap;">
         <span style="width:22px;height:22px;background:${COLORS[r.colorIdx].bg};border-radius:4px;flex-shrink:0;display:inline-block;"></span>
         <div class="rx-name">${esc(getDrugName(r))}</div>
-        <div class="rx-chain">${esc(parts.join('、'))}<br>${chain}</div>
+        <div class="rx-chain" style="flex-basis:100%;flex:none;width:100%;">${esc(parts.join('、'))}<br>${chain}${planSelectorHtml}</div>
         ${remainG>0?`<span class="rx-tag">残 ${remainG.toFixed(0)}g 控除</span>`:''}
         <div class="rx-g">${ru.g}g</div>
         ${guideHtml?'</div><div class="rx-row" style="padding-top:0;">'+guideHtml:''}
@@ -845,19 +908,35 @@ function buildKarteText(){
     const pre=PRESETS[r.presetIdx];
     const remainG=calcRemainG(k)??0;
     const netG=Math.max(0,neededG-remainG);
-    const ru=pre.mixed?{g:Math.ceil(netG/5)*5||5,b:null}:roundUpTube(netG,pre.tubeg);
+    const onceTotalG=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+calcOnceG(ro),0);
+    const avgFreqVal=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+FREQS[ro.freqIdx].val,0);
+    const avgDayG=onceTotalG*avgFreqVal;
+    let ru, paceNote='';
+    if(pre.mixed){
+      const plans=calcMixedPlans(avgDayG,netG);
+      const selIdx=mixedPlanState[k]??-1;
+      const activePlan=plans[selIdx>=0?selIdx:0];
+      ru={g:activePlan.totalG,b:null};
+      if(activePlan.contG!==null){
+        paceNote=`  ※ ${activePlan.contG}g容器 × ${activePlan.count}個処方。1容器を約${activePlan.daysPerCont}日で使い切るペース\n`;
+        paceNote+=`  ※ 薬局への指示：${activePlan.contG}g × ${activePlan.count}ケースで調剤してください\n`;
+      }else if(avgDayG>0){
+        const dpt=Math.round(ru.g/avgDayG*10)/10;
+        paceNote=`  ※ 合計${ru.g}g処方（容器分割なし）。約${dpt}日で使い切るペース\n`;
+      }
+    }else{
+      ru=roundUpTube(netG,pre.tubeg);
+      if(pre.tubeg>0&&avgDayG>0){
+        const dpt=Math.round(pre.tubeg/avgDayG*10)/10;
+        paceNote=`  ※ 1本（${pre.tubeg}g）を約${dpt}日で使い切るペース\n`;
+      }
+    }
     txt+=`・${getDrugName(r)}\n`;
     txt+=`  塗布部位: ${parts.join('、')}\n`;
     txt+=`  必要量 ${neededG.toFixed(1)}g ー 残量 ${remainG.toFixed(1)}g = 処方 ${ru.g}g`;
     if(ru.b)txt+=`（${ru.b}本）`;
     txt+='\n';
-    const onceTotalG=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+calcOnceG(ro),0);
-    const avgFreqVal=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+FREQS[ro.freqIdx].val,0);
-    const avgDayG=onceTotalG*avgFreqVal;
-    if(pre.tubeg>0&&avgDayG>0){
-      const dpt=Math.round(pre.tubeg/avgDayG*10)/10;
-      txt+=`  ※ 1${pre.mixed?'容器':'本'}（${pre.tubeg}g）を約${dpt}日で使い切るペース\n`;
-    }
+    txt+=paceNote;
   });
   document.getElementById('karte-text').value=txt;
 }
