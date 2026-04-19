@@ -63,7 +63,6 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 .taper-phases{display:flex;flex-direction:column;gap:5px;}
 .taper-phase{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.6);border-radius:var(--radius-sm);padding:6px 8px;flex-wrap:wrap;}
 .taper-phase-num{font-size:11px;font-weight:700;color:var(--amber-text);width:18px;flex-shrink:0;}
-.taper-phase-arrow{font-size:11px;color:var(--amber-text);}
 .taper-phase-date{font-size:11px;color:var(--teal);font-weight:600;white-space:nowrap;}
 .taper-phase-rest{font-size:11px;color:var(--text3);font-style:italic;}
 .taper-phase-warn{font-size:11px;color:var(--red);font-weight:600;}
@@ -370,7 +369,6 @@ function newRow(){
     freqIdx:0, colorIdx:rows.length%COLORS.length,
     startOffset:0, endOffset:null,
     taper:false,
-    // phases: [{freqIdx, days}]  最後のphaseのdaysはnull=「残り全部」
     taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:null}],
   };
 }
@@ -424,10 +422,6 @@ function renderRows(){
 
     const div=document.createElement('div');
     div.className='row-editor';
-
-    // フェーズUI（漸減ON時）
-    const taperHtml=buildTaperPhasesHtml(i,r,nd);
-
     div.innerHTML=`<div class="row-editor-grid">
       <div>
         <label>部位</label>
@@ -456,7 +450,7 @@ function renderRows(){
       ${COLORS.map((c,ci)=>`<div class="color-swatch${ci===r.colorIdx?' sel':''}" style="background:${c.bg};" onclick="rows[${i}].colorIdx=${ci};renderRows();calcAll()"></div>`).join('')}
       <span class="taper-badge${r.taper?' on':''}" onclick="rows[${i}].taper=!rows[${i}].taper;renderRows();calcAll();">漸減設定</span>
     </div>
-    ${r.taper?taperHtml:''}`;
+    ${r.taper?buildTaperPhasesHtml(i,r,nd):''}`;
     wrap.appendChild(div);
   });
   renderGantt('gantt-table');
@@ -464,62 +458,46 @@ function renderRows(){
 
 function buildTaperPhasesHtml(i,r,nd){
   const tv=document.getElementById('todayDate')?.value||fmt(new Date());
-  const nv=document.getElementById('nextDate')?.value;
   const phases=r.taperPhases||[];
-  const totalDays=nd;
-
-  // フェーズごとの開始日・終了日を計算
-  let cursor=r.startOffset;
+  const totalSlots=nd-r.startOffset;
+  let usedDays=0;
   const phaseInfo=phases.map((ph,pi)=>{
     const isLast=pi===phases.length-1;
-    const usedDays=phases.slice(0,pi).reduce((s,p)=>s+(p.days||0),0);
-    const remaining=totalDays-r.startOffset-usedDays;
-    const days=isLast?remaining:(ph.days||0);
-    const startOff=cursor;
-    const endOff=Math.min(startOff+days-1,totalDays-1);
-    if(!isLast)cursor+=ph.days||0;
-    // 日付に変換
+    const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+    const startOff=r.startOffset+usedDays;
+    const endOff=Math.min(startOff+days-1,nd-1);
     let dateStr='';
-    if(tv){
+    if(tv&&days>0){
       const sd=addDays(parseDate(tv),startOff);
       const ed=addDays(parseDate(tv),endOff);
       dateStr=`${sd.getMonth()+1}/${sd.getDate()}〜${ed.getMonth()+1}/${ed.getDate()}`;
     }
-    return{days,remaining,isLast,dateStr,startOff,endOff,valid:days>0};
+    if(!isLast)usedDays+=ph.days||0;
+    return{days,isLast,dateStr,valid:days>0};
   });
-
-  const usedDaysTotal=phases.slice(0,-1).reduce((s,p)=>s+(p.days||0),0);
-  const overflow=usedDaysTotal>=(totalDays-r.startOffset);
-
+  const overflow=(phases.slice(0,-1).reduce((s,p)=>s+(p.days||0),0))>=(totalSlots);
   const phaseRows=phases.map((ph,pi)=>{
     const info=phaseInfo[pi];
     const fOpts=FREQS.map((f,fi)=>`<option value="${fi}"${fi===ph.freqIdx?' selected':''}>${f.label}</option>`).join('');
-    const isLast=pi===phases.length-1;
     const canDel=phases.length>1;
-
     let rightPart='';
-    if(isLast){
-      if(overflow){
-        rightPart=`<span class="taper-phase-warn">⚠ 前のフェーズで期間が超過</span>`;
-      }else{
-        rightPart=`<span class="taper-phase-rest">残り ${info.remaining}日（〜${info.dateStr.split('〜')[1]||''}）</span>`;
-      }
+    if(info.isLast){
+      rightPart=overflow
+        ?`<span class="taper-phase-warn">⚠ 前のフェーズで期間が超過</span>`
+        :`<span class="taper-phase-rest">残り ${info.days}日</span>`;
     }else{
-      rightPart=`<input class="phase-days-input" type="number" min="1" max="${totalDays}" value="${ph.days||7}" oninput="rows[${i}].taperPhases[${pi}].days=Math.max(1,parseInt(this.value)||1);renderRows();calcAll()"> <span style="font-size:11px;color:var(--text2);">日間</span>`;
+      rightPart=`<input class="phase-days-input" type="number" min="1" max="${nd}" value="${ph.days||7}" oninput="rows[${i}].taperPhases[${pi}].days=Math.max(1,parseInt(this.value)||1);renderRows();calcAll()"> <span style="font-size:11px;color:var(--text2);">日間</span>`;
     }
-
     return `<div class="taper-phase">
       <span class="taper-phase-num">P${pi+1}</span>
       <select class="phase-freq-select" onchange="rows[${i}].taperPhases[${pi}].freqIdx=parseInt(this.value);${pi===0?`rows[${i}].freqIdx=parseInt(this.value);`:''}renderRows();calcAll()">${fOpts}</select>
-      <span class="taper-phase-arrow">×</span>
+      <span style="font-size:11px;color:var(--text2);">×</span>
       ${rightPart}
-      ${info.dateStr&&!isLast?`<span class="taper-phase-date">${info.dateStr}</span>`:''}
+      ${info.dateStr&&info.valid?`<span class="taper-phase-date">${info.dateStr}</span>`:''}
       ${canDel?`<button class="taper-del-btn" onclick="rows[${i}].taperPhases.splice(${pi},1);renderRows();calcAll();">✕</button>`:''}
     </div>`;
   }).join('');
-
   const canAdd=phases.length<5&&!overflow;
-
   return `<div class="taper-sub">
     <div style="font-size:11px;font-weight:600;color:var(--amber-text);margin-bottom:6px;">📉 漸減スケジュール（今日から）</div>
     <div class="taper-phases">${phaseRows}</div>
@@ -612,24 +590,23 @@ function calcRemainG(k){
 }
 
 // ===== ガント描画 =====
-function getPhaseAt(row, dayIdx, nd){
-  // 漸減ONの場合、dayIdxがどのフェーズに属するか返す → {freqIdx, fillRatio}
+function getPhaseAt(row,dayIdx,nd){
   if(!row.taper||!row.taperPhases||!row.taperPhases.length){
-    return {freqIdx:row.freqIdx, fillRatio:FREQS[row.freqIdx].fillRatio};
+    return{freqIdx:row.freqIdx,fillRatio:FREQS[row.freqIdx].fillRatio};
   }
+  const phases=row.taperPhases;
   const totalSlots=nd-row.startOffset;
   let cursor=row.startOffset;
-  const phases=row.taperPhases;
+  let usedDays=0;
   for(let pi=0;pi<phases.length;pi++){
     const isLast=pi===phases.length-1;
-    const usedBefore=phases.slice(0,pi).reduce((s,p)=>s+(p.days||0),0);
-    const days=isLast?Math.max(0,totalSlots-usedBefore):(phases[pi].days||0);
+    const days=isLast?Math.max(0,totalSlots-usedDays):(phases[pi].days||0);
     if(dayIdx>=cursor&&dayIdx<cursor+days){
-      return {freqIdx:phases[pi].freqIdx, fillRatio:FREQS[phases[pi].freqIdx].fillRatio};
+      return{freqIdx:phases[pi].freqIdx,fillRatio:FREQS[phases[pi].freqIdx].fillRatio};
     }
-    if(!isLast)cursor+=phases[pi].days||0;
+    if(!isLast){cursor+=phases[pi].days||0;usedDays+=phases[pi].days||0;}
   }
-  return {freqIdx:row.freqIdx, fillRatio:FREQS[row.freqIdx].fillRatio};
+  return{freqIdx:row.freqIdx,fillRatio:FREQS[row.freqIdx].fillRatio};
 }
 
 function shouldShow(row,dayIdx,startDate,nd){
@@ -671,11 +648,9 @@ function renderGantt(tableId){
   }
   rows.forEach(row=>{
     const c=COLORS[row.colorIdx];
-    const freq=FREQS[row.freqIdx];
     const partLabel=PARTS.find(p=>p.key===row.partKey)?.label||row.part;
     const sideLabel=PARTS.find(p=>p.key===row.partKey)?.bilateral?(row.sides===2?'（両）':'（片）'):'';
-    // 頻度列：漸減の場合はフェーズ列挙
-    let freqLabel=freq.label;
+    let freqLabel=FREQS[row.freqIdx].label;
     if(row.taper&&row.taperPhases&&row.taperPhases.length){
       freqLabel=row.taperPhases.map(ph=>FREQS[ph.freqIdx].label).join('→');
     }
@@ -714,18 +689,16 @@ function calcNeededG(row){
   if(row.taper&&row.taperPhases&&row.taperPhases.length){
     const phases=row.taperPhases;
     const totalSlots=nd-row.startOffset;
-    let g=0,used=0;
+    let g=0,usedDays=0;
     phases.forEach((ph,pi)=>{
       const isLast=pi===phases.length-1;
-      const days=isLast?Math.max(0,totalSlots-used):(ph.days||0);
-      if(days<=0)return;
-      g+=calcOnceG(row)*FREQS[ph.freqIdx].val*days;
-      if(!isLast)used+=ph.days||0;
+      const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+      if(days>0)g+=calcOnceG(row)*FREQS[ph.freqIdx].val*days;
+      if(!isLast)usedDays+=ph.days||0;
     });
     return g;
   }
-  const freq=FREQS[row.freqIdx];
-  return calcOnceG(row)*freq.val*nd;
+  return calcOnceG(row)*FREQS[row.freqIdx].val*nd;
 }
 
 // 薬剤ごとに合算（同じプリセットの行を合計）
@@ -755,7 +728,7 @@ function roundUpTube(netG,tubeg){
 }
 
 // ===== STEP3レンダリング =====
-function calcAll(){renderRows();updateTaperHints();}
+function calcAll(){renderRows();}
 
 function renderStep3(){
   const nd=numDays();
@@ -778,9 +751,16 @@ function renderStep3(){
       const onceTotalG=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+calcOnceG(ro),0);
       const avgFreqVal=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>{
         const nd2=numDays()||1;
-        if(ro.taper&&ro.taperDate&&tv&&nv){
-          const d1=dateDiff(tv,ro.taperDate),d2=dateDiff(ro.taperDate,nv);
-          if(d1>0&&d2>0)return s+(FREQS[ro.freqIdx].val*d1+FREQS[ro.taperFreqIdx].val*d2)/nd2;
+        if(ro.taper&&ro.taperPhases&&ro.taperPhases.length){
+          const totalSlots=nd2-ro.startOffset;
+          let wSum=0,usedDays=0;
+          ro.taperPhases.forEach((ph,pi)=>{
+            const isLast=pi===ro.taperPhases.length-1;
+            const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+            wSum+=FREQS[ph.freqIdx].val*days;
+            if(!isLast)usedDays+=ph.days||0;
+          });
+          return s+wSum/nd2;
         }
         return s+FREQS[ro.freqIdx].val;
       },0);
@@ -842,21 +822,20 @@ function buildKarteText(){
   rows.forEach((r,i)=>{
     const partLabel=PARTS.find(p=>p.key===r.partKey)?.label||r.part;
     const sideLabel=PARTS.find(p=>p.key===r.partKey)?.bilateral?(r.sides===2?'（両側）':'（片側）'):'';
-    const freqLabel=FREQS[r.freqIdx].label;
     const nd2=numDays()||14;
     const endOff=r.endOffset===null?nd2-1:r.endOffset;
     txt+=`${i+1}. ${partLabel}${sideLabel}：${getDrugName(r)}　`;
     if(r.taper&&r.taperPhases&&r.taperPhases.length){
-      let used=r.startOffset;
       const totalSlots=nd2-r.startOffset;
+      let usedDays=0;
       txt+=r.taperPhases.map((ph,pi)=>{
         const isLast=pi===r.taperPhases.length-1;
-        const usedBefore=r.taperPhases.slice(0,pi).reduce((s,p)=>s+(p.days||0),0);
-        const days=isLast?Math.max(0,totalSlots-usedBefore):(ph.days||0);
+        const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+        if(!isLast)usedDays+=ph.days||0;
         return `${FREQS[ph.freqIdx].label}×${days}日`;
       }).join(' → ');
     }else{
-      txt+=freqLabel;
+      txt+=FREQS[r.freqIdx].label;
       if(r.startOffset>0||endOff<nd2-1)txt+=`（${r.startOffset+1}〜${endOff+1}日目）`;
     }
     txt+='\n';
@@ -949,10 +928,14 @@ function loadSample(){
   const data=[
     {presetIdx:9,partKey:'trunk_f',sides:1,freqIdx:0,colorIdx:0,startOffset:0,endOffset:null,
      taper:true,taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:7},{freqIdx:2,days:null}]},
-    {presetIdx:9,partKey:'trunk_b',sides:1,freqIdx:1,colorIdx:0,startOffset:0,endOffset:null,taper:false,taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:null}]},
-    {presetIdx:9,partKey:'face',   sides:1,freqIdx:2,colorIdx:1,startOffset:0,endOffset:null,taper:false,taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:null}]},
-    {presetIdx:4,partKey:'face',   sides:1,freqIdx:0,colorIdx:2,startOffset:0,endOffset:null,taper:false,taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:null}]},
-    {presetIdx:4,partKey:'trunk_f',sides:1,freqIdx:0,colorIdx:2,startOffset:0,endOffset:null,taper:false,taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:null}]},
+    {presetIdx:9,partKey:'trunk_b',sides:1,freqIdx:1,colorIdx:0,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:1,days:null}]},
+    {presetIdx:9,partKey:'face',   sides:1,freqIdx:2,colorIdx:1,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:2,days:null}]},
+    {presetIdx:4,partKey:'face',   sides:1,freqIdx:0,colorIdx:2,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:0,days:null}]},
+    {presetIdx:4,partKey:'trunk_f',sides:1,freqIdx:0,colorIdx:2,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:0,days:null}]},
   ];
   data.forEach(d=>{
     const r=newRow();
