@@ -1,0 +1,3739 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>アトピー外来 処方支援</title>
+<style>
+:root {
+  --bg:#f5f4f0;--surface:#fff;--surface2:#f0efe9;--border:#e0ddd4;--border2:#c8c4b8;
+  --text:#1a1916;--text2:#6b6760;--text3:#9b9890;
+  --teal:#0f6e56;--green:#1d9e75;--green-bg:#e1f5ee;--green-text:#085041;
+  --amber:#b87515;--amber-bg:#faeeda;--amber-text:#633806;
+  --red:#c0392b;--red-bg:#fcebeb;--red-text:#501313;
+  --blue:#185fa5;--blue-bg:#e6f1fb;--blue-text:#042c53;
+  --radius:10px;--radius-sm:6px;--cell-h:38px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Hiragino Sans','Hiragino Kaku Gothic ProN','Yu Gothic',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh;padding-bottom:80px;}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:11px 18px;position:sticky;top:0;z-index:300;display:flex;align-items:center;gap:12px;}
+header h1{font-size:15px;font-weight:700;}
+.sub{font-size:11px;color:var(--text2);}
+.main{max-width:980px;margin:0 auto;padding:14px 12px;}
+
+/* ステップナビ */
+.step-nav{display:flex;gap:0;margin-bottom:16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;}
+.step-btn{flex:1;padding:11px 6px;font-size:12px;font-weight:600;font-family:inherit;border:none;background:transparent;cursor:pointer;color:var(--text3);display:flex;flex-direction:column;align-items:center;gap:3px;border-right:1px solid var(--border);transition:background .15s;}
+.step-btn:last-child{border-right:none;}
+.step-btn.on{background:var(--green-bg);color:var(--green-text);}
+.step-btn.done{color:var(--teal);}
+.step-num{width:20px;height:20px;border-radius:50%;border:2px solid currentColor;display:flex;align-items:center;justify-content:center;font-size:11px;}
+.step-btn.on .step-num{background:var(--green);border-color:var(--green);color:white;}
+.step-btn.done .step-num{background:var(--teal);border-color:var(--teal);color:white;}
+
+/* カード */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;}
+.card-title{font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;display:flex;align-items:center;gap:7px;}
+.card-title .icon{width:20px;height:20px;background:var(--green-bg);border-radius:4px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;}
+
+/* フォーム */
+label{display:block;font-size:11px;font-weight:500;color:var(--text2);margin-bottom:4px;}
+input[type=text],input[type=date],input[type=number],select{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;-webkit-appearance:none;appearance:none;}
+input:focus,select:focus{outline:none;border-color:var(--green);}
+select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6760' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center;padding-right:26px;}
+
+/* ボタン */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;padding:8px 16px;border-radius:var(--radius-sm);font-size:13px;font-family:inherit;cursor:pointer;border:none;font-weight:500;-webkit-tap-highlight-color:transparent;}
+.btn-green{background:var(--green);color:white;}
+.btn-green:hover{background:var(--teal);}
+.btn-ghost{background:var(--surface);border:1px solid var(--border);color:var(--text2);}
+.btn-danger{background:transparent;border:none;color:var(--red);font-size:12px;padding:4px 6px;}
+.btn-sm{padding:5px 10px;font-size:12px;}
+
+/* 行エディタ */
+.row-editor{border:1px solid var(--border);border-radius:var(--radius);padding:10px 12px;margin-bottom:8px;background:var(--surface2);position:relative;}
+.row-editor-grid{display:grid;grid-template-columns:80px 1fr 110px 80px 80px 28px;gap:7px;align-items:end;}
+@media(max-width:640px){.row-editor-grid{grid-template-columns:1fr 1fr;gap:6px;}}
+.color-swatch{width:20px;height:20px;border-radius:4px;cursor:pointer;border:2px solid transparent;flex-shrink:0;}
+.color-swatch.sel{border-color:var(--text);}
+.color-row{display:flex;gap:4px;flex-wrap:wrap;margin-top:7px;align-items:center;}
+.taper-badge{font-size:10px;padding:2px 7px;border-radius:10px;background:var(--amber-bg);color:var(--amber-text);cursor:pointer;font-weight:600;white-space:nowrap;}
+.taper-badge.on{background:var(--amber);color:white;}
+.taper-sub{margin-top:8px;padding:8px;background:var(--amber-bg);border-radius:var(--radius-sm);}
+.taper-phases{display:flex;flex-direction:column;gap:5px;}
+.taper-phase{display:flex;align-items:center;gap:7px;background:rgba(255,255,255,.6);border-radius:var(--radius-sm);padding:6px 8px;flex-wrap:wrap;}
+.taper-phase-num{font-size:11px;font-weight:700;color:var(--amber-text);width:18px;flex-shrink:0;}
+.taper-phase-date{font-size:11px;color:var(--teal);font-weight:600;white-space:nowrap;}
+.taper-phase-rest{font-size:11px;color:var(--text3);font-style:italic;}
+.taper-phase-warn{font-size:11px;color:var(--red);font-weight:600;}
+.taper-add-btn{font-size:11px;padding:4px 10px;border-radius:var(--radius-sm);border:1px dashed var(--amber-text);background:transparent;color:var(--amber-text);cursor:pointer;font-family:inherit;margin-top:4px;}
+.taper-del-btn{font-size:11px;padding:2px 6px;border:none;background:transparent;color:var(--red);cursor:pointer;flex-shrink:0;}
+.phase-days-input{width:52px;padding:4px 6px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;text-align:center;}
+.phase-freq-select{padding:4px 22px 4px 7px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:inherit;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%236b6760' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 5px center;-webkit-appearance:none;appearance:none;}
+
+/* 残量ボタン */
+.remain-block{padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface2);margin-bottom:8px;}
+.remain-drug-name{font-size:13px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;gap:8px;}
+.remain-btns{display:flex;gap:6px;flex-wrap:wrap;}
+.remain-btn{padding:8px 12px;border-radius:var(--radius-sm);border:2px solid var(--border);background:var(--surface);font-size:12px;font-family:inherit;cursor:pointer;font-weight:500;color:var(--text2);transition:all .12s;display:flex;flex-direction:column;align-items:center;gap:2px;min-width:72px;-webkit-tap-highlight-color:transparent;}
+.remain-btn:hover{border-color:var(--border2);}
+.remain-btn.sel-0{border-color:var(--red);background:var(--red-bg);color:var(--red-text);}
+.remain-btn.sel-1{border-color:#d98c2a;background:#fff3dc;color:#5c3500;}
+.remain-btn.sel-2{border-color:var(--blue);background:var(--blue-bg);color:var(--blue-text);}
+.remain-btn.sel-3{border-color:var(--teal);background:var(--green-bg);color:var(--green-text);}
+.remain-btn .ricon{font-size:16px;}
+.remain-btn .rlabel{font-size:12px;font-weight:600;}
+.remain-btn .rpct{font-size:10px;color:var(--text3);}
+.remain-btn.sel-0 .rpct,.remain-btn.sel-1 .rpct,.remain-btn.sel-2 .rpct,.remain-btn.sel-3 .rpct{color:currentColor;opacity:.7;}
+.remain-manual{display:flex;align-items:center;gap:6px;margin-top:7px;}
+.remain-g-disp{font-size:12px;color:var(--teal);font-weight:600;margin-top:5px;}
+/* 混合軟膏用容器入力 */
+.container-btns{display:flex;gap:5px;flex-wrap:wrap;margin-top:6px;}
+.cont-btn{padding:6px 10px;border-radius:var(--radius-sm);border:2px solid var(--border);background:var(--surface);font-size:12px;font-family:inherit;cursor:pointer;color:var(--text2);font-weight:500;}
+.cont-btn.sel{border-color:var(--teal);background:var(--green-bg);color:var(--green-text);}
+
+/* ガント */
+.gantt-outer{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table.gantt{border-collapse:collapse;font-size:11px;table-layout:fixed;}
+table.gantt th,table.gantt td{border:1px solid var(--border);padding:0;vertical-align:middle;}
+.col-part{width:66px;}.col-drug{width:130px;}.col-freq{width:54px;}.col-day{width:32px;}
+.th-part,.th-drug,.th-freq{background:var(--surface2);padding:5px 6px;font-size:10px;font-weight:600;color:var(--text2);}
+.th-day{background:var(--surface2);text-align:center;padding:2px 1px;line-height:1.3;}
+.th-day .md{font-size:9px;font-weight:600;}
+.th-day .dow{font-size:8px;color:var(--text3);}
+.th-day.sunday .dow{color:#c0392b;}.th-day.saturday .dow{color:#185fa5;}
+.th-day.today-hd{background:var(--green-bg);}
+.td-part{padding:4px 6px;font-size:11px;font-weight:600;background:var(--surface);}
+.td-drug{padding:3px 5px;font-size:10px;color:var(--text2);background:var(--surface);line-height:1.4;}
+.td-freq{padding:2px 3px;font-size:9px;color:var(--text2);background:var(--surface);text-align:center;line-height:1.4;}
+.day-cell{width:32px;height:var(--cell-h);position:relative;background:var(--surface);}
+.fill-block{position:absolute;left:2px;right:2px;bottom:2px;border-radius:2px;}
+.today-col{background:#edf7f3 !important;}
+
+/* 処方結果 */
+.rx-box{border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;margin-bottom:12px;}
+.rx-head{background:var(--surface2);padding:8px 13px;font-size:12px;font-weight:600;color:var(--text2);}
+.rx-row{display:flex;align-items:center;padding:10px 13px;border-top:1px solid var(--border);gap:10px;flex-wrap:wrap;}
+.rx-name{font-size:13px;font-weight:700;flex:1;min-width:130px;}
+.rx-chain{font-size:11px;color:var(--text3);flex:2;line-height:1.7;}
+.rx-g{font-size:22px;font-weight:700;color:var(--teal);white-space:nowrap;}
+.rx-tag{font-size:11px;background:var(--amber-bg);color:var(--amber-text);padding:2px 8px;border-radius:10px;white-space:nowrap;}
+.rx-guide{font-size:12px;background:var(--green-bg);color:var(--green-text);padding:4px 10px;border-radius:var(--radius-sm);margin-top:5px;width:100%;}
+
+/* タブ */
+.tabs{display:flex;gap:2px;background:var(--surface2);border-radius:var(--radius-sm);padding:3px;margin-bottom:14px;}
+.tab-btn{flex:1;padding:8px;font-size:12px;font-family:inherit;border:none;border-radius:var(--radius-sm);background:transparent;color:var(--text2);cursor:pointer;font-weight:500;}
+.tab-btn.on{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.1);}
+
+/* テキスト出力 */
+.text-out{width:100%;min-height:160px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-family:inherit;font-size:12px;line-height:1.85;background:var(--surface2);color:var(--text);resize:vertical;}
+
+/* 患者向けカード */
+.pt-header{background:var(--teal);color:white;padding:13px 16px;border-radius:var(--radius) var(--radius) 0 0;}
+.pt-header h2{font-size:15px;font-weight:700;margin-bottom:2px;}
+.pt-drug-row{padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;}
+.pt-drug-row:last-child{border-bottom:none;}
+.pt-num{width:26px;height:26px;background:var(--green-bg);color:var(--green-text);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:1px;}
+
+/* 患者提示モード */
+#patient-view{
+  display:none;
+  position:fixed;inset:0;z-index:1000;
+  background:#fff;
+  flex-direction:column;
+  overflow:hidden;
+}
+#patient-view.active{display:flex;}
+#pv-topbar{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 16px;background:var(--teal);color:white;flex-shrink:0;
+}
+#pv-topbar .pv-title{font-size:15px;font-weight:700;}
+#pv-topbar .pv-meta{font-size:12px;opacity:.85;}
+#pv-close{
+  padding:8px 18px;border-radius:var(--radius-sm);border:2px solid rgba(255,255,255,.7);
+  background:transparent;color:white;font-size:14px;font-weight:700;
+  font-family:inherit;cursor:pointer;flex-shrink:0;
+}
+#pv-rotate-hint{
+  display:none;
+  background:var(--amber-bg);color:var(--amber-text);
+  font-size:13px;font-weight:600;text-align:center;
+  padding:7px;flex-shrink:0;
+}
+#pv-scroll{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:12px;}
+/* 提示モード用ガント：文字・セル大きめ */
+#pv-gantt-wrap{--cell-h:52px;}
+#pv-gantt-wrap table.gantt{font-size:13px;}
+#pv-gantt-wrap .col-part{width:72px;}
+#pv-gantt-wrap .col-drug{width:150px;}
+#pv-gantt-wrap .col-freq{width:60px;}
+#pv-gantt-wrap .col-day{width:38px;}
+#pv-gantt-wrap .th-part,
+#pv-gantt-wrap .th-drug,
+#pv-gantt-wrap .th-freq{font-size:12px;padding:7px 8px;}
+#pv-gantt-wrap .th-day .md{font-size:11px;}
+#pv-gantt-wrap .th-day .dow{font-size:10px;}
+#pv-gantt-wrap .td-part{font-size:13px;padding:5px 7px;}
+#pv-gantt-wrap .td-drug{font-size:12px;padding:4px 6px;}
+#pv-gantt-wrap .td-freq{font-size:11px;}
+@media(orientation:portrait){
+  #pv-rotate-hint{display:block;}
+}
+@media(orientation:landscape){
+  #pv-rotate-hint{display:none;}
+}
+
+/* 印刷 */
+@media print{
+  header,.step-nav,.no-print{display:none!important;}
+  body{background:white;padding:0;}
+  .main{padding:0;max-width:none;}
+  .card{border:none;padding:0;margin-bottom:8px;box-shadow:none;}
+  @page{size:A4 landscape;margin:12mm 10mm;}
+  :root{--cell-h:30px;}
+  .gantt-outer{overflow:visible;}
+  .today-col{background:white!important;}
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+<!-- 患者提示モード オーバーレイ -->
+<div id="patient-view">
+  <div id="pv-topbar">
+    <div>
+      <div class="pv-title">🌿 軟膏 塗布スケジュール</div>
+      <div class="pv-meta" id="pv-meta"></div>
+    </div>
+    <button id="pv-close" onclick="closePatientView()">✕ 閉じる</button>
+  </div>
+  <div id="pv-rotate-hint">📱 横向きにすると見やすくなります</div>
+  <div id="pv-scroll">
+    <div id="pv-gantt-wrap">
+      <div class="gantt-outer"><table class="gantt" id="gantt-table-pv"></table></div>
+    </div>
+    <div style="margin-top:16px;padding:10px 12px;background:#f0efe9;border-radius:8px;font-size:12px;color:#6b6760;line-height:1.7;">
+      <strong>棒の高さ = 塗る量の目安。</strong><br>
+      1 FTU（フィンガーチップユニット）= 人差し指の先から第1関節まで絞り出した量。棒が低いほど少量・低頻度です。
+    </div>
+    <!-- 塗り方テキスト（患者提示モード内） -->
+    <div id="pv-patient-text" style="margin-top:16px;background:#fff;border:1px solid #e0ddd4;border-radius:10px;overflow:hidden;"></div>
+    <!-- QRコードエリア（患者提示モード内） -->
+    <div id="pv-qr-area" style="margin-top:16px;text-align:center;">
+      <button onclick="showPvQR()" style="padding:10px 20px;border-radius:8px;border:none;background:#1d9e75;color:white;font-size:14px;font-family:inherit;font-weight:600;cursor:pointer;">📱 QRコードで送る</button>
+      <div id="pv-qr-wrap" style="display:none;margin-top:12px;">
+        <p style="font-size:12px;color:#6b6760;margin-bottom:10px;">患者さんのスマートフォンで読み取ってください</p>
+        <div id="pv-qr-canvas" style="display:inline-block;padding:12px;background:#fff;border:1px solid #e0ddd4;border-radius:8px;"></div>
+        <p style="font-size:11px;color:#9b9890;margin-top:8px;">読み取るとメモアプリなどで内容を確認できます</p>
+      </div>
+    </div>
+  </div>
+</div>
+<header>
+  <div>
+    <h1>アトピー外来 処方支援</h1>
+    <div class="sub">はまこどもクリニック</div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:8px;">
+    <button class="btn btn-ghost btn-sm no-print" onclick="loadSample()">サンプル</button>
+    <button class="btn btn-ghost btn-sm no-print" onclick="window.print()">🖨 印刷</button>
+  </div>
+</header>
+
+<div class="main">
+
+<!-- ステップナビ -->
+<div class="step-nav no-print">
+  <button class="step-btn on" id="nav0" onclick="goStep(0)">
+    <div class="step-num">1</div><span>塗り方を決める</span>
+  </button>
+  <button class="step-btn" id="nav1" onclick="goStep(1)">
+    <div class="step-num">2</div><span>受診日・残量</span>
+  </button>
+  <button class="step-btn" id="nav2" onclick="goStep(2)">
+    <div class="step-num">3</div><span>処方・記録・共有</span>
+  </button>
+</div>
+
+<!-- ======== STEP 1: 塗り方 ======== -->
+<div id="step0">
+  <div class="card">
+    <div class="card-title"><span class="icon">👤</span>患者情報</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;">
+      <div><label>患者 ID</label><input type="text" id="pid" placeholder="00000" maxlength="10" oninput="calcAll()"></div>
+      <div><label>患者名（任意）</label><input type="text" id="pname" placeholder="田中 太郎" oninput="calcAll()"></div>
+      <div>
+        <label>次回受診予定日（スケジュール終了日）</label>
+        <input type="date" id="nextDate" oninput="onNextDateChange()">
+        <div id="next-badge" style="font-size:12px;color:var(--text3);margin-top:4px;"></div>
+      </div>
+      <div><label>年齢グループ</label>
+        <select id="globalAge" onchange="calcAll()">
+          <option value="infant">3〜6か月</option>
+          <option value="child1">1〜2歳</option>
+          <option value="child3">3〜5歳</option>
+          <option value="child10">6〜10歳</option>
+          <option value="adult">成人</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="icon">📋</span>塗り方の設定
+      <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">（薬剤・部位・頻度・期間を入力）</span>
+    </div>
+    <div id="rows-wrap"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="addRow()">＋ 行を追加</button>
+      <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="if(confirm('全行を削除しますか？')){rows=[];renderRows();calcAll();}">🗑 クリア</button>
+    </div>
+  </div>
+
+  <!-- プレビューガント -->
+  <div class="card" id="gantt-preview-card">
+    <div class="card-title"><span class="icon">📅</span>スケジュールプレビュー
+      <span id="gantt-range" style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;"></span>
+    </div>
+    <div class="gantt-outer"><table class="gantt" id="gantt-table"></table></div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-end;margin-top:4px;" class="no-print">
+    <button class="btn btn-green" onclick="goStep(1)">次へ：受診日・残量を入力 →</button>
+  </div>
+</div>
+
+<!-- ======== STEP 2: 受診日・残量 ======== -->
+<div id="step1" style="display:none;">
+  <div class="card">
+    <div class="card-title"><span class="icon">📅</span>受診日</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;align-items:end;">
+      <div><label>今日の受診日</label><input type="date" id="todayDate" oninput="calcAll()"></div>
+      <div id="step2-date-summary" style="font-size:13px;color:var(--teal);font-weight:600;padding-bottom:8px;"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title"><span class="icon">💊</span>現在の残量
+      <span style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0;">（患者さんに確認）</span>
+    </div>
+    <div id="remain-list"></div>
+    <div id="remain-empty" style="font-size:13px;color:var(--text3);padding:10px 0;">ステップ1で薬剤を追加してください。</div>
+  </div>
+
+  <div style="display:flex;justify-content:space-between;margin-top:4px;flex-wrap:wrap;gap:8px;" class="no-print">
+    <button class="btn btn-ghost" onclick="goStep(0)">← 戻る</button>
+    <button class="btn btn-green" onclick="goStep(2)">次へ：処方・記録・共有 →</button>
+  </div>
+</div>
+
+<!-- ======== STEP 3: 処方・記録・共有 ======== -->
+<div id="step2" style="display:none;">
+  <div class="tabs no-print">
+    <button class="tab-btn on" onclick="switchTab('rx',this)">📋 処方箋</button>
+    <button class="tab-btn" onclick="switchTab('gantt',this)">📅 患者向けガント</button>
+    <button class="tab-btn" onclick="switchTab('karte',this)">📝 カルテ記録</button>
+  </div>
+
+  <!-- 処方タブ -->
+  <div id="panel-rx">
+    <div id="rx-area"></div>
+  </div>
+
+  <!-- ガントタブ -->
+  <div id="panel-gantt" style="display:none;">
+    <div class="card" id="print-gantt-card">
+      <div id="print-header" style="display:none;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:2px solid var(--teal);margin-bottom:10px;">
+          <div>
+            <div style="font-size:17px;font-weight:700;color:var(--teal);">軟膏 塗布スケジュール</div>
+            <div style="font-size:11px;color:var(--text2);">はまこどもクリニック</div>
+          </div>
+          <div id="print-meta" style="text-align:right;font-size:12px;line-height:1.8;"></div>
+        </div>
+        <div style="font-size:11px;background:var(--green-bg);color:var(--green-text);padding:6px 11px;border-radius:var(--radius-sm);margin-bottom:10px;">
+          <strong>棒の高さ = 塗る量の目安。</strong>　1 FTU（フィンガーチップユニット）= 人差し指の先から第1関節まで絞り出した量。棒が低いほど少量・低頻度です。
+        </div>
+      </div>
+      <div class="gantt-outer"><table class="gantt" id="gantt-table2"></table></div>
+      <!-- 患者向けテキスト（印刷・画像共有に含まれる） -->
+      <div id="patient-text-card" style="margin-top:16px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;" class="no-print">
+      <button class="btn btn-green" onclick="printGantt()">🖨 患者向けに印刷</button>
+      <button class="btn btn-green" id="share-btn" onclick="shareGantt()">📤 画像として共有</button>
+      <button class="btn btn-green" onclick="openPatientView()" style="background:var(--teal);">👁 患者さんに見せる</button>
+      <button class="btn btn-ghost btn-sm no-print" onclick="toggleQRPanel()">📱 QRコード</button>
+      <span id="share-notice" style="font-size:12px;color:var(--teal);display:none;align-self:center;"></span>
+    </div>
+    <!-- QRコードパネル（ガントタブ） -->
+    <div id="qr-panel" style="display:none;margin-top:12px;" class="no-print">
+      <div class="card" style="text-align:center;">
+        <div class="card-title"><span class="icon">📱</span>QRコード — 患者さんに読み取ってもらう</div>
+        <div id="qr-canvas-wrap" style="display:inline-block;padding:14px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);"></div>
+        <p style="font-size:11px;color:var(--text3);margin-top:10px;">読み取るとメモアプリなどで塗り方の詳細を確認できます</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- カルテタブ -->
+  <div id="panel-karte" style="display:none;">
+    <div class="card">
+      <p style="font-size:12px;color:var(--text2);margin-bottom:8px;">下のテキストをコピーして電子カルテに貼り付けてください。</p>
+      <textarea id="karte-text" class="text-out" readonly></textarea>
+      <div style="display:flex;gap:10px;margin-top:10px;align-items:center;">
+        <button class="btn btn-green btn-sm" onclick="copyKarte()">📋 コピー</button>
+        <span id="copy-notice" style="font-size:12px;color:var(--teal);display:none;">コピーしました！</span>
+      </div>
+    </div>
+  </div>
+
+  <div style="display:flex;justify-content:flex-start;margin-top:4px;" class="no-print">
+    <button class="btn btn-ghost" onclick="goStep(1)">← 戻る</button>
+  </div>
+</div>
+
+</div><!-- /main -->
+
+<script>
+// ===== データ定義 =====
+const PRESETS=[
+  {name:"ロコイド軟膏 10g",       tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"リンデロンV軟膏 10g",    tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"アンテベート軟膏 10g",   tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"ベタメタゾン軟膏 10g",   tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"モイゼルト軟膏 28g",     tubeg:28, gPerFTU:0.35,mixed:false},
+  {name:"コレクチム軟膏 10g",     tubeg:10, gPerFTU:0.5, mixed:false},
+  {name:"プロトピック軟膏 5g",    tubeg:5,  gPerFTU:0.2, mixed:false},
+  {name:"ヒルドイドクリーム 25g", tubeg:25, gPerFTU:0.5, mixed:false},
+  {name:"ヒルドイドソフト軟膏 25g",tubeg:25,gPerFTU:0.5, mixed:false},
+  {name:"ロコイド/ヘパリン混合 10g",  tubeg:10, gPerFTU:0.5, mixed:true},
+  {name:"ベタメタゾン/ヘパリン混合 10g",tubeg:10,gPerFTU:0.5,mixed:true},
+  {name:"その他（手入力）",        tubeg:10, gPerFTU:0.5, mixed:false, custom:true},
+];
+const FREQS=[
+  {label:"1日2回",  val:2,    fillRatio:1.0, showEvery:1, dow:null},
+  {label:"1日1回",  val:1,    fillRatio:0.5, showEvery:1, dow:null},
+  {label:"2日に1回",val:0.5,  fillRatio:0.5, showEvery:2, dow:null},
+  {label:"週3回",   val:3/7,  fillRatio:0.5, showEvery:2, dow:null},
+  {label:"週2回 月木",val:2/7,fillRatio:0.5, showEvery:1, dow:[1,4]},
+  {label:"週2回 火金",val:2/7,fillRatio:0.5, showEvery:1, dow:[2,5]},
+  {label:"週1回",   val:1/7,  fillRatio:0.5, showEvery:7, dow:null},
+];
+const PARTS=[
+  {key:"face",    label:"顔・首",       bilateral:false},
+  {key:"trunk_f", label:"体幹前面",     bilateral:false},
+  {key:"trunk_b", label:"体幹後面",     bilateral:false},
+  {key:"arm",     label:"腕",   bilateral:true, sideNames:['右腕','左腕','両腕']},
+  {key:"leg",     label:"足",   bilateral:true, sideNames:['右足','左足','両足']},
+];
+const FTU_AGE={
+  adult:  {face:2.5,arm:4.0,trunk_f:7.0,trunk_b:7.0,leg:8.0},
+  child10:{face:2.0,arm:2.5,trunk_f:3.5,trunk_b:5.0,leg:4.5},
+  child3: {face:1.5,arm:2.0,trunk_f:3.0,trunk_b:3.5,leg:3.0},
+  child1: {face:1.5,arm:1.5,trunk_f:2.0,trunk_b:3.0,leg:2.0},
+  infant: {face:1.0,arm:1.0,trunk_f:1.0,trunk_b:1.5,leg:1.5},
+};
+const COLORS=[
+  {bg:"#5DCAA5",fg:"#04342C"},
+  {bg:"#85B7EB",fg:"#042C53"},
+  {bg:"#FAC775",fg:"#412402"},
+  {bg:"#AFA9EC",fg:"#26215C"},
+  {bg:"#F0997B",fg:"#4A1B0C"},
+  {bg:"#B4B2A9",fg:"#2C2C2A"},
+];
+// 残量パーセント
+const REMAIN_OPTS=[
+  {key:0, label:"ほぼない",     icon:"▁", pct:0.05, cls:"sel-0"},
+  {key:1, label:"少し残ってる", icon:"▃", pct:0.25, cls:"sel-1"},
+  {key:2, label:"半分くらい",   icon:"▅", pct:0.50, cls:"sel-2"},
+  {key:3, label:"次回分まである",icon:"▇",pct:1.00, cls:"sel-3"},
+];
+
+// ===== 状態 =====
+let rows=[], rowId=0;
+// remainState: {drugKey: {optKey, customG, containers}}
+let remainState={};
+// mixedPlanState: {drugKey: planIndex} — 混合軟膏の処方プラン選択（-1=未選択, 0=容器なし, 1〜=容器プラン）
+let mixedPlanState={};
+
+function newRow(){
+  return {
+    id:rowId++, presetIdx:0, customName:"",
+    part:"顔", sides:'right',
+    partKey:"face",
+    freqIdx:0, colorIdx:rows.length%COLORS.length,
+    startOffset:0, endOffset:null,
+    taper:false,
+    taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:null}],
+  };
+}
+
+// ===== ユーティリティ =====
+function esc(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmt(d){if(!d)return'';return d.getFullYear()+'-'+zp(d.getMonth()+1)+'-'+zp(d.getDate());}
+function zp(n){return n<10?'0'+n:n;}
+function parseDate(s){if(!s)return null;const p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2]);}
+function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
+function dateDiff(a,b){if(!a||!b)return null;return Math.round((parseDate(b)-parseDate(a))/86400000);}
+function isToday(d){const t=new Date();return d.getFullYear()===t.getFullYear()&&d.getMonth()===t.getMonth()&&d.getDate()===t.getDate();}
+function getDrugName(r){return PRESETS[r.presetIdx].custom?(r.customName||'（薬剤名未入力）'):PRESETS[r.presetIdx].name;}
+// 同じプリセットの行をグループ化してユニーク薬剤リスト
+function uniqueDrugs(){
+  const seen={},list=[];
+  rows.forEach(r=>{
+    const k=r.presetIdx+'|'+(PRESETS[r.presetIdx].custom?r.customName:'');
+    if(!seen[k]){seen[k]=true;list.push({row:r,key:k});}
+  });
+  return list;
+}
+function numDays(){
+  const tv=document.getElementById('todayDate')?.value||fmt(new Date());
+  const nv=document.getElementById('nextDate')?.value;
+  if(!nv)return null;
+  const d=dateDiff(tv,nv);
+  return(d&&d>0)?d:null;
+}
+
+// ===== ステップ切替 =====
+function goStep(n){
+  [0,1,2].forEach(i=>{
+    document.getElementById('step'+i).style.display=i===n?'block':'none';
+    const nb=document.getElementById('nav'+i);
+    nb.className='step-btn'+(i===n?' on':i<n?' done':'');
+  });
+  if(n===1)renderRemain();
+  if(n===2){calcAll();renderStep3();}
+}
+
+// ===== STEP1: 行エディタ =====
+function renderRows(){
+  const wrap=document.getElementById('rows-wrap');
+  const nd=numDays()||14;
+  wrap.innerHTML='';
+  rows.forEach((r,i)=>{
+    const pOpts=PRESETS.map((p,pi)=>`<option value="${pi}"${pi===r.presetIdx?' selected':''}>${p.name}</option>`).join('');
+    const fOpts=FREQS.map((f,fi)=>`<option value="${fi}"${fi===r.freqIdx?' selected':''}>${f.label}</option>`).join('');
+    const partOpts=PARTS.map(p=>`<option value="${p.key}"${p.key===r.partKey?' selected':''}>${p.label}</option>`).join('');
+
+    const div=document.createElement('div');
+    div.className='row-editor';
+    div.innerHTML=`<div class="row-editor-grid">
+      <div>
+        <label>部位</label>
+        <select onchange="rows[${i}].partKey=this.value;rows[${i}].part=PARTS.find(p=>p.key===this.value).label;renderRows();calcAll()">${partOpts}</select>
+      </div>
+      <div>
+        <label>薬剤</label>
+        <select onchange="onPreset(${i},this.value)">${pOpts}</select>
+        ${PRESETS[r.presetIdx].custom?`<input type="text" value="${esc(r.customName)}" placeholder="薬剤名" style="margin-top:5px;" oninput="rows[${i}].customName=this.value;calcAll()">`:''} 
+      </div>
+      <div>
+        <label>${r.taper?'第1フェーズ頻度':'頻度'}</label>
+        <select onchange="rows[${i}].freqIdx=parseInt(this.value);if(rows[${i}].taper&&rows[${i}].taperPhases.length)rows[${i}].taperPhases[0].freqIdx=parseInt(this.value);calcAll()">${fOpts}</select>
+      </div>
+      <div>
+        <label>${PARTS.find(p=>p.key===r.partKey)?.bilateral?'左右':''}開始日目〜</label>
+        ${PARTS.find(p=>p.key===r.partKey)?.bilateral?
+          (()=>{const pt=PARTS.find(p=>p.key===r.partKey);const sn=pt.sideNames;
+           return `<select onchange="rows[${i}].sides=this.value;calcAll()">
+            <option value="right"${r.sides==='right'?' selected':''}>${sn[0]}</option>
+            <option value="left"${r.sides==='left'?' selected':''}>${sn[1]}</option>
+            <option value="both"${r.sides==='both'?' selected':''}>${sn[2]}</option>
+           </select>`;})()
+          :`<input type="number" value="${r.startOffset}" min="0" max="${nd-1}" step="1" oninput="rows[${i}].startOffset=Math.max(0,parseInt(this.value)||0);calcAll()">`}
+      </div>
+      ${!r.taper?`<div>
+        <label>〜終了日目</label>
+        <input type="number" value="${r.endOffset===null?nd-1:r.endOffset}" min="0" max="${nd-1}" step="1" oninput="rows[${i}].endOffset=Math.min(parseInt(this.value)||0,nd-1);calcAll()" style="${r.endOffset===null||r.endOffset>=nd-1?'border-color:var(--green)':''}">
+      </div>`:'<div></div>'}
+      <button class="btn-danger" onclick="rows.splice(${i},1);renderRows();calcAll();">×</button>
+    </div>
+    <div class="color-row">
+      ${COLORS.map((c,ci)=>`<div class="color-swatch${ci===r.colorIdx?' sel':''}" style="background:${c.bg};" onclick="rows[${i}].colorIdx=${ci};renderRows();calcAll()"></div>`).join('')}
+      <span class="taper-badge${r.taper?' on':''}" onclick="rows[${i}].taper=!rows[${i}].taper;renderRows();calcAll();">漸減設定</span>
+    </div>
+    ${r.taper?buildTaperPhasesHtml(i,r,nd):''}`;
+    wrap.appendChild(div);
+  });
+  renderGantt('gantt-table');
+}
+
+function buildTaperPhasesHtml(i,r,nd){
+  const tv=document.getElementById('todayDate')?.value||fmt(new Date());
+  const phases=r.taperPhases||[];
+  const totalSlots=nd-r.startOffset;
+  let usedDays=0;
+  const phaseInfo=phases.map((ph,pi)=>{
+    const isLast=pi===phases.length-1;
+    const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+    const startOff=r.startOffset+usedDays;
+    const endOff=Math.min(startOff+days-1,nd-1);
+    let dateStr='';
+    if(tv&&days>0){
+      const sd=addDays(parseDate(tv),startOff);
+      const ed=addDays(parseDate(tv),endOff);
+      dateStr=`${sd.getMonth()+1}/${sd.getDate()}〜${ed.getMonth()+1}/${ed.getDate()}`;
+    }
+    if(!isLast)usedDays+=ph.days||0;
+    return{days,isLast,dateStr,valid:days>0};
+  });
+  const overflow=(phases.slice(0,-1).reduce((s,p)=>s+(p.days||0),0))>=(totalSlots);
+  const phaseRows=phases.map((ph,pi)=>{
+    const info=phaseInfo[pi];
+    const fOpts=FREQS.map((f,fi)=>`<option value="${fi}"${fi===ph.freqIdx?' selected':''}>${f.label}</option>`).join('');
+    const canDel=phases.length>1;
+    let rightPart='';
+    if(info.isLast){
+      rightPart=overflow
+        ?`<span class="taper-phase-warn">⚠ 前のフェーズで期間が超過</span>`
+        :`<span class="taper-phase-rest">残り ${info.days}日</span>`;
+    }else{
+      rightPart=`<input class="phase-days-input" type="number" min="1" max="${nd}" value="${ph.days||7}" oninput="rows[${i}].taperPhases[${pi}].days=Math.max(1,parseInt(this.value)||1);renderRows();calcAll()"> <span style="font-size:11px;color:var(--text2);">日間</span>`;
+    }
+    return `<div class="taper-phase">
+      <span class="taper-phase-num">P${pi+1}</span>
+      <select class="phase-freq-select" onchange="rows[${i}].taperPhases[${pi}].freqIdx=parseInt(this.value);${pi===0?`rows[${i}].freqIdx=parseInt(this.value);`:''}renderRows();calcAll()">${fOpts}</select>
+      <span style="font-size:11px;color:var(--text2);">×</span>
+      ${rightPart}
+      ${info.dateStr&&info.valid?`<span class="taper-phase-date">${info.dateStr}</span>`:''}
+      ${canDel?`<button class="taper-del-btn" onclick="rows[${i}].taperPhases.splice(${pi},1);renderRows();calcAll();">✕</button>`:''}
+    </div>`;
+  }).join('');
+  const canAdd=phases.length<5&&!overflow;
+  return `<div class="taper-sub">
+    <div style="font-size:11px;font-weight:600;color:var(--amber-text);margin-bottom:6px;">📉 漸減スケジュール（今日から）</div>
+    <div class="taper-phases">${phaseRows}</div>
+    ${canAdd?`<button class="taper-add-btn" onclick="rows[${i}].taperPhases.splice(rows[${i}].taperPhases.length-1,0,{freqIdx:rows[${i}].taperPhases[Math.max(0,rows[${i}].taperPhases.length-2)].freqIdx,days:7});renderRows();calcAll();">＋ フェーズを追加</button>`:''}
+  </div>`;
+}
+
+function onPreset(i,v){
+  rows[i].presetIdx=parseInt(v);
+  rows[i].customName='';
+  renderRows();calcAll();
+}
+function addRow(){rows.push(newRow());renderRows();calcAll();}
+
+// ===== STEP2: 残量 =====
+function drugKey(r){return r.presetIdx+'|'+(PRESETS[r.presetIdx].custom?r.customName:'');}
+
+function renderRemain(){
+  const list=document.getElementById('remain-list');
+  const empty=document.getElementById('remain-empty');
+  const uds=uniqueDrugs();
+  if(!uds.length){list.innerHTML='';empty.style.display='block';return;}
+  empty.style.display='none';
+
+  list.innerHTML=uds.map(({row:r,key:k})=>{
+    const pre=PRESETS[r.presetIdx];
+    const mixed=pre.mixed;
+    const nd=numDays()||14;
+    const state=remainState[k]||{optKey:-1,customG:null,containers:null};
+
+    // 混合軟膏は容器単位で聞く
+    if(mixed){
+      // 前回処方推定（今回の計算から逆算は無理なのでシンプルに）
+      const contBtns=[0,1,2,3,4,5].map(n=>`<button class="cont-btn${state.containers===n?' sel':''}" onclick="setContainers('${k}',${n})">${n===0?'なし':n+'個'}</button>`).join('');
+      return `<div class="remain-block">
+        <div class="remain-drug-name">
+          <span style="width:22px;height:22px;background:${COLORS[r.colorIdx].bg};border-radius:4px;display:inline-block;"></span>
+          ${esc(getDrugName(r))}
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:6px;">未開封の容器は何個ありますか？</div>
+        <div class="container-btns">${contBtns}</div>
+        ${state.containers!==null?`<div class="remain-g-disp">残量: 約 ${(state.containers*pre.tubeg).toFixed(0)}g（${state.containers}容器分）</div>`:''}
+      </div>`;
+    }
+
+    // 通常軟膏
+    const optBtns=REMAIN_OPTS.map(o=>`<button class="remain-btn${state.optKey===o.key?' '+o.cls:''}" onclick="setRemain('${k}',${o.key})">
+      <span class="ricon">${o.icon}</span>
+      <span class="rlabel">${o.label}</span>
+      <span class="rpct">${Math.round(o.pct*100)}%</span>
+    </button>`).join('');
+    const gDisp=calcRemainG(k);
+    return `<div class="remain-block">
+      <div class="remain-drug-name">
+        <span style="width:22px;height:22px;background:${COLORS[r.colorIdx].bg};border-radius:4px;display:inline-block;"></span>
+        ${esc(getDrugName(r))}
+      </div>
+      <div class="remain-btns">${optBtns}</div>
+      ${gDisp!==null?`<div class="remain-g-disp">残量: 約 ${gDisp.toFixed(1)}g</div>`:'<div class="remain-g-disp" style="color:var(--text3);">上から選択してください</div>'}
+    </div>`;
+  }).join('');
+}
+
+function setRemain(k,optKey){
+  if(!remainState[k])remainState[k]={optKey:-1,customG:null,containers:null};
+  remainState[k].optKey=optKey;
+  remainState[k].customG=null;
+  renderRemain();
+}
+function setContainers(k,n){
+  if(!remainState[k])remainState[k]={optKey:-1,customG:null,containers:null};
+  remainState[k].containers=n;
+  renderRemain();
+}
+
+function calcRemainG(k){
+  const state=remainState[k];
+  if(!state)return null;
+  const ud=uniqueDrugs().find(u=>u.key===k);
+  if(!ud)return null;
+  const pre=PRESETS[ud.row.presetIdx];
+  if(pre.mixed){
+    return state.containers!==null?state.containers*pre.tubeg:null;
+  }
+  if(state.customG!==null)return state.customG;
+  if(state.optKey<0)return null;
+  // 残量 = プリセット% × チューブ1本分（この薬の標準1本）
+  const opt=REMAIN_OPTS.find(o=>o.key===state.optKey);
+  return opt?opt.pct*pre.tubeg:null;
+}
+
+// ===== ガント描画 =====
+function getPhaseAt(row,dayIdx,nd){
+  if(!row.taper||!row.taperPhases||!row.taperPhases.length){
+    return{freqIdx:row.freqIdx,fillRatio:FREQS[row.freqIdx].fillRatio};
+  }
+  const phases=row.taperPhases;
+  const totalSlots=nd-row.startOffset;
+  let cursor=row.startOffset;
+  let usedDays=0;
+  for(let pi=0;pi<phases.length;pi++){
+    const isLast=pi===phases.length-1;
+    const days=isLast?Math.max(0,totalSlots-usedDays):(phases[pi].days||0);
+    if(dayIdx>=cursor&&dayIdx<cursor+days){
+      return{freqIdx:phases[pi].freqIdx,fillRatio:FREQS[phases[pi].freqIdx].fillRatio};
+    }
+    if(!isLast){cursor+=phases[pi].days||0;usedDays+=phases[pi].days||0;}
+  }
+  return{freqIdx:row.freqIdx,fillRatio:FREQS[row.freqIdx].fillRatio};
+}
+
+function shouldShow(row,dayIdx,startDate,nd){
+  const endOff=row.endOffset===null?nd-1:row.endOffset;
+  if(dayIdx<row.startOffset||dayIdx>endOff)return false;
+  const phase=getPhaseAt(row,dayIdx,nd);
+  const freq=FREQS[phase.freqIdx];
+  if(freq.dow){
+    if(!startDate)return true;
+    return freq.dow.includes(addDays(startDate,dayIdx).getDay());
+  }
+  return(dayIdx-row.startOffset)%freq.showEvery===0;
+}
+
+function renderGantt(tableId){
+  const tbl=document.getElementById(tableId);
+  if(!tbl)return;
+  const tv=document.getElementById('todayDate').value;
+  const start=parseDate(tv);
+  const nd=numDays()||14;
+  const DOW=['日','月','火','水','木','金','土'];
+  const CELL_H=38;
+  let html='<thead><tr>';
+  html+=`<th class="col-part th-part">部位</th><th class="col-drug th-drug">薬剤</th><th class="col-freq th-freq">頻度</th>`;
+  for(let i=0;i<nd;i++){
+    let md='',dow='',dc='',todayCls='';
+    if(start){
+      const d=addDays(start,i);
+      md=`${d.getMonth()+1}/${d.getDate()}`;
+      const dw=d.getDay();dow=DOW[dw];
+      dc=dw===0?' sunday':dw===6?' saturday':'';
+      if(isToday(d))todayCls=' today-hd';
+    }else{md=`${i+1}日`;}
+    html+=`<th class="col-day th-day${dc}${todayCls}"><div class="md">${md}</div><div class="dow">${dow}</div></th>`;
+  }
+  html+='</tr></thead><tbody>';
+  if(!rows.length){
+    html+=`<tr><td colspan="${nd+3}" style="text-align:center;padding:20px;color:var(--text3);font-size:12px;">行を追加してください</td></tr>`;
+  }
+  rows.forEach(row=>{
+    const c=COLORS[row.colorIdx];
+    const partLabel=PARTS.find(p=>p.key===row.partKey)?.label||row.part;
+    const sideLabel=PARTS.find(p=>p.key===row.partKey)?.bilateral?
+      (()=>{const sn=PARTS.find(p=>p.key===row.partKey).sideNames;return row.sides==='both'?`（${sn[2]}）`:row.sides==='left'?`（${sn[1]}）`:`（${sn[0]}）`;})()
+      :'';
+    let freqLabel=FREQS[row.freqIdx].label;
+    if(row.taper&&row.taperPhases&&row.taperPhases.length){
+      freqLabel=row.taperPhases.map(ph=>FREQS[ph.freqIdx].label).join('→');
+    }
+    html+='<tr>';
+    html+=`<td class="td-part">${esc(partLabel+sideLabel)}</td>`;
+    html+=`<td class="td-drug">${esc(getDrugName(row))}</td>`;
+    html+=`<td class="td-freq">${esc(freqLabel)}</td>`;
+    for(let i=0;i<nd;i++){
+      const showOn=shouldShow(row,i,start,nd);
+      const todayCls=start&&isToday(addDays(start,i))?' today-col':'';
+      const phase=getPhaseAt(row,i,nd);
+      const fillH=Math.round((CELL_H-4)*phase.fillRatio);
+      html+=showOn?`<td class="day-cell${todayCls}"><div class="fill-block" style="height:${fillH}px;background:${c.bg};"></div></td>`:`<td class="day-cell${todayCls}"></td>`;
+    }
+    html+='</tr>';
+  });
+  html+='</tbody>';
+  tbl.innerHTML=html;
+  if(tableId==='gantt-table'){
+    const rangeEl=document.getElementById('gantt-range');
+    if(rangeEl&&start)rangeEl.textContent=`${start.getMonth()+1}/${start.getDate()}〜${addDays(start,nd-1).getMonth()+1}/${addDays(start,nd-1).getDate()}（${nd}日間）`;
+  }
+}
+
+// ===== 処方計算 =====
+function calcOnceG(row){
+  const pre=PRESETS[row.presetIdx];
+  const ageKey=document.getElementById('globalAge').value;
+  const ftu=FTU_AGE[ageKey][row.partKey]||0;
+  const sides=PARTS.find(p=>p.key===row.partKey)?.bilateral?(row.sides==='both'?2:1):1;
+  return ftu*sides*pre.gPerFTU;
+}
+function calcNeededG(row){
+  const nd=numDays()||0;
+  if(!nd)return 0;
+  if(row.taper&&row.taperPhases&&row.taperPhases.length){
+    const phases=row.taperPhases;
+    const totalSlots=nd-row.startOffset;
+    let g=0,usedDays=0;
+    phases.forEach((ph,pi)=>{
+      const isLast=pi===phases.length-1;
+      const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+      if(days>0)g+=calcOnceG(row)*FREQS[ph.freqIdx].val*days;
+      if(!isLast)usedDays+=ph.days||0;
+    });
+    return g;
+  }
+  return calcOnceG(row)*FREQS[row.freqIdx].val*nd;
+}
+
+// 薬剤ごとに合算（同じプリセットの行を合計）
+function calcPerDrug(){
+  const map={};
+  rows.forEach(r=>{
+    const k=drugKey(r);
+    if(!map[k])map[k]={row:r,neededG:0,parts:[]};
+    map[k].neededG+=calcNeededG(r);
+    const partLabel=PARTS.find(p=>p.key===r.partKey)?.label||r.part;
+    const sideLabel=PARTS.find(p=>p.key===r.partKey)?.bilateral?
+      (()=>{const sn=PARTS.find(p=>p.key===r.partKey).sideNames;return r.sides==='both'?`（${sn[2]}）`:r.sides==='left'?`（${sn[1]}）`:`（${sn[0]}）`;})()
+      :'';
+    let freqNote='';
+    if(r.taper&&r.taperPhases&&r.taperPhases.length){
+      freqNote=' ['+r.taperPhases.map(ph=>FREQS[ph.freqIdx].label).join('→')+']';
+    }else{
+      freqNote=` [${FREQS[r.freqIdx].label}]`;
+    }
+    map[k].parts.push(partLabel+sideLabel+freqNote);
+  });
+  return Object.entries(map).map(([k,v])=>({...v,key:k}));
+}
+
+function roundUpTube(netG,tubeg){
+  if(tubeg<=0)return{g:Math.ceil(netG),b:null};
+  const b=Math.ceil(netG/tubeg);
+  return{g:b*tubeg,b};
+}
+
+// ===== 混合軟膏 プラン生成 =====
+// avgDayG: 1日平均消費量(g), netG: 必要総量（残量控除後）
+// 返り値: [{label, contG, count, totalG, daysPerCont}] — plans[0]は常に「容器なし」
+function calcMixedPlans(avgDayG, netG){
+  const plans=[];
+  // プラン0: 容器なし（5g単位切り上げ）
+  const noContG=Math.ceil(netG/5)*5||5;
+  plans.push({label:'容器なし（切り上げのみ）', contG:null, count:null, totalG:noContG, daysPerCont:null});
+  if(avgDayG<=0)return plans;
+  // 容器ありプラン: 1〜7日ごとに1容器を試す
+  const seen=new Set();
+  for(let days=1;days<=7;days++){
+    const rawG=avgDayG*days;
+    // 5g単位で切り上げ、最低5g
+    const contG=Math.max(5,Math.ceil(rawG/5)*5);
+    if(seen.has(contG))continue;
+    seen.add(contG);
+    const count=Math.ceil(netG/contG);
+    const totalG=contG*count;
+    plans.push({label:`${contG}g × ${count}個（計${totalG}g）`, contG, count, totalG, daysPerCont:days});
+  }
+  return plans;
+}
+
+// ===== STEP3レンダリング =====
+function calcAll(){renderRows();}
+
+function renderStep3(){
+  const nd=numDays();
+  const tv=document.getElementById('todayDate').value;
+  const nv=document.getElementById('nextDate').value;
+
+  // 処方エリア
+  const rxArea=document.getElementById('rx-area');
+  if(!nd){
+    rxArea.innerHTML='<div class="card" style="color:var(--text3);font-size:13px;">受診日と次回受診日を入力してください（ステップ2）。</div>';
+  }else{
+    const drugList=calcPerDrug();
+    let html='<div class="rx-box"><div class="rx-head">処方内容（'+nd+'日分）</div>';
+    drugList.forEach(({row:r,key:k,neededG,parts})=>{
+      const pre=PRESETS[r.presetIdx];
+      const remainG=calcRemainG(k)??0;
+      const netG=Math.max(0,neededG-remainG);
+      // 1日平均消費量
+      const onceTotalG=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+calcOnceG(ro),0);
+      const avgFreqVal=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>{
+        const nd2=numDays()||1;
+        if(ro.taper&&ro.taperPhases&&ro.taperPhases.length){
+          const totalSlots=nd2-ro.startOffset;
+          let wSum=0,usedDays=0;
+          ro.taperPhases.forEach((ph,pi)=>{
+            const isLast=pi===ro.taperPhases.length-1;
+            const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+            wSum+=FREQS[ph.freqIdx].val*days;
+            if(!isLast)usedDays+=ph.days||0;
+          });
+          return s+wSum/nd2;
+        }
+        return s+FREQS[ro.freqIdx].val;
+      },0);
+      const avgDayG=onceTotalG*avgFreqVal;
+
+      let ru, guideHtml='', planSelectorHtml='';
+      if(pre.mixed){
+        // 混合軟膏: プラン一覧生成 & 選択UI
+        const plans=calcMixedPlans(avgDayG,netG);
+        const selIdx=mixedPlanState[k]??-1;
+        // 選択プランに基づく処方量決定（未選択はプラン0をデフォルト）
+        const activePlan=plans[selIdx>=0?selIdx:0];
+        ru={g:activePlan.totalG, b:null};
+
+        // プラン選択ボタン
+        const btnHtml=plans.map((p,pi)=>{
+          const isSel=(selIdx<0&&pi===0)||selIdx===pi;
+          return `<button
+            onclick="mixedPlanState['${k}']=${pi};renderStep3();"
+            style="padding:7px 11px;border-radius:6px;font-size:11px;font-family:inherit;cursor:pointer;font-weight:${isSel?700:400};
+              border:2px solid ${isSel?'var(--teal)':'var(--border)'};
+              background:${isSel?'var(--green-bg)':'var(--surface)'};
+              color:${isSel?'var(--green-text)':'var(--text2)'};
+              white-space:nowrap;">
+            ${esc(p.label)}
+          </button>`;
+        }).join('');
+        planSelectorHtml=`<div style="margin:6px 0 2px;display:flex;flex-wrap:wrap;gap:5px;align-items:center;">
+          <span style="font-size:11px;color:var(--text2);white-space:nowrap;">容器選択：</span>
+          ${btnHtml}
+        </div>`;
+
+        // ガイド文
+        if(activePlan.contG!==null&&activePlan.daysPerCont!==null){
+          guideHtml=`<div class="rx-guide">💡 <strong>${activePlan.contG}g入り容器を${activePlan.count}個</strong>処方。1容器を約<strong style="font-size:16px;"> ${activePlan.daysPerCont} 日</strong>で使い切るペース。<br><span style="font-size:11px;">薬局への指示：${activePlan.contG}g × ${activePlan.count}ケースで調剤してください。</span></div>`;
+        }else{
+          // 容器なし
+          if(pre.tubeg>0&&avgDayG>0){
+            const dpt=Math.round(ru.g/avgDayG*10)/10;
+            guideHtml=`<div class="rx-guide">💡 合計 <strong>${ru.g}g</strong> 処方（容器分割なし）。約<strong style="font-size:16px;"> ${dpt} 日</strong>で使い切るペース。</div>`;
+          }
+        }
+      }else{
+        // 通常軟膏
+        ru=roundUpTube(netG,pre.tubeg);
+        if(pre.tubeg>0&&onceTotalG>0&&avgDayG>0){
+          const dpt=Math.round(pre.tubeg/avgDayG*10)/10;
+          guideHtml=`<div class="rx-guide">💡 1本（${pre.tubeg}g）を約<strong style="font-size:16px;"> ${dpt} 日</strong>で使い切るペース。</div>`;
+        }
+      }
+
+      const chain=`必要 ${neededG.toFixed(1)}g ー 残 ${remainG.toFixed(1)}g = ${netG.toFixed(1)}g → ${ru.g}g`;
+      html+=`<div class="rx-row" style="flex-wrap:wrap;">
+        <span style="width:22px;height:22px;background:${COLORS[r.colorIdx].bg};border-radius:4px;flex-shrink:0;display:inline-block;"></span>
+        <div class="rx-name">${esc(getDrugName(r))}</div>
+        <div class="rx-chain" style="flex-basis:100%;flex:none;width:100%;">${esc(parts.join('、'))}<br>${chain}${planSelectorHtml}</div>
+        ${remainG>0?`<span class="rx-tag">残 ${remainG.toFixed(0)}g 控除</span>`:''}
+        <div class="rx-g">${ru.g}g</div>
+        ${guideHtml?'</div><div class="rx-row" style="padding-top:0;">'+guideHtml:''}
+      </div>`;
+    });
+    html+='</div>';
+    rxArea.innerHTML=html;
+  }
+
+  // ガント（患者向け）
+  renderGantt('gantt-table2');
+  // 患者向けテキストカード
+  renderPatientTextCards();
+  // 印刷ヘッダー
+  const ph=document.getElementById('print-header');
+  ph.style.display='none'; // 印刷時CSSで表示
+  const pm=document.getElementById('print-meta');
+  const pid=document.getElementById('pid').value;
+  const pname=document.getElementById('pname').value;
+  const metaLines=[];
+  if(pname||pid)metaLines.push((pname||'')+(pid?' ／ ID: '+pid:''));
+  if(tv)metaLines.push('受診日：'+tv.replace(/-/g,'/'));
+  if(nv)metaLines.push('次回受診：'+nv.replace(/-/g,'/'));
+  pm.innerHTML=metaLines.map(l=>`<div>${esc(l)}</div>`).join('');
+
+  // カルテテキスト
+  buildKarteText();
+}
+
+function buildKarteText(){
+  const tv=document.getElementById('todayDate').value||'未入力';
+  const nv=document.getElementById('nextDate').value||'未入力';
+  const nd=numDays();
+  const pid=document.getElementById('pid').value||'未入力';
+  const pname=document.getElementById('pname').value||'';
+  const ageKey=document.getElementById('globalAge').value;
+  const ageLabels={infant:'3〜6か月',child1:'1〜2歳',child3:'3〜5歳',child10:'6〜10歳',adult:'成人'};
+  let txt='【アトピー性皮膚炎 軟膏処方記録】\n';
+  txt+=`患者ID: ${pid}${pname?' / '+pname:''}　年齢: ${ageLabels[ageKey]}\n`;
+  txt+=`受診日: ${tv}　次回受診: ${nv}${nd?'（'+nd+'日後）':''}\n`;
+  txt+='─'.repeat(40)+'\n\n';
+  txt+='■ 塗り方の指示\n';
+  rows.forEach((r,i)=>{
+    const partLabel=PARTS.find(p=>p.key===r.partKey)?.label||r.part;
+    const sideLabel=PARTS.find(p=>p.key===r.partKey)?.bilateral?
+      (()=>{const sn=PARTS.find(p=>p.key===r.partKey).sideNames;return r.sides==='both'?`（${sn[2]}）`:r.sides==='left'?`（${sn[1]}）`:`（${sn[0]}）`;})()
+      :'';
+    const nd2=numDays()||14;
+    const endOff=r.endOffset===null?nd2-1:r.endOffset;
+    txt+=`${i+1}. ${partLabel}${sideLabel}：${getDrugName(r)}　`;
+    if(r.taper&&r.taperPhases&&r.taperPhases.length){
+      const totalSlots=nd2-r.startOffset;
+      let usedDays=0;
+      txt+=r.taperPhases.map((ph,pi)=>{
+        const isLast=pi===r.taperPhases.length-1;
+        const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+        if(!isLast)usedDays+=ph.days||0;
+        return `${FREQS[ph.freqIdx].label}×${days}日`;
+      }).join(' → ');
+    }else{
+      txt+=FREQS[r.freqIdx].label;
+      if(r.startOffset>0||endOff<nd2-1)txt+=`（${r.startOffset+1}〜${endOff+1}日目）`;
+    }
+    txt+='\n';
+  });
+  txt+='\n■ 処方内容\n';
+  calcPerDrug().forEach(({row:r,key:k,neededG,parts})=>{
+    const pre=PRESETS[r.presetIdx];
+    const remainG=calcRemainG(k)??0;
+    const netG=Math.max(0,neededG-remainG);
+    const onceTotalG=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+calcOnceG(ro),0);
+    const avgFreqVal=rows.filter(ro=>drugKey(ro)===k).reduce((s,ro)=>s+FREQS[ro.freqIdx].val,0);
+    const avgDayG=onceTotalG*avgFreqVal;
+    let ru, paceNote='';
+    if(pre.mixed){
+      const plans=calcMixedPlans(avgDayG,netG);
+      const selIdx=mixedPlanState[k]??-1;
+      const activePlan=plans[selIdx>=0?selIdx:0];
+      ru={g:activePlan.totalG,b:null};
+      if(activePlan.contG!==null){
+        paceNote=`  ※ ${activePlan.contG}g容器 × ${activePlan.count}個処方。1容器を約${activePlan.daysPerCont}日で使い切るペース\n`;
+        paceNote+=`  ※ 薬局への指示：${activePlan.contG}g × ${activePlan.count}ケースで調剤してください\n`;
+      }else if(avgDayG>0){
+        const dpt=Math.round(ru.g/avgDayG*10)/10;
+        paceNote=`  ※ 合計${ru.g}g処方（容器分割なし）。約${dpt}日で使い切るペース\n`;
+      }
+    }else{
+      ru=roundUpTube(netG,pre.tubeg);
+      if(pre.tubeg>0&&avgDayG>0){
+        const dpt=Math.round(pre.tubeg/avgDayG*10)/10;
+        paceNote=`  ※ 1本（${pre.tubeg}g）を約${dpt}日で使い切るペース\n`;
+      }
+    }
+    txt+=`・${getDrugName(r)}\n`;
+    txt+=`  塗布部位: ${parts.join('、')}\n`;
+    txt+=`  必要量 ${neededG.toFixed(1)}g ー 残量 ${remainG.toFixed(1)}g = 処方 ${ru.g}g`;
+    if(ru.b)txt+=`（${ru.b}本）`;
+    txt+='\n';
+    txt+=paceNote;
+  });
+  document.getElementById('karte-text').value=txt;
+}
+
+// ===== 印刷 =====
+function printGantt(){
+  document.getElementById('print-header').style.display='block';
+  window.print();
+  setTimeout(()=>document.getElementById('print-header').style.display='none',1000);
+}
+
+// ===== タブ =====
+function switchTab(id,btn){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  ['rx','gantt','karte'].forEach(t=>{
+    document.getElementById('panel-'+t).style.display=t===id?'block':'none';
+  });
+}
+
+// ===== コピー =====
+function copyKarte(){
+  const ta=document.getElementById('karte-text');
+  if(navigator.clipboard)navigator.clipboard.writeText(ta.value).then(showCopied);
+  else{ta.select();document.execCommand('copy');showCopied();}
+}
+function showCopied(){
+  const n=document.getElementById('copy-notice');
+  n.style.display='inline';setTimeout(()=>n.style.display='none',2000);
+}
+
+// ===== 患者提示モード =====
+// ===== 患者向けテキスト生成 =====
+function buildPatientText(){
+  const ageKey=document.getElementById('globalAge').value;
+  const ftuData=FTU_AGE[ageKey];
+  const pname=document.getElementById('pname').value;
+  const tv=document.getElementById('todayDate').value;
+  const nv=document.getElementById('nextDate').value;
+  let txt='';
+  if(pname)txt+=`【${pname} さんへ】\n`;
+  if(tv)txt+=`受診日：${tv.replace(/-/g,'/')}`;
+  if(nv)txt+=`　次回受診：${nv.replace(/-/g,'/')}`;
+  if(tv||nv)txt+='\n';
+  txt+='─'.repeat(28)+'\n';
+  txt+='■ 軟膏の塗り方\n\n';
+
+  // 薬剤ごとにまとめる
+  const seen={};
+  rows.forEach((r,i)=>{
+    const name=getDrugName(r);
+    const pre=PRESETS[r.presetIdx];
+    const k=drugKey(r);
+    const partLabel=PARTS.find(p=>p.key===r.partKey)?.label||r.part;
+    const bilateral=PARTS.find(p=>p.key===r.partKey)?.bilateral;
+    const sn=bilateral?PARTS.find(p=>p.key===r.partKey).sideNames:null;
+    const sideLabel=bilateral?(r.sides==='both'?`（${sn[2]}）`:r.sides==='left'?`（${sn[1]}）`:`（${sn[0]}）`):'';
+    const sides=bilateral?(r.sides==='both'?2:1):1;
+    const gOnce=ftuData[r.partKey]*sides*pre.gPerFTU;
+    let freqLabel;
+    if(r.taper&&r.taperPhases&&r.taperPhases.length){
+      const nd2=numDays()||14;
+      const totalSlots=nd2-r.startOffset;
+      let usedDays=0;
+      freqLabel=r.taperPhases.map((ph,pi)=>{
+        const isLast=pi===r.taperPhases.length-1;
+        const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+        if(!isLast)usedDays+=ph.days||0;
+        return `${FREQS[ph.freqIdx].label}×${days}日`;
+      }).join(' → ');
+    }else{
+      freqLabel=FREQS[r.freqIdx].label;
+    }
+
+    if(!seen[k]){
+      seen[k]=true;
+      txt+=`◆ ${name}\n`;
+    }
+    txt+=`  ${partLabel}${sideLabel}：${freqLabel}、1回 ${gOnce.toFixed(1)}g\n`;
+  });
+
+  txt+='\n1 FTU（フィンガーチップユニット）≈ 0.5g\n人差し指の先から第1関節まで絞り出した量です。\n';
+  return txt.trim();
+}
+
+// HTML形式のカード（ガントタブ・患者提示モード共用）
+function buildPatientTextHtml(){
+  const ageKey=document.getElementById('globalAge').value;
+  const ftuData=FTU_AGE[ageKey];
+  if(!rows.length)return'';
+
+  // 薬剤ごとにグループ化
+  const groups={};
+  rows.forEach(r=>{
+    const k=drugKey(r);
+    if(!groups[k])groups[k]={row:r,entries:[]};
+    const partLabel=PARTS.find(p=>p.key===r.partKey)?.label||r.part;
+    const bilateral=PARTS.find(p=>p.key===r.partKey)?.bilateral;
+    const sn=bilateral?PARTS.find(p=>p.key===r.partKey).sideNames:null;
+    const sideLabel=bilateral?(r.sides==='both'?`（${sn[2]}）`:r.sides==='left'?`（${sn[1]}）`:`（${sn[0]}）`):'';
+    const sides=bilateral?(r.sides==='both'?2:1):1;
+    const gOnce=(ftuData[r.partKey]*sides*PRESETS[r.presetIdx].gPerFTU).toFixed(1);
+    let freqLabel;
+    if(r.taper&&r.taperPhases&&r.taperPhases.length){
+      const nd2=numDays()||14;
+      const totalSlots=nd2-r.startOffset;
+      let usedDays=0;
+      freqLabel=r.taperPhases.map((ph,pi)=>{
+        const isLast=pi===r.taperPhases.length-1;
+        const days=isLast?Math.max(0,totalSlots-usedDays):(ph.days||0);
+        if(!isLast)usedDays+=ph.days||0;
+        return `${FREQS[ph.freqIdx].label}×${days}日`;
+      }).join(' → ');
+    }else{
+      freqLabel=FREQS[r.freqIdx].label;
+    }
+    groups[k].entries.push({partLabel,sideLabel,freqLabel,gOnce});
+  });
+
+  const c=COLORS;
+  let html='<div style="background:var(--teal);color:white;padding:10px 14px;font-size:13px;font-weight:700;">💊 塗り方の詳細</div>';
+  Object.values(groups).forEach(({row:r,entries},gi)=>{
+    const col=COLORS[r.colorIdx];
+    html+=`<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start;">
+      <div style="width:14px;height:14px;background:${col.bg};border-radius:3px;flex-shrink:0;margin-top:2px;"></div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:700;margin-bottom:5px;">${esc(getDrugName(r))}</div>
+        <div style="font-size:12px;color:var(--text2);line-height:1.9;">
+          ${entries.map(e=>`<span style="display:inline-block;margin-right:12px;">
+            <strong>${esc(e.partLabel+e.sideLabel)}</strong>：${esc(e.freqLabel)}、1回 <strong>${e.gOnce}g</strong>
+          </span>`).join('<br>')}
+        </div>
+      </div>
+    </div>`;
+  });
+  html+=`<div style="padding:8px 14px;font-size:11px;color:var(--text3);background:var(--surface2);">1 FTU（フィンガーチップユニット）≈ 0.5g ＝ 人差し指の先から第1関節まで絞り出した量</div>`;
+  return html;
+}
+
+function renderPatientTextCards(){
+  const html=buildPatientTextHtml();
+  const el1=document.getElementById('patient-text-card');
+  const el2=document.getElementById('pv-patient-text');
+  if(el1)el1.innerHTML=html;
+  if(el2)el2.innerHTML=html;
+}
+
+// QR表示（ガントタブ）
+function toggleQRPanel(){
+  const panel=document.getElementById('qr-panel');
+  const isHidden=panel.style.display==='none';
+  panel.style.display=isHidden?'block':'none';
+  if(isHidden)renderQR('qr-canvas-wrap');
+}
+
+// QR表示（患者提示モード）
+function showPvQR(){
+  const wrap=document.getElementById('pv-qr-wrap');
+  wrap.style.display='block';
+  renderQR('pv-qr-canvas');
+}
+
+function renderQR(targetId){
+  const wrap=document.getElementById(targetId);
+  if(!wrap)return;
+  wrap.innerHTML='';
+  const text=buildPatientText();
+  try{
+    const qr=qrcode(0,'M');
+    qr.addData(text,'Byte');
+    qr.make();
+    const moduleCount=qr.getModuleCount();
+    const moduleSize=5, margin=4;
+    const px=(moduleCount+margin*2)*moduleSize;
+    const canvas=document.createElement('canvas');
+    canvas.width=px; canvas.height=px;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#fff'; ctx.fillRect(0,0,px,px);
+    ctx.fillStyle='#0f6e56';
+    for(let r=0;r<moduleCount;r++)
+      for(let c=0;c<moduleCount;c++)
+        if(qr.isDark(r,c))
+          ctx.fillRect((c+margin)*moduleSize,(r+margin)*moduleSize,moduleSize,moduleSize);
+    wrap.appendChild(canvas);
+  }catch(e){
+    wrap.innerHTML='<p style="font-size:12px;color:var(--text2);padding:8px;">QR生成に失敗しました（テキストが長すぎる可能性があります）</p>';
+  }
+}
+
+function openPatientView(){
+  // メタ情報セット
+  const pname=document.getElementById('pname').value;
+  const tv=document.getElementById('todayDate').value;
+  const nv=document.getElementById('nextDate').value;
+  const parts=[];
+  if(pname)parts.push(pname+' さん');
+  if(tv)parts.push('受診日：'+tv.replace(/-/g,'/'));
+  if(nv)parts.push('次回：'+nv.replace(/-/g,'/'));
+  document.getElementById('pv-meta').textContent=parts.join('　');
+
+  // ガント描画（専用テーブルへ）
+  renderGanttTo('gantt-table-pv');
+  // 塗り方テキスト描画
+  renderPatientTextCards();
+
+  // オーバーレイ表示
+  document.getElementById('patient-view').classList.add('active');
+  // スクロール禁止
+  document.body.style.overflow='hidden';
+}
+
+function closePatientView(){
+  document.getElementById('patient-view').classList.remove('active');
+  document.body.style.overflow='';
+}
+
+// テーブルIDを引数で受け取れるようrenderGanttをラップ
+function renderGanttTo(tableId){
+  renderGantt(tableId);
+}
+
+// ===== 画像共有 =====
+async function shareGantt(){
+  const btn=document.getElementById('share-btn');
+  const notice=document.getElementById('share-notice');
+  btn.disabled=true;
+  btn.textContent='⏳ 生成中…';
+  notice.style.display='none';
+
+  // 印刷ヘッダーを一時的に表示してキャプチャ
+  const ph=document.getElementById('print-header');
+  const wasHidden=ph.style.display==='none';
+  ph.style.display='block';
+
+  try{
+    const card=document.getElementById('print-gantt-card');
+    const canvas=await html2canvas(card,{
+      scale:2,
+      backgroundColor:'#ffffff',
+      useCORS:true,
+      logging:false,
+    });
+    if(wasHidden)ph.style.display='none';
+
+    canvas.toBlob(async(blob)=>{
+      const pname=document.getElementById('pname').value||'スケジュール';
+      const tv=document.getElementById('todayDate').value||'';
+      const filename=`塗布スケジュール_${pname}_${tv}.png`;
+      const file=new File([blob],filename,{type:'image/png'});
+
+      // Web Share API（iOS Safari対応）
+      if(navigator.share&&navigator.canShare&&navigator.canShare({files:[file]})){
+        try{
+          await navigator.share({files:[file],title:'軟膏 塗布スケジュール',text:pname+' の塗布スケジュールです。'});
+        }catch(e){
+          if(e.name!=='AbortError'){fallbackDownload(blob,filename);}
+        }
+      }else{
+        // Web Share API非対応 → ダウンロード
+        fallbackDownload(blob,filename);
+        notice.textContent='画像を保存しました';
+        notice.style.display='inline';
+        setTimeout(()=>notice.style.display='none',3000);
+      }
+      btn.disabled=false;
+      btn.textContent='📤 画像として共有';
+    },'image/png');
+  }catch(err){
+    if(wasHidden)ph.style.display='none';
+    btn.disabled=false;
+    btn.textContent='📤 画像として共有';
+    notice.textContent='⚠ 生成に失敗しました';
+    notice.style.display='inline';
+    console.error(err);
+  }
+}
+
+function fallbackDownload(blob,filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=filename;
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),3000);
+}
+
+// ===== next badge / date handlers =====
+function updateBadge(){
+  const tv=document.getElementById('todayDate').value;
+  const nv=document.getElementById('nextDate').value;
+  const nb=document.getElementById('next-badge');
+  if(!nb)return;
+  const nd=dateDiff(tv,nv);
+  if(nd&&nd>0)nb.innerHTML=`<span style="color:var(--teal);font-weight:600;">今日から ${nd} 日後</span>`;
+  else if(nv)nb.innerHTML=`<span style="color:var(--red);">日付を確認してください</span>`;
+  else nb.textContent='次回受診日を選ぶと終了日が確定します';
+  // step2のサマリー更新
+  const s2=document.getElementById('step2-date-summary');
+  if(s2){
+    if(nd&&nd>0)s2.textContent=`次回受診: ${nv} （${nd}日後）`;
+    else s2.textContent='';
+  }
+}
+// 次回受診日変更時: 終了日がnullの行は自動追従（endOffset=nd-1 を維持）
+function onNextDateChange(){
+  updateBadge();
+  // endOffset=nullの行はnumDays-1を維持するので再描画だけでOK
+  renderRows();calcAll();
+}
+document.getElementById('todayDate').addEventListener('input',()=>{updateBadge();calcAll();});
+document.getElementById('nextDate').addEventListener('input',onNextDateChange);
+
+// ===== サンプル =====
+function loadSample(){
+  rows=[];rowId=0;
+  document.getElementById('pid').value='12345';
+  document.getElementById('pname').value='田中 太郎';
+  document.getElementById('globalAge').value='infant';
+  const today=new Date();
+  document.getElementById('todayDate').value=fmt(today);
+  document.getElementById('nextDate').value=fmt(addDays(today,21));
+  updateBadge();
+  const data=[
+    {presetIdx:9,partKey:'trunk_f',sides:'right',freqIdx:0,colorIdx:0,startOffset:0,endOffset:null,
+     taper:true,taperPhases:[{freqIdx:0,days:7},{freqIdx:1,days:7},{freqIdx:2,days:null}]},
+    {presetIdx:9,partKey:'trunk_b',sides:'right',freqIdx:1,colorIdx:0,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:1,days:null}]},
+    {presetIdx:9,partKey:'face',   sides:'right',freqIdx:2,colorIdx:1,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:2,days:null}]},
+    {presetIdx:4,partKey:'face',   sides:'right',freqIdx:0,colorIdx:2,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:0,days:null}]},
+    {presetIdx:4,partKey:'trunk_f',sides:'right',freqIdx:0,colorIdx:2,startOffset:0,endOffset:null,
+     taper:false,taperPhases:[{freqIdx:0,days:null}]},
+  ];
+  data.forEach(d=>{
+    const r=newRow();
+    Object.assign(r,d);
+    r.part=PARTS.find(p=>p.key===r.partKey)?.label||r.partKey;
+    rows.push(r);
+  });
+  remainState={
+    '9|':{optKey:0,customG:null,containers:null},
+    '4|':{optKey:1,customG:null,containers:null},
+  };
+  renderRows();calcAll();
+}
+
+// ===== 初期化 =====
+(function(){
+  const today=new Date();
+  document.getElementById('todayDate').value=fmt(today);
+  document.getElementById('nextDate').value=fmt(addDays(today,14));
+  updateBadge();
+  renderRows();
+  calcAll();
+})();
+
+// QR Code Generator (MIT License, Kazuhiko Arase)
+//---------------------------------------------------------------------
+//
+// QR Code Generator for JavaScript
+//
+// Copyright (c) 2009 Kazuhiko Arase
+//
+// URL: http://www.d-project.com/
+//
+// Licensed under the MIT license:
+//  http://www.opensource.org/licenses/mit-license.php
+//
+// The word 'QR Code' is registered trademark of
+// DENSO WAVE INCORPORATED
+//  http://www.denso-wave.com/qrcode/faqpatent-e.html
+//
+//---------------------------------------------------------------------
+
+var qrcode = function() {
+
+  //---------------------------------------------------------------------
+  // qrcode
+  //---------------------------------------------------------------------
+
+  /**
+   * qrcode
+   * @param typeNumber 1 to 40
+   * @param errorCorrectionLevel 'L','M','Q','H'
+   */
+  var qrcode = function(typeNumber, errorCorrectionLevel) {
+
+    var PAD0 = 0xEC;
+    var PAD1 = 0x11;
+
+    var _typeNumber = typeNumber;
+    var _errorCorrectionLevel = QRErrorCorrectionLevel[errorCorrectionLevel];
+    var _modules = null;
+    var _moduleCount = 0;
+    var _dataCache = null;
+    var _dataList = [];
+
+    var _this = {};
+
+    var makeImpl = function(test, maskPattern) {
+
+      _moduleCount = _typeNumber * 4 + 17;
+      _modules = function(moduleCount) {
+        var modules = new Array(moduleCount);
+        for (var row = 0; row < moduleCount; row += 1) {
+          modules[row] = new Array(moduleCount);
+          for (var col = 0; col < moduleCount; col += 1) {
+            modules[row][col] = null;
+          }
+        }
+        return modules;
+      }(_moduleCount);
+
+      setupPositionProbePattern(0, 0);
+      setupPositionProbePattern(_moduleCount - 7, 0);
+      setupPositionProbePattern(0, _moduleCount - 7);
+      setupPositionAdjustPattern();
+      setupTimingPattern();
+      setupTypeInfo(test, maskPattern);
+
+      if (_typeNumber >= 7) {
+        setupTypeNumber(test);
+      }
+
+      if (_dataCache == null) {
+        _dataCache = createData(_typeNumber, _errorCorrectionLevel, _dataList);
+      }
+
+      mapData(_dataCache, maskPattern);
+    };
+
+    var setupPositionProbePattern = function(row, col) {
+
+      for (var r = -1; r <= 7; r += 1) {
+
+        if (row + r <= -1 || _moduleCount <= row + r) continue;
+
+        for (var c = -1; c <= 7; c += 1) {
+
+          if (col + c <= -1 || _moduleCount <= col + c) continue;
+
+          if ( (0 <= r && r <= 6 && (c == 0 || c == 6) )
+              || (0 <= c && c <= 6 && (r == 0 || r == 6) )
+              || (2 <= r && r <= 4 && 2 <= c && c <= 4) ) {
+            _modules[row + r][col + c] = true;
+          } else {
+            _modules[row + r][col + c] = false;
+          }
+        }
+      }
+    };
+
+    var getBestMaskPattern = function() {
+
+      var minLostPoint = 0;
+      var pattern = 0;
+
+      for (var i = 0; i < 8; i += 1) {
+
+        makeImpl(true, i);
+
+        var lostPoint = QRUtil.getLostPoint(_this);
+
+        if (i == 0 || minLostPoint > lostPoint) {
+          minLostPoint = lostPoint;
+          pattern = i;
+        }
+      }
+
+      return pattern;
+    };
+
+    var setupTimingPattern = function() {
+
+      for (var r = 8; r < _moduleCount - 8; r += 1) {
+        if (_modules[r][6] != null) {
+          continue;
+        }
+        _modules[r][6] = (r % 2 == 0);
+      }
+
+      for (var c = 8; c < _moduleCount - 8; c += 1) {
+        if (_modules[6][c] != null) {
+          continue;
+        }
+        _modules[6][c] = (c % 2 == 0);
+      }
+    };
+
+    var setupPositionAdjustPattern = function() {
+
+      var pos = QRUtil.getPatternPosition(_typeNumber);
+
+      for (var i = 0; i < pos.length; i += 1) {
+
+        for (var j = 0; j < pos.length; j += 1) {
+
+          var row = pos[i];
+          var col = pos[j];
+
+          if (_modules[row][col] != null) {
+            continue;
+          }
+
+          for (var r = -2; r <= 2; r += 1) {
+
+            for (var c = -2; c <= 2; c += 1) {
+
+              if (r == -2 || r == 2 || c == -2 || c == 2
+                  || (r == 0 && c == 0) ) {
+                _modules[row + r][col + c] = true;
+              } else {
+                _modules[row + r][col + c] = false;
+              }
+            }
+          }
+        }
+      }
+    };
+
+    var setupTypeNumber = function(test) {
+
+      var bits = QRUtil.getBCHTypeNumber(_typeNumber);
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[Math.floor(i / 3)][i % 3 + _moduleCount - 8 - 3] = mod;
+      }
+
+      for (var i = 0; i < 18; i += 1) {
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+        _modules[i % 3 + _moduleCount - 8 - 3][Math.floor(i / 3)] = mod;
+      }
+    };
+
+    var setupTypeInfo = function(test, maskPattern) {
+
+      var data = (_errorCorrectionLevel << 3) | maskPattern;
+      var bits = QRUtil.getBCHTypeInfo(data);
+
+      // vertical
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 6) {
+          _modules[i][8] = mod;
+        } else if (i < 8) {
+          _modules[i + 1][8] = mod;
+        } else {
+          _modules[_moduleCount - 15 + i][8] = mod;
+        }
+      }
+
+      // horizontal
+      for (var i = 0; i < 15; i += 1) {
+
+        var mod = (!test && ( (bits >> i) & 1) == 1);
+
+        if (i < 8) {
+          _modules[8][_moduleCount - i - 1] = mod;
+        } else if (i < 9) {
+          _modules[8][15 - i - 1 + 1] = mod;
+        } else {
+          _modules[8][15 - i - 1] = mod;
+        }
+      }
+
+      // fixed module
+      _modules[_moduleCount - 8][8] = (!test);
+    };
+
+    var mapData = function(data, maskPattern) {
+
+      var inc = -1;
+      var row = _moduleCount - 1;
+      var bitIndex = 7;
+      var byteIndex = 0;
+      var maskFunc = QRUtil.getMaskFunction(maskPattern);
+
+      for (var col = _moduleCount - 1; col > 0; col -= 2) {
+
+        if (col == 6) col -= 1;
+
+        while (true) {
+
+          for (var c = 0; c < 2; c += 1) {
+
+            if (_modules[row][col - c] == null) {
+
+              var dark = false;
+
+              if (byteIndex < data.length) {
+                dark = ( ( (data[byteIndex] >>> bitIndex) & 1) == 1);
+              }
+
+              var mask = maskFunc(row, col - c);
+
+              if (mask) {
+                dark = !dark;
+              }
+
+              _modules[row][col - c] = dark;
+              bitIndex -= 1;
+
+              if (bitIndex == -1) {
+                byteIndex += 1;
+                bitIndex = 7;
+              }
+            }
+          }
+
+          row += inc;
+
+          if (row < 0 || _moduleCount <= row) {
+            row -= inc;
+            inc = -inc;
+            break;
+          }
+        }
+      }
+    };
+
+    var createBytes = function(buffer, rsBlocks) {
+
+      var offset = 0;
+
+      var maxDcCount = 0;
+      var maxEcCount = 0;
+
+      var dcdata = new Array(rsBlocks.length);
+      var ecdata = new Array(rsBlocks.length);
+
+      for (var r = 0; r < rsBlocks.length; r += 1) {
+
+        var dcCount = rsBlocks[r].dataCount;
+        var ecCount = rsBlocks[r].totalCount - dcCount;
+
+        maxDcCount = Math.max(maxDcCount, dcCount);
+        maxEcCount = Math.max(maxEcCount, ecCount);
+
+        dcdata[r] = new Array(dcCount);
+
+        for (var i = 0; i < dcdata[r].length; i += 1) {
+          dcdata[r][i] = 0xff & buffer.getBuffer()[i + offset];
+        }
+        offset += dcCount;
+
+        var rsPoly = QRUtil.getErrorCorrectPolynomial(ecCount);
+        var rawPoly = qrPolynomial(dcdata[r], rsPoly.getLength() - 1);
+
+        var modPoly = rawPoly.mod(rsPoly);
+        ecdata[r] = new Array(rsPoly.getLength() - 1);
+        for (var i = 0; i < ecdata[r].length; i += 1) {
+          var modIndex = i + modPoly.getLength() - ecdata[r].length;
+          ecdata[r][i] = (modIndex >= 0)? modPoly.getAt(modIndex) : 0;
+        }
+      }
+
+      var totalCodeCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalCodeCount += rsBlocks[i].totalCount;
+      }
+
+      var data = new Array(totalCodeCount);
+      var index = 0;
+
+      for (var i = 0; i < maxDcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < dcdata[r].length) {
+            data[index] = dcdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      for (var i = 0; i < maxEcCount; i += 1) {
+        for (var r = 0; r < rsBlocks.length; r += 1) {
+          if (i < ecdata[r].length) {
+            data[index] = ecdata[r][i];
+            index += 1;
+          }
+        }
+      }
+
+      return data;
+    };
+
+    var createData = function(typeNumber, errorCorrectionLevel, dataList) {
+
+      var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, errorCorrectionLevel);
+
+      var buffer = qrBitBuffer();
+
+      for (var i = 0; i < dataList.length; i += 1) {
+        var data = dataList[i];
+        buffer.put(data.getMode(), 4);
+        buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+        data.write(buffer);
+      }
+
+      // calc num max data.
+      var totalDataCount = 0;
+      for (var i = 0; i < rsBlocks.length; i += 1) {
+        totalDataCount += rsBlocks[i].dataCount;
+      }
+
+      if (buffer.getLengthInBits() > totalDataCount * 8) {
+        throw 'code length overflow. ('
+          + buffer.getLengthInBits()
+          + '>'
+          + totalDataCount * 8
+          + ')';
+      }
+
+      // end code
+      if (buffer.getLengthInBits() + 4 <= totalDataCount * 8) {
+        buffer.put(0, 4);
+      }
+
+      // padding
+      while (buffer.getLengthInBits() % 8 != 0) {
+        buffer.putBit(false);
+      }
+
+      // padding
+      while (true) {
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD0, 8);
+
+        if (buffer.getLengthInBits() >= totalDataCount * 8) {
+          break;
+        }
+        buffer.put(PAD1, 8);
+      }
+
+      return createBytes(buffer, rsBlocks);
+    };
+
+    _this.addData = function(data, mode) {
+
+      mode = mode || 'Byte';
+
+      var newData = null;
+
+      switch(mode) {
+      case 'Numeric' :
+        newData = qrNumber(data);
+        break;
+      case 'Alphanumeric' :
+        newData = qrAlphaNum(data);
+        break;
+      case 'Byte' :
+        newData = qr8BitByte(data);
+        break;
+      case 'Kanji' :
+        newData = qrKanji(data);
+        break;
+      default :
+        throw 'mode:' + mode;
+      }
+
+      _dataList.push(newData);
+      _dataCache = null;
+    };
+
+    _this.isDark = function(row, col) {
+      if (row < 0 || _moduleCount <= row || col < 0 || _moduleCount <= col) {
+        throw row + ',' + col;
+      }
+      return _modules[row][col];
+    };
+
+    _this.getModuleCount = function() {
+      return _moduleCount;
+    };
+
+    _this.make = function() {
+      if (_typeNumber < 1) {
+        var typeNumber = 1;
+
+        for (; typeNumber < 40; typeNumber++) {
+          var rsBlocks = QRRSBlock.getRSBlocks(typeNumber, _errorCorrectionLevel);
+          var buffer = qrBitBuffer();
+
+          for (var i = 0; i < _dataList.length; i++) {
+            var data = _dataList[i];
+            buffer.put(data.getMode(), 4);
+            buffer.put(data.getLength(), QRUtil.getLengthInBits(data.getMode(), typeNumber) );
+            data.write(buffer);
+          }
+
+          var totalDataCount = 0;
+          for (var i = 0; i < rsBlocks.length; i++) {
+            totalDataCount += rsBlocks[i].dataCount;
+          }
+
+          if (buffer.getLengthInBits() <= totalDataCount * 8) {
+            break;
+          }
+        }
+
+        _typeNumber = typeNumber;
+      }
+
+      makeImpl(false, getBestMaskPattern() );
+    };
+
+    _this.createTableTag = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var qrHtml = '';
+
+      qrHtml += '<table style="';
+      qrHtml += ' border-width: 0px; border-style: none;';
+      qrHtml += ' border-collapse: collapse;';
+      qrHtml += ' padding: 0px; margin: ' + margin + 'px;';
+      qrHtml += '">';
+      qrHtml += '<tbody>';
+
+      for (var r = 0; r < _this.getModuleCount(); r += 1) {
+
+        qrHtml += '<tr>';
+
+        for (var c = 0; c < _this.getModuleCount(); c += 1) {
+          qrHtml += '<td style="';
+          qrHtml += ' border-width: 0px; border-style: none;';
+          qrHtml += ' border-collapse: collapse;';
+          qrHtml += ' padding: 0px; margin: 0px;';
+          qrHtml += ' width: ' + cellSize + 'px;';
+          qrHtml += ' height: ' + cellSize + 'px;';
+          qrHtml += ' background-color: ';
+          qrHtml += _this.isDark(r, c)? '#000000' : '#ffffff';
+          qrHtml += ';';
+          qrHtml += '"/>';
+        }
+
+        qrHtml += '</tr>';
+      }
+
+      qrHtml += '</tbody>';
+      qrHtml += '</table>';
+
+      return qrHtml;
+    };
+
+    _this.createSvgTag = function(cellSize, margin, alt, title) {
+
+      var opts = {};
+      if (typeof arguments[0] == 'object') {
+        // Called by options.
+        opts = arguments[0];
+        // overwrite cellSize and margin.
+        cellSize = opts.cellSize;
+        margin = opts.margin;
+        alt = opts.alt;
+        title = opts.title;
+      }
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      // Compose alt property surrogate
+      alt = (typeof alt === 'string') ? {text: alt} : alt || {};
+      alt.text = alt.text || null;
+      alt.id = (alt.text) ? alt.id || 'qrcode-description' : null;
+
+      // Compose title property surrogate
+      title = (typeof title === 'string') ? {text: title} : title || {};
+      title.text = title.text || null;
+      title.id = (title.text) ? title.id || 'qrcode-title' : null;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var c, mc, r, mr, qrSvg='', rect;
+
+      rect = 'l' + cellSize + ',0 0,' + cellSize +
+        ' -' + cellSize + ',0 0,-' + cellSize + 'z ';
+
+      qrSvg += '<svg version="1.1" xmlns="http://www.w3.org/2000/svg"';
+      qrSvg += !opts.scalable ? ' width="' + size + 'px" height="' + size + 'px"' : '';
+      qrSvg += ' viewBox="0 0 ' + size + ' ' + size + '" ';
+      qrSvg += ' preserveAspectRatio="xMinYMin meet"';
+      qrSvg += (title.text || alt.text) ? ' role="img" aria-labelledby="' +
+          escapeXml([title.id, alt.id].join(' ').trim() ) + '"' : '';
+      qrSvg += '>';
+      qrSvg += (title.text) ? '<title id="' + escapeXml(title.id) + '">' +
+          escapeXml(title.text) + '</title>' : '';
+      qrSvg += (alt.text) ? '<description id="' + escapeXml(alt.id) + '">' +
+          escapeXml(alt.text) + '</description>' : '';
+      qrSvg += '<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>';
+      qrSvg += '<path d="';
+
+      for (r = 0; r < _this.getModuleCount(); r += 1) {
+        mr = r * cellSize + margin;
+        for (c = 0; c < _this.getModuleCount(); c += 1) {
+          if (_this.isDark(r, c) ) {
+            mc = c*cellSize+margin;
+            qrSvg += 'M' + mc + ',' + mr + rect;
+          }
+        }
+      }
+
+      qrSvg += '" stroke="transparent" fill="black"/>';
+      qrSvg += '</svg>';
+
+      return qrSvg;
+    };
+
+    _this.createDataURL = function(cellSize, margin) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      return createDataURL(size, size, function(x, y) {
+        if (min <= x && x < max && min <= y && y < max) {
+          var c = Math.floor( (x - min) / cellSize);
+          var r = Math.floor( (y - min) / cellSize);
+          return _this.isDark(r, c)? 0 : 1;
+        } else {
+          return 1;
+        }
+      } );
+    };
+
+    _this.createImgTag = function(cellSize, margin, alt) {
+
+      cellSize = cellSize || 2;
+      margin = (typeof margin == 'undefined')? cellSize * 4 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+
+      var img = '';
+      img += '<img';
+      img += '\u0020src="';
+      img += _this.createDataURL(cellSize, margin);
+      img += '"';
+      img += '\u0020width="';
+      img += size;
+      img += '"';
+      img += '\u0020height="';
+      img += size;
+      img += '"';
+      if (alt) {
+        img += '\u0020alt="';
+        img += escapeXml(alt);
+        img += '"';
+      }
+      img += '/>';
+
+      return img;
+    };
+
+    var escapeXml = function(s) {
+      var escaped = '';
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charAt(i);
+        switch(c) {
+        case '<': escaped += '&lt;'; break;
+        case '>': escaped += '&gt;'; break;
+        case '&': escaped += '&amp;'; break;
+        case '"': escaped += '&quot;'; break;
+        default : escaped += c; break;
+        }
+      }
+      return escaped;
+    };
+
+    var _createHalfASCII = function(margin) {
+      var cellSize = 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r1, r2, p;
+
+      var blocks = {
+        '██': '█',
+        '█ ': '▀',
+        ' █': '▄',
+        '  ': ' '
+      };
+
+      var blocksLastLineNoMargin = {
+        '██': '▀',
+        '█ ': '▀',
+        ' █': ' ',
+        '  ': ' '
+      };
+
+      var ascii = '';
+      for (y = 0; y < size; y += 2) {
+        r1 = Math.floor((y - min) / cellSize);
+        r2 = Math.floor((y + 1 - min) / cellSize);
+        for (x = 0; x < size; x += 1) {
+          p = '█';
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r1, Math.floor((x - min) / cellSize))) {
+            p = ' ';
+          }
+
+          if (min <= x && x < max && min <= y+1 && y+1 < max && _this.isDark(r2, Math.floor((x - min) / cellSize))) {
+            p += ' ';
+          }
+          else {
+            p += '█';
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          ascii += (margin < 1 && y+1 >= max) ? blocksLastLineNoMargin[p] : blocks[p];
+        }
+
+        ascii += '\n';
+      }
+
+      if (size % 2 && margin > 0) {
+        return ascii.substring(0, ascii.length - size - 1) + Array(size+1).join('▀');
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.createASCII = function(cellSize, margin) {
+      cellSize = cellSize || 1;
+
+      if (cellSize < 2) {
+        return _createHalfASCII(margin);
+      }
+
+      cellSize -= 1;
+      margin = (typeof margin == 'undefined')? cellSize * 2 : margin;
+
+      var size = _this.getModuleCount() * cellSize + margin * 2;
+      var min = margin;
+      var max = size - margin;
+
+      var y, x, r, p;
+
+      var white = Array(cellSize+1).join('██');
+      var black = Array(cellSize+1).join('  ');
+
+      var ascii = '';
+      var line = '';
+      for (y = 0; y < size; y += 1) {
+        r = Math.floor( (y - min) / cellSize);
+        line = '';
+        for (x = 0; x < size; x += 1) {
+          p = 1;
+
+          if (min <= x && x < max && min <= y && y < max && _this.isDark(r, Math.floor((x - min) / cellSize))) {
+            p = 0;
+          }
+
+          // Output 2 characters per pixel, to create full square. 1 character per pixels gives only half width of square.
+          line += p ? white : black;
+        }
+
+        for (r = 0; r < cellSize; r += 1) {
+          ascii += line + '\n';
+        }
+      }
+
+      return ascii.substring(0, ascii.length-1);
+    };
+
+    _this.renderTo2dContext = function(context, cellSize) {
+      cellSize = cellSize || 2;
+      var length = _this.getModuleCount();
+      for (var row = 0; row < length; row++) {
+        for (var col = 0; col < length; col++) {
+          context.fillStyle = _this.isDark(row, col) ? 'black' : 'white';
+          context.fillRect(col * cellSize, row * cellSize, cellSize, cellSize);
+        }
+      }
+    }
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrcode.stringToBytes
+  //---------------------------------------------------------------------
+
+  qrcode.stringToBytesFuncs = {
+    'default' : function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        bytes.push(c & 0xff);
+      }
+      return bytes;
+    }
+  };
+
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['default'];
+
+  //---------------------------------------------------------------------
+  // qrcode.createStringToBytes
+  //---------------------------------------------------------------------
+
+  /**
+   * @param unicodeData base64 string of byte array.
+   * [16bit Unicode],[16bit Bytes], ...
+   * @param numChars
+   */
+  qrcode.createStringToBytes = function(unicodeData, numChars) {
+
+    // create conversion map.
+
+    var unicodeMap = function() {
+
+      var bin = base64DecodeInputStream(unicodeData);
+      var read = function() {
+        var b = bin.read();
+        if (b == -1) throw 'eof';
+        return b;
+      };
+
+      var count = 0;
+      var unicodeMap = {};
+      while (true) {
+        var b0 = bin.read();
+        if (b0 == -1) break;
+        var b1 = read();
+        var b2 = read();
+        var b3 = read();
+        var k = String.fromCharCode( (b0 << 8) | b1);
+        var v = (b2 << 8) | b3;
+        unicodeMap[k] = v;
+        count += 1;
+      }
+      if (count != numChars) {
+        throw count + ' != ' + numChars;
+      }
+
+      return unicodeMap;
+    }();
+
+    var unknownChar = '?'.charCodeAt(0);
+
+    return function(s) {
+      var bytes = [];
+      for (var i = 0; i < s.length; i += 1) {
+        var c = s.charCodeAt(i);
+        if (c < 128) {
+          bytes.push(c);
+        } else {
+          var b = unicodeMap[s.charAt(i)];
+          if (typeof b == 'number') {
+            if ( (b & 0xff) == b) {
+              // 1byte
+              bytes.push(b);
+            } else {
+              // 2bytes
+              bytes.push(b >>> 8);
+              bytes.push(b & 0xff);
+            }
+          } else {
+            bytes.push(unknownChar);
+          }
+        }
+      }
+      return bytes;
+    };
+  };
+
+  //---------------------------------------------------------------------
+  // QRMode
+  //---------------------------------------------------------------------
+
+  var QRMode = {
+    MODE_NUMBER :    1 << 0,
+    MODE_ALPHA_NUM : 1 << 1,
+    MODE_8BIT_BYTE : 1 << 2,
+    MODE_KANJI :     1 << 3
+  };
+
+  //---------------------------------------------------------------------
+  // QRErrorCorrectionLevel
+  //---------------------------------------------------------------------
+
+  var QRErrorCorrectionLevel = {
+    L : 1,
+    M : 0,
+    Q : 3,
+    H : 2
+  };
+
+  //---------------------------------------------------------------------
+  // QRMaskPattern
+  //---------------------------------------------------------------------
+
+  var QRMaskPattern = {
+    PATTERN000 : 0,
+    PATTERN001 : 1,
+    PATTERN010 : 2,
+    PATTERN011 : 3,
+    PATTERN100 : 4,
+    PATTERN101 : 5,
+    PATTERN110 : 6,
+    PATTERN111 : 7
+  };
+
+  //---------------------------------------------------------------------
+  // QRUtil
+  //---------------------------------------------------------------------
+
+  var QRUtil = function() {
+
+    var PATTERN_POSITION_TABLE = [
+      [],
+      [6, 18],
+      [6, 22],
+      [6, 26],
+      [6, 30],
+      [6, 34],
+      [6, 22, 38],
+      [6, 24, 42],
+      [6, 26, 46],
+      [6, 28, 50],
+      [6, 30, 54],
+      [6, 32, 58],
+      [6, 34, 62],
+      [6, 26, 46, 66],
+      [6, 26, 48, 70],
+      [6, 26, 50, 74],
+      [6, 30, 54, 78],
+      [6, 30, 56, 82],
+      [6, 30, 58, 86],
+      [6, 34, 62, 90],
+      [6, 28, 50, 72, 94],
+      [6, 26, 50, 74, 98],
+      [6, 30, 54, 78, 102],
+      [6, 28, 54, 80, 106],
+      [6, 32, 58, 84, 110],
+      [6, 30, 58, 86, 114],
+      [6, 34, 62, 90, 118],
+      [6, 26, 50, 74, 98, 122],
+      [6, 30, 54, 78, 102, 126],
+      [6, 26, 52, 78, 104, 130],
+      [6, 30, 56, 82, 108, 134],
+      [6, 34, 60, 86, 112, 138],
+      [6, 30, 58, 86, 114, 142],
+      [6, 34, 62, 90, 118, 146],
+      [6, 30, 54, 78, 102, 126, 150],
+      [6, 24, 50, 76, 102, 128, 154],
+      [6, 28, 54, 80, 106, 132, 158],
+      [6, 32, 58, 84, 110, 136, 162],
+      [6, 26, 54, 82, 110, 138, 166],
+      [6, 30, 58, 86, 114, 142, 170]
+    ];
+    var G15 = (1 << 10) | (1 << 8) | (1 << 5) | (1 << 4) | (1 << 2) | (1 << 1) | (1 << 0);
+    var G18 = (1 << 12) | (1 << 11) | (1 << 10) | (1 << 9) | (1 << 8) | (1 << 5) | (1 << 2) | (1 << 0);
+    var G15_MASK = (1 << 14) | (1 << 12) | (1 << 10) | (1 << 4) | (1 << 1);
+
+    var _this = {};
+
+    var getBCHDigit = function(data) {
+      var digit = 0;
+      while (data != 0) {
+        digit += 1;
+        data >>>= 1;
+      }
+      return digit;
+    };
+
+    _this.getBCHTypeInfo = function(data) {
+      var d = data << 10;
+      while (getBCHDigit(d) - getBCHDigit(G15) >= 0) {
+        d ^= (G15 << (getBCHDigit(d) - getBCHDigit(G15) ) );
+      }
+      return ( (data << 10) | d) ^ G15_MASK;
+    };
+
+    _this.getBCHTypeNumber = function(data) {
+      var d = data << 12;
+      while (getBCHDigit(d) - getBCHDigit(G18) >= 0) {
+        d ^= (G18 << (getBCHDigit(d) - getBCHDigit(G18) ) );
+      }
+      return (data << 12) | d;
+    };
+
+    _this.getPatternPosition = function(typeNumber) {
+      return PATTERN_POSITION_TABLE[typeNumber - 1];
+    };
+
+    _this.getMaskFunction = function(maskPattern) {
+
+      switch (maskPattern) {
+
+      case QRMaskPattern.PATTERN000 :
+        return function(i, j) { return (i + j) % 2 == 0; };
+      case QRMaskPattern.PATTERN001 :
+        return function(i, j) { return i % 2 == 0; };
+      case QRMaskPattern.PATTERN010 :
+        return function(i, j) { return j % 3 == 0; };
+      case QRMaskPattern.PATTERN011 :
+        return function(i, j) { return (i + j) % 3 == 0; };
+      case QRMaskPattern.PATTERN100 :
+        return function(i, j) { return (Math.floor(i / 2) + Math.floor(j / 3) ) % 2 == 0; };
+      case QRMaskPattern.PATTERN101 :
+        return function(i, j) { return (i * j) % 2 + (i * j) % 3 == 0; };
+      case QRMaskPattern.PATTERN110 :
+        return function(i, j) { return ( (i * j) % 2 + (i * j) % 3) % 2 == 0; };
+      case QRMaskPattern.PATTERN111 :
+        return function(i, j) { return ( (i * j) % 3 + (i + j) % 2) % 2 == 0; };
+
+      default :
+        throw 'bad maskPattern:' + maskPattern;
+      }
+    };
+
+    _this.getErrorCorrectPolynomial = function(errorCorrectLength) {
+      var a = qrPolynomial([1], 0);
+      for (var i = 0; i < errorCorrectLength; i += 1) {
+        a = a.multiply(qrPolynomial([1, QRMath.gexp(i)], 0) );
+      }
+      return a;
+    };
+
+    _this.getLengthInBits = function(mode, type) {
+
+      if (1 <= type && type < 10) {
+
+        // 1 - 9
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 10;
+        case QRMode.MODE_ALPHA_NUM : return 9;
+        case QRMode.MODE_8BIT_BYTE : return 8;
+        case QRMode.MODE_KANJI     : return 8;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 27) {
+
+        // 10 - 26
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 12;
+        case QRMode.MODE_ALPHA_NUM : return 11;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 10;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else if (type < 41) {
+
+        // 27 - 40
+
+        switch(mode) {
+        case QRMode.MODE_NUMBER    : return 14;
+        case QRMode.MODE_ALPHA_NUM : return 13;
+        case QRMode.MODE_8BIT_BYTE : return 16;
+        case QRMode.MODE_KANJI     : return 12;
+        default :
+          throw 'mode:' + mode;
+        }
+
+      } else {
+        throw 'type:' + type;
+      }
+    };
+
+    _this.getLostPoint = function(qrcode) {
+
+      var moduleCount = qrcode.getModuleCount();
+
+      var lostPoint = 0;
+
+      // LEVEL1
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount; col += 1) {
+
+          var sameCount = 0;
+          var dark = qrcode.isDark(row, col);
+
+          for (var r = -1; r <= 1; r += 1) {
+
+            if (row + r < 0 || moduleCount <= row + r) {
+              continue;
+            }
+
+            for (var c = -1; c <= 1; c += 1) {
+
+              if (col + c < 0 || moduleCount <= col + c) {
+                continue;
+              }
+
+              if (r == 0 && c == 0) {
+                continue;
+              }
+
+              if (dark == qrcode.isDark(row + r, col + c) ) {
+                sameCount += 1;
+              }
+            }
+          }
+
+          if (sameCount > 5) {
+            lostPoint += (3 + sameCount - 5);
+          }
+        }
+      };
+
+      // LEVEL2
+
+      for (var row = 0; row < moduleCount - 1; row += 1) {
+        for (var col = 0; col < moduleCount - 1; col += 1) {
+          var count = 0;
+          if (qrcode.isDark(row, col) ) count += 1;
+          if (qrcode.isDark(row + 1, col) ) count += 1;
+          if (qrcode.isDark(row, col + 1) ) count += 1;
+          if (qrcode.isDark(row + 1, col + 1) ) count += 1;
+          if (count == 0 || count == 4) {
+            lostPoint += 3;
+          }
+        }
+      }
+
+      // LEVEL3
+
+      for (var row = 0; row < moduleCount; row += 1) {
+        for (var col = 0; col < moduleCount - 6; col += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row, col + 1)
+              &&  qrcode.isDark(row, col + 2)
+              &&  qrcode.isDark(row, col + 3)
+              &&  qrcode.isDark(row, col + 4)
+              && !qrcode.isDark(row, col + 5)
+              &&  qrcode.isDark(row, col + 6) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount - 6; row += 1) {
+          if (qrcode.isDark(row, col)
+              && !qrcode.isDark(row + 1, col)
+              &&  qrcode.isDark(row + 2, col)
+              &&  qrcode.isDark(row + 3, col)
+              &&  qrcode.isDark(row + 4, col)
+              && !qrcode.isDark(row + 5, col)
+              &&  qrcode.isDark(row + 6, col) ) {
+            lostPoint += 40;
+          }
+        }
+      }
+
+      // LEVEL4
+
+      var darkCount = 0;
+
+      for (var col = 0; col < moduleCount; col += 1) {
+        for (var row = 0; row < moduleCount; row += 1) {
+          if (qrcode.isDark(row, col) ) {
+            darkCount += 1;
+          }
+        }
+      }
+
+      var ratio = Math.abs(100 * darkCount / moduleCount / moduleCount - 50) / 5;
+      lostPoint += ratio * 10;
+
+      return lostPoint;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // QRMath
+  //---------------------------------------------------------------------
+
+  var QRMath = function() {
+
+    var EXP_TABLE = new Array(256);
+    var LOG_TABLE = new Array(256);
+
+    // initialize tables
+    for (var i = 0; i < 8; i += 1) {
+      EXP_TABLE[i] = 1 << i;
+    }
+    for (var i = 8; i < 256; i += 1) {
+      EXP_TABLE[i] = EXP_TABLE[i - 4]
+        ^ EXP_TABLE[i - 5]
+        ^ EXP_TABLE[i - 6]
+        ^ EXP_TABLE[i - 8];
+    }
+    for (var i = 0; i < 255; i += 1) {
+      LOG_TABLE[EXP_TABLE[i] ] = i;
+    }
+
+    var _this = {};
+
+    _this.glog = function(n) {
+
+      if (n < 1) {
+        throw 'glog(' + n + ')';
+      }
+
+      return LOG_TABLE[n];
+    };
+
+    _this.gexp = function(n) {
+
+      while (n < 0) {
+        n += 255;
+      }
+
+      while (n >= 256) {
+        n -= 255;
+      }
+
+      return EXP_TABLE[n];
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrPolynomial
+  //---------------------------------------------------------------------
+
+  function qrPolynomial(num, shift) {
+
+    if (typeof num.length == 'undefined') {
+      throw num.length + '/' + shift;
+    }
+
+    var _num = function() {
+      var offset = 0;
+      while (offset < num.length && num[offset] == 0) {
+        offset += 1;
+      }
+      var _num = new Array(num.length - offset + shift);
+      for (var i = 0; i < num.length - offset; i += 1) {
+        _num[i] = num[i + offset];
+      }
+      return _num;
+    }();
+
+    var _this = {};
+
+    _this.getAt = function(index) {
+      return _num[index];
+    };
+
+    _this.getLength = function() {
+      return _num.length;
+    };
+
+    _this.multiply = function(e) {
+
+      var num = new Array(_this.getLength() + e.getLength() - 1);
+
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        for (var j = 0; j < e.getLength(); j += 1) {
+          num[i + j] ^= QRMath.gexp(QRMath.glog(_this.getAt(i) ) + QRMath.glog(e.getAt(j) ) );
+        }
+      }
+
+      return qrPolynomial(num, 0);
+    };
+
+    _this.mod = function(e) {
+
+      if (_this.getLength() - e.getLength() < 0) {
+        return _this;
+      }
+
+      var ratio = QRMath.glog(_this.getAt(0) ) - QRMath.glog(e.getAt(0) );
+
+      var num = new Array(_this.getLength() );
+      for (var i = 0; i < _this.getLength(); i += 1) {
+        num[i] = _this.getAt(i);
+      }
+
+      for (var i = 0; i < e.getLength(); i += 1) {
+        num[i] ^= QRMath.gexp(QRMath.glog(e.getAt(i) ) + ratio);
+      }
+
+      // recursive call
+      return qrPolynomial(num, 0).mod(e);
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // QRRSBlock
+  //---------------------------------------------------------------------
+
+  var QRRSBlock = function() {
+
+    var RS_BLOCK_TABLE = [
+
+      // L
+      // M
+      // Q
+      // H
+
+      // 1
+      [1, 26, 19],
+      [1, 26, 16],
+      [1, 26, 13],
+      [1, 26, 9],
+
+      // 2
+      [1, 44, 34],
+      [1, 44, 28],
+      [1, 44, 22],
+      [1, 44, 16],
+
+      // 3
+      [1, 70, 55],
+      [1, 70, 44],
+      [2, 35, 17],
+      [2, 35, 13],
+
+      // 4
+      [1, 100, 80],
+      [2, 50, 32],
+      [2, 50, 24],
+      [4, 25, 9],
+
+      // 5
+      [1, 134, 108],
+      [2, 67, 43],
+      [2, 33, 15, 2, 34, 16],
+      [2, 33, 11, 2, 34, 12],
+
+      // 6
+      [2, 86, 68],
+      [4, 43, 27],
+      [4, 43, 19],
+      [4, 43, 15],
+
+      // 7
+      [2, 98, 78],
+      [4, 49, 31],
+      [2, 32, 14, 4, 33, 15],
+      [4, 39, 13, 1, 40, 14],
+
+      // 8
+      [2, 121, 97],
+      [2, 60, 38, 2, 61, 39],
+      [4, 40, 18, 2, 41, 19],
+      [4, 40, 14, 2, 41, 15],
+
+      // 9
+      [2, 146, 116],
+      [3, 58, 36, 2, 59, 37],
+      [4, 36, 16, 4, 37, 17],
+      [4, 36, 12, 4, 37, 13],
+
+      // 10
+      [2, 86, 68, 2, 87, 69],
+      [4, 69, 43, 1, 70, 44],
+      [6, 43, 19, 2, 44, 20],
+      [6, 43, 15, 2, 44, 16],
+
+      // 11
+      [4, 101, 81],
+      [1, 80, 50, 4, 81, 51],
+      [4, 50, 22, 4, 51, 23],
+      [3, 36, 12, 8, 37, 13],
+
+      // 12
+      [2, 116, 92, 2, 117, 93],
+      [6, 58, 36, 2, 59, 37],
+      [4, 46, 20, 6, 47, 21],
+      [7, 42, 14, 4, 43, 15],
+
+      // 13
+      [4, 133, 107],
+      [8, 59, 37, 1, 60, 38],
+      [8, 44, 20, 4, 45, 21],
+      [12, 33, 11, 4, 34, 12],
+
+      // 14
+      [3, 145, 115, 1, 146, 116],
+      [4, 64, 40, 5, 65, 41],
+      [11, 36, 16, 5, 37, 17],
+      [11, 36, 12, 5, 37, 13],
+
+      // 15
+      [5, 109, 87, 1, 110, 88],
+      [5, 65, 41, 5, 66, 42],
+      [5, 54, 24, 7, 55, 25],
+      [11, 36, 12, 7, 37, 13],
+
+      // 16
+      [5, 122, 98, 1, 123, 99],
+      [7, 73, 45, 3, 74, 46],
+      [15, 43, 19, 2, 44, 20],
+      [3, 45, 15, 13, 46, 16],
+
+      // 17
+      [1, 135, 107, 5, 136, 108],
+      [10, 74, 46, 1, 75, 47],
+      [1, 50, 22, 15, 51, 23],
+      [2, 42, 14, 17, 43, 15],
+
+      // 18
+      [5, 150, 120, 1, 151, 121],
+      [9, 69, 43, 4, 70, 44],
+      [17, 50, 22, 1, 51, 23],
+      [2, 42, 14, 19, 43, 15],
+
+      // 19
+      [3, 141, 113, 4, 142, 114],
+      [3, 70, 44, 11, 71, 45],
+      [17, 47, 21, 4, 48, 22],
+      [9, 39, 13, 16, 40, 14],
+
+      // 20
+      [3, 135, 107, 5, 136, 108],
+      [3, 67, 41, 13, 68, 42],
+      [15, 54, 24, 5, 55, 25],
+      [15, 43, 15, 10, 44, 16],
+
+      // 21
+      [4, 144, 116, 4, 145, 117],
+      [17, 68, 42],
+      [17, 50, 22, 6, 51, 23],
+      [19, 46, 16, 6, 47, 17],
+
+      // 22
+      [2, 139, 111, 7, 140, 112],
+      [17, 74, 46],
+      [7, 54, 24, 16, 55, 25],
+      [34, 37, 13],
+
+      // 23
+      [4, 151, 121, 5, 152, 122],
+      [4, 75, 47, 14, 76, 48],
+      [11, 54, 24, 14, 55, 25],
+      [16, 45, 15, 14, 46, 16],
+
+      // 24
+      [6, 147, 117, 4, 148, 118],
+      [6, 73, 45, 14, 74, 46],
+      [11, 54, 24, 16, 55, 25],
+      [30, 46, 16, 2, 47, 17],
+
+      // 25
+      [8, 132, 106, 4, 133, 107],
+      [8, 75, 47, 13, 76, 48],
+      [7, 54, 24, 22, 55, 25],
+      [22, 45, 15, 13, 46, 16],
+
+      // 26
+      [10, 142, 114, 2, 143, 115],
+      [19, 74, 46, 4, 75, 47],
+      [28, 50, 22, 6, 51, 23],
+      [33, 46, 16, 4, 47, 17],
+
+      // 27
+      [8, 152, 122, 4, 153, 123],
+      [22, 73, 45, 3, 74, 46],
+      [8, 53, 23, 26, 54, 24],
+      [12, 45, 15, 28, 46, 16],
+
+      // 28
+      [3, 147, 117, 10, 148, 118],
+      [3, 73, 45, 23, 74, 46],
+      [4, 54, 24, 31, 55, 25],
+      [11, 45, 15, 31, 46, 16],
+
+      // 29
+      [7, 146, 116, 7, 147, 117],
+      [21, 73, 45, 7, 74, 46],
+      [1, 53, 23, 37, 54, 24],
+      [19, 45, 15, 26, 46, 16],
+
+      // 30
+      [5, 145, 115, 10, 146, 116],
+      [19, 75, 47, 10, 76, 48],
+      [15, 54, 24, 25, 55, 25],
+      [23, 45, 15, 25, 46, 16],
+
+      // 31
+      [13, 145, 115, 3, 146, 116],
+      [2, 74, 46, 29, 75, 47],
+      [42, 54, 24, 1, 55, 25],
+      [23, 45, 15, 28, 46, 16],
+
+      // 32
+      [17, 145, 115],
+      [10, 74, 46, 23, 75, 47],
+      [10, 54, 24, 35, 55, 25],
+      [19, 45, 15, 35, 46, 16],
+
+      // 33
+      [17, 145, 115, 1, 146, 116],
+      [14, 74, 46, 21, 75, 47],
+      [29, 54, 24, 19, 55, 25],
+      [11, 45, 15, 46, 46, 16],
+
+      // 34
+      [13, 145, 115, 6, 146, 116],
+      [14, 74, 46, 23, 75, 47],
+      [44, 54, 24, 7, 55, 25],
+      [59, 46, 16, 1, 47, 17],
+
+      // 35
+      [12, 151, 121, 7, 152, 122],
+      [12, 75, 47, 26, 76, 48],
+      [39, 54, 24, 14, 55, 25],
+      [22, 45, 15, 41, 46, 16],
+
+      // 36
+      [6, 151, 121, 14, 152, 122],
+      [6, 75, 47, 34, 76, 48],
+      [46, 54, 24, 10, 55, 25],
+      [2, 45, 15, 64, 46, 16],
+
+      // 37
+      [17, 152, 122, 4, 153, 123],
+      [29, 74, 46, 14, 75, 47],
+      [49, 54, 24, 10, 55, 25],
+      [24, 45, 15, 46, 46, 16],
+
+      // 38
+      [4, 152, 122, 18, 153, 123],
+      [13, 74, 46, 32, 75, 47],
+      [48, 54, 24, 14, 55, 25],
+      [42, 45, 15, 32, 46, 16],
+
+      // 39
+      [20, 147, 117, 4, 148, 118],
+      [40, 75, 47, 7, 76, 48],
+      [43, 54, 24, 22, 55, 25],
+      [10, 45, 15, 67, 46, 16],
+
+      // 40
+      [19, 148, 118, 6, 149, 119],
+      [18, 75, 47, 31, 76, 48],
+      [34, 54, 24, 34, 55, 25],
+      [20, 45, 15, 61, 46, 16]
+    ];
+
+    var qrRSBlock = function(totalCount, dataCount) {
+      var _this = {};
+      _this.totalCount = totalCount;
+      _this.dataCount = dataCount;
+      return _this;
+    };
+
+    var _this = {};
+
+    var getRsBlockTable = function(typeNumber, errorCorrectionLevel) {
+
+      switch(errorCorrectionLevel) {
+      case QRErrorCorrectionLevel.L :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 0];
+      case QRErrorCorrectionLevel.M :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 1];
+      case QRErrorCorrectionLevel.Q :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 2];
+      case QRErrorCorrectionLevel.H :
+        return RS_BLOCK_TABLE[(typeNumber - 1) * 4 + 3];
+      default :
+        return undefined;
+      }
+    };
+
+    _this.getRSBlocks = function(typeNumber, errorCorrectionLevel) {
+
+      var rsBlock = getRsBlockTable(typeNumber, errorCorrectionLevel);
+
+      if (typeof rsBlock == 'undefined') {
+        throw 'bad rs block @ typeNumber:' + typeNumber +
+            '/errorCorrectionLevel:' + errorCorrectionLevel;
+      }
+
+      var length = rsBlock.length / 3;
+
+      var list = [];
+
+      for (var i = 0; i < length; i += 1) {
+
+        var count = rsBlock[i * 3 + 0];
+        var totalCount = rsBlock[i * 3 + 1];
+        var dataCount = rsBlock[i * 3 + 2];
+
+        for (var j = 0; j < count; j += 1) {
+          list.push(qrRSBlock(totalCount, dataCount) );
+        }
+      }
+
+      return list;
+    };
+
+    return _this;
+  }();
+
+  //---------------------------------------------------------------------
+  // qrBitBuffer
+  //---------------------------------------------------------------------
+
+  var qrBitBuffer = function() {
+
+    var _buffer = [];
+    var _length = 0;
+
+    var _this = {};
+
+    _this.getBuffer = function() {
+      return _buffer;
+    };
+
+    _this.getAt = function(index) {
+      var bufIndex = Math.floor(index / 8);
+      return ( (_buffer[bufIndex] >>> (7 - index % 8) ) & 1) == 1;
+    };
+
+    _this.put = function(num, length) {
+      for (var i = 0; i < length; i += 1) {
+        _this.putBit( ( (num >>> (length - i - 1) ) & 1) == 1);
+      }
+    };
+
+    _this.getLengthInBits = function() {
+      return _length;
+    };
+
+    _this.putBit = function(bit) {
+
+      var bufIndex = Math.floor(_length / 8);
+      if (_buffer.length <= bufIndex) {
+        _buffer.push(0);
+      }
+
+      if (bit) {
+        _buffer[bufIndex] |= (0x80 >>> (_length % 8) );
+      }
+
+      _length += 1;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrNumber
+  //---------------------------------------------------------------------
+
+  var qrNumber = function(data) {
+
+    var _mode = QRMode.MODE_NUMBER;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _data;
+
+      var i = 0;
+
+      while (i + 2 < data.length) {
+        buffer.put(strToNum(data.substring(i, i + 3) ), 10);
+        i += 3;
+      }
+
+      if (i < data.length) {
+        if (data.length - i == 1) {
+          buffer.put(strToNum(data.substring(i, i + 1) ), 4);
+        } else if (data.length - i == 2) {
+          buffer.put(strToNum(data.substring(i, i + 2) ), 7);
+        }
+      }
+    };
+
+    var strToNum = function(s) {
+      var num = 0;
+      for (var i = 0; i < s.length; i += 1) {
+        num = num * 10 + chatToNum(s.charAt(i) );
+      }
+      return num;
+    };
+
+    var chatToNum = function(c) {
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      }
+      throw 'illegal char :' + c;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrAlphaNum
+  //---------------------------------------------------------------------
+
+  var qrAlphaNum = function(data) {
+
+    var _mode = QRMode.MODE_ALPHA_NUM;
+    var _data = data;
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _data.length;
+    };
+
+    _this.write = function(buffer) {
+
+      var s = _data;
+
+      var i = 0;
+
+      while (i + 1 < s.length) {
+        buffer.put(
+          getCode(s.charAt(i) ) * 45 +
+          getCode(s.charAt(i + 1) ), 11);
+        i += 2;
+      }
+
+      if (i < s.length) {
+        buffer.put(getCode(s.charAt(i) ), 6);
+      }
+    };
+
+    var getCode = function(c) {
+
+      if ('0' <= c && c <= '9') {
+        return c.charCodeAt(0) - '0'.charCodeAt(0);
+      } else if ('A' <= c && c <= 'Z') {
+        return c.charCodeAt(0) - 'A'.charCodeAt(0) + 10;
+      } else {
+        switch (c) {
+        case ' ' : return 36;
+        case '$' : return 37;
+        case '%' : return 38;
+        case '*' : return 39;
+        case '+' : return 40;
+        case '-' : return 41;
+        case '.' : return 42;
+        case '/' : return 43;
+        case ':' : return 44;
+        default :
+          throw 'illegal char :' + c;
+        }
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qr8BitByte
+  //---------------------------------------------------------------------
+
+  var qr8BitByte = function(data) {
+
+    var _mode = QRMode.MODE_8BIT_BYTE;
+    var _data = data;
+    var _bytes = qrcode.stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return _bytes.length;
+    };
+
+    _this.write = function(buffer) {
+      for (var i = 0; i < _bytes.length; i += 1) {
+        buffer.put(_bytes[i], 8);
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // qrKanji
+  //---------------------------------------------------------------------
+
+  var qrKanji = function(data) {
+
+    var _mode = QRMode.MODE_KANJI;
+    var _data = data;
+
+    var stringToBytes = qrcode.stringToBytesFuncs['SJIS'];
+    if (!stringToBytes) {
+      throw 'sjis not supported.';
+    }
+    !function(c, code) {
+      // self test for sjis support.
+      var test = stringToBytes(c);
+      if (test.length != 2 || ( (test[0] << 8) | test[1]) != code) {
+        throw 'sjis not supported.';
+      }
+    }('\u53cb', 0x9746);
+
+    var _bytes = stringToBytes(data);
+
+    var _this = {};
+
+    _this.getMode = function() {
+      return _mode;
+    };
+
+    _this.getLength = function(buffer) {
+      return ~~(_bytes.length / 2);
+    };
+
+    _this.write = function(buffer) {
+
+      var data = _bytes;
+
+      var i = 0;
+
+      while (i + 1 < data.length) {
+
+        var c = ( (0xff & data[i]) << 8) | (0xff & data[i + 1]);
+
+        if (0x8140 <= c && c <= 0x9FFC) {
+          c -= 0x8140;
+        } else if (0xE040 <= c && c <= 0xEBBF) {
+          c -= 0xC140;
+        } else {
+          throw 'illegal char at ' + (i + 1) + '/' + c;
+        }
+
+        c = ( (c >>> 8) & 0xff) * 0xC0 + (c & 0xff);
+
+        buffer.put(c, 13);
+
+        i += 2;
+      }
+
+      if (i < data.length) {
+        throw 'illegal char at ' + (i + 1);
+      }
+    };
+
+    return _this;
+  };
+
+  //=====================================================================
+  // GIF Support etc.
+  //
+
+  //---------------------------------------------------------------------
+  // byteArrayOutputStream
+  //---------------------------------------------------------------------
+
+  var byteArrayOutputStream = function() {
+
+    var _bytes = [];
+
+    var _this = {};
+
+    _this.writeByte = function(b) {
+      _bytes.push(b & 0xff);
+    };
+
+    _this.writeShort = function(i) {
+      _this.writeByte(i);
+      _this.writeByte(i >>> 8);
+    };
+
+    _this.writeBytes = function(b, off, len) {
+      off = off || 0;
+      len = len || b.length;
+      for (var i = 0; i < len; i += 1) {
+        _this.writeByte(b[i + off]);
+      }
+    };
+
+    _this.writeString = function(s) {
+      for (var i = 0; i < s.length; i += 1) {
+        _this.writeByte(s.charCodeAt(i) );
+      }
+    };
+
+    _this.toByteArray = function() {
+      return _bytes;
+    };
+
+    _this.toString = function() {
+      var s = '';
+      s += '[';
+      for (var i = 0; i < _bytes.length; i += 1) {
+        if (i > 0) {
+          s += ',';
+        }
+        s += _bytes[i];
+      }
+      s += ']';
+      return s;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64EncodeOutputStream
+  //---------------------------------------------------------------------
+
+  var base64EncodeOutputStream = function() {
+
+    var _buffer = 0;
+    var _buflen = 0;
+    var _length = 0;
+    var _base64 = '';
+
+    var _this = {};
+
+    var writeEncoded = function(b) {
+      _base64 += String.fromCharCode(encode(b & 0x3f) );
+    };
+
+    var encode = function(n) {
+      if (n < 0) {
+        // error.
+      } else if (n < 26) {
+        return 0x41 + n;
+      } else if (n < 52) {
+        return 0x61 + (n - 26);
+      } else if (n < 62) {
+        return 0x30 + (n - 52);
+      } else if (n == 62) {
+        return 0x2b;
+      } else if (n == 63) {
+        return 0x2f;
+      }
+      throw 'n:' + n;
+    };
+
+    _this.writeByte = function(n) {
+
+      _buffer = (_buffer << 8) | (n & 0xff);
+      _buflen += 8;
+      _length += 1;
+
+      while (_buflen >= 6) {
+        writeEncoded(_buffer >>> (_buflen - 6) );
+        _buflen -= 6;
+      }
+    };
+
+    _this.flush = function() {
+
+      if (_buflen > 0) {
+        writeEncoded(_buffer << (6 - _buflen) );
+        _buffer = 0;
+        _buflen = 0;
+      }
+
+      if (_length % 3 != 0) {
+        // padding
+        var padlen = 3 - _length % 3;
+        for (var i = 0; i < padlen; i += 1) {
+          _base64 += '=';
+        }
+      }
+    };
+
+    _this.toString = function() {
+      return _base64;
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // base64DecodeInputStream
+  //---------------------------------------------------------------------
+
+  var base64DecodeInputStream = function(str) {
+
+    var _str = str;
+    var _pos = 0;
+    var _buffer = 0;
+    var _buflen = 0;
+
+    var _this = {};
+
+    _this.read = function() {
+
+      while (_buflen < 8) {
+
+        if (_pos >= _str.length) {
+          if (_buflen == 0) {
+            return -1;
+          }
+          throw 'unexpected end of file./' + _buflen;
+        }
+
+        var c = _str.charAt(_pos);
+        _pos += 1;
+
+        if (c == '=') {
+          _buflen = 0;
+          return -1;
+        } else if (c.match(/^\s$/) ) {
+          // ignore if whitespace.
+          continue;
+        }
+
+        _buffer = (_buffer << 6) | decode(c.charCodeAt(0) );
+        _buflen += 6;
+      }
+
+      var n = (_buffer >>> (_buflen - 8) ) & 0xff;
+      _buflen -= 8;
+      return n;
+    };
+
+    var decode = function(c) {
+      if (0x41 <= c && c <= 0x5a) {
+        return c - 0x41;
+      } else if (0x61 <= c && c <= 0x7a) {
+        return c - 0x61 + 26;
+      } else if (0x30 <= c && c <= 0x39) {
+        return c - 0x30 + 52;
+      } else if (c == 0x2b) {
+        return 62;
+      } else if (c == 0x2f) {
+        return 63;
+      } else {
+        throw 'c:' + c;
+      }
+    };
+
+    return _this;
+  };
+
+  //---------------------------------------------------------------------
+  // gifImage (B/W)
+  //---------------------------------------------------------------------
+
+  var gifImage = function(width, height) {
+
+    var _width = width;
+    var _height = height;
+    var _data = new Array(width * height);
+
+    var _this = {};
+
+    _this.setPixel = function(x, y, pixel) {
+      _data[y * _width + x] = pixel;
+    };
+
+    _this.write = function(out) {
+
+      //---------------------------------
+      // GIF Signature
+
+      out.writeString('GIF87a');
+
+      //---------------------------------
+      // Screen Descriptor
+
+      out.writeShort(_width);
+      out.writeShort(_height);
+
+      out.writeByte(0x80); // 2bit
+      out.writeByte(0);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Global Color Map
+
+      // black
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+      out.writeByte(0x00);
+
+      // white
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+      out.writeByte(0xff);
+
+      //---------------------------------
+      // Image Descriptor
+
+      out.writeString(',');
+      out.writeShort(0);
+      out.writeShort(0);
+      out.writeShort(_width);
+      out.writeShort(_height);
+      out.writeByte(0);
+
+      //---------------------------------
+      // Local Color Map
+
+      //---------------------------------
+      // Raster Data
+
+      var lzwMinCodeSize = 2;
+      var raster = getLZWRaster(lzwMinCodeSize);
+
+      out.writeByte(lzwMinCodeSize);
+
+      var offset = 0;
+
+      while (raster.length - offset > 255) {
+        out.writeByte(255);
+        out.writeBytes(raster, offset, 255);
+        offset += 255;
+      }
+
+      out.writeByte(raster.length - offset);
+      out.writeBytes(raster, offset, raster.length - offset);
+      out.writeByte(0x00);
+
+      //---------------------------------
+      // GIF Terminator
+      out.writeString(';');
+    };
+
+    var bitOutputStream = function(out) {
+
+      var _out = out;
+      var _bitLength = 0;
+      var _bitBuffer = 0;
+
+      var _this = {};
+
+      _this.write = function(data, length) {
+
+        if ( (data >>> length) != 0) {
+          throw 'length over';
+        }
+
+        while (_bitLength + length >= 8) {
+          _out.writeByte(0xff & ( (data << _bitLength) | _bitBuffer) );
+          length -= (8 - _bitLength);
+          data >>>= (8 - _bitLength);
+          _bitBuffer = 0;
+          _bitLength = 0;
+        }
+
+        _bitBuffer = (data << _bitLength) | _bitBuffer;
+        _bitLength = _bitLength + length;
+      };
+
+      _this.flush = function() {
+        if (_bitLength > 0) {
+          _out.writeByte(_bitBuffer);
+        }
+      };
+
+      return _this;
+    };
+
+    var getLZWRaster = function(lzwMinCodeSize) {
+
+      var clearCode = 1 << lzwMinCodeSize;
+      var endCode = (1 << lzwMinCodeSize) + 1;
+      var bitLength = lzwMinCodeSize + 1;
+
+      // Setup LZWTable
+      var table = lzwTable();
+
+      for (var i = 0; i < clearCode; i += 1) {
+        table.add(String.fromCharCode(i) );
+      }
+      table.add(String.fromCharCode(clearCode) );
+      table.add(String.fromCharCode(endCode) );
+
+      var byteOut = byteArrayOutputStream();
+      var bitOut = bitOutputStream(byteOut);
+
+      // clear code
+      bitOut.write(clearCode, bitLength);
+
+      var dataIndex = 0;
+
+      var s = String.fromCharCode(_data[dataIndex]);
+      dataIndex += 1;
+
+      while (dataIndex < _data.length) {
+
+        var c = String.fromCharCode(_data[dataIndex]);
+        dataIndex += 1;
+
+        if (table.contains(s + c) ) {
+
+          s = s + c;
+
+        } else {
+
+          bitOut.write(table.indexOf(s), bitLength);
+
+          if (table.size() < 0xfff) {
+
+            if (table.size() == (1 << bitLength) ) {
+              bitLength += 1;
+            }
+
+            table.add(s + c);
+          }
+
+          s = c;
+        }
+      }
+
+      bitOut.write(table.indexOf(s), bitLength);
+
+      // end code
+      bitOut.write(endCode, bitLength);
+
+      bitOut.flush();
+
+      return byteOut.toByteArray();
+    };
+
+    var lzwTable = function() {
+
+      var _map = {};
+      var _size = 0;
+
+      var _this = {};
+
+      _this.add = function(key) {
+        if (_this.contains(key) ) {
+          throw 'dup key:' + key;
+        }
+        _map[key] = _size;
+        _size += 1;
+      };
+
+      _this.size = function() {
+        return _size;
+      };
+
+      _this.indexOf = function(key) {
+        return _map[key];
+      };
+
+      _this.contains = function(key) {
+        return typeof _map[key] != 'undefined';
+      };
+
+      return _this;
+    };
+
+    return _this;
+  };
+
+  var createDataURL = function(width, height, getPixel) {
+    var gif = gifImage(width, height);
+    for (var y = 0; y < height; y += 1) {
+      for (var x = 0; x < width; x += 1) {
+        gif.setPixel(x, y, getPixel(x, y) );
+      }
+    }
+
+    var b = byteArrayOutputStream();
+    gif.write(b);
+
+    var base64 = base64EncodeOutputStream();
+    var bytes = b.toByteArray();
+    for (var i = 0; i < bytes.length; i += 1) {
+      base64.writeByte(bytes[i]);
+    }
+    base64.flush();
+
+    return 'data:image/gif;base64,' + base64;
+  };
+
+  //---------------------------------------------------------------------
+  // returns qrcode function.
+
+  return qrcode;
+}();
+
+// multibyte support
+!function() {
+
+  qrcode.stringToBytesFuncs['UTF-8'] = function(s) {
+    // http://stackoverflow.com/questions/18729405/how-to-convert-utf8-string-to-byte-array
+    function toUTF8Array(str) {
+      var utf8 = [];
+      for (var i=0; i < str.length; i++) {
+        var charcode = str.charCodeAt(i);
+        if (charcode < 0x80) utf8.push(charcode);
+        else if (charcode < 0x800) {
+          utf8.push(0xc0 | (charcode >> 6),
+              0x80 | (charcode & 0x3f));
+        }
+        else if (charcode < 0xd800 || charcode >= 0xe000) {
+          utf8.push(0xe0 | (charcode >> 12),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+        // surrogate pair
+        else {
+          i++;
+          // UTF-16 encodes 0x10000-0x10FFFF by
+          // subtracting 0x10000 and splitting the
+          // 20 bits of 0x0-0xFFFFF into two halves
+          charcode = 0x10000 + (((charcode & 0x3ff)<<10)
+            | (str.charCodeAt(i) & 0x3ff));
+          utf8.push(0xf0 | (charcode >>18),
+              0x80 | ((charcode>>12) & 0x3f),
+              0x80 | ((charcode>>6) & 0x3f),
+              0x80 | (charcode & 0x3f));
+        }
+      }
+      return utf8;
+    }
+    return toUTF8Array(s);
+  };
+
+}();
+
+(function (factory) {
+  if (typeof define === 'function' && define.amd) {
+      define([], factory);
+  } else if (typeof exports === 'object') {
+      module.exports = factory();
+  }
+}(function () {
+    return qrcode;
+}));
+
+
+// UTF-8 support
+//---------------------------------------------------------------------
+//
+// QR Code Generator for JavaScript UTF8 Support (optional)
+//
+// Copyright (c) 2011 Kazuhiko Arase
+//
+// URL: http://www.d-project.com/
+//
+// Licensed under the MIT license:
+//  http://www.opensource.org/licenses/mit-license.php
+//
+// The word 'QR Code' is registered trademark of
+// DENSO WAVE INCORPORATED
+//  http://www.denso-wave.com/qrcode/faqpatent-e.html
+//
+//---------------------------------------------------------------------
+
+!function(qrcode) {
+
+  //---------------------------------------------------------------------
+  // overwrite qrcode.stringToBytes
+  //---------------------------------------------------------------------
+
+  qrcode.stringToBytes = qrcode.stringToBytesFuncs['UTF-8'];
+
+}(qrcode);
+
+
+
+</script>
+</body>
+</html>
