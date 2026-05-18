@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>カルテダッシュボード</title>
+<?!= include('shared_styles'); ?>
+<style>
+body { max-width: none; }
+.dashboard-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+.dashboard-header h1 { font-size: 16px; font-weight: 700; }
+.refresh-btn {
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text2);
+}
+.main { max-width: 900px; margin: 0 auto; padding: 16px 14px; }
+.tabs { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 2px solid var(--border); }
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  font-family: inherit;
+  cursor: pointer;
+  color: var(--text2);
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+.tab-btn.active { color: var(--teal); border-bottom-color: var(--teal); font-weight: 700; }
+.report-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.report-card.reviewed { opacity: 0.7; }
+.report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.report-patient-name { font-size: 18px; font-weight: 700; }
+.report-meta { font-size: 12px; color: var(--text2); margin-top: 3px; }
+.section-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  margin: 12px 0 8px;
+}
+.poem-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.poem-item {
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  text-align: center;
+}
+.poem-item .p-label { font-size: 11px; color: var(--text2); margin-bottom: 3px; }
+.poem-item .p-val { font-size: 15px; font-weight: 700; }
+.poem-total {
+  display: inline-block;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  margin-bottom: 8px;
+}
+.remain-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.remain-item {
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.remain-item .r-name { font-weight: 600; }
+.remain-item .r-level { font-size: 12px; color: var(--text2); }
+.rx-summary {
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text2);
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.comment-area { margin-top: 14px; }
+.comment-area label { color: var(--teal); font-size: 13px; font-weight: 700; }
+.comment-input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  min-height: 80px;
+  resize: vertical;
+  margin-top: 6px;
+  margin-bottom: 8px;
+}
+.comment-input:focus { outline: none; border-color: var(--green); }
+.next-appt-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.next-appt-row label { margin: 0; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.next-appt-row input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  flex: 1;
+}
+.save-btn {
+  padding: 10px 24px;
+  border-radius: var(--radius-sm);
+  background: var(--green);
+  color: white;
+  border: none;
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.save-btn:active { background: var(--teal); }
+.saved-comment {
+  background: var(--green-bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+.saved-comment .c-meta { font-size: 11px; color: var(--text2); margin-top: 4px; }
+.empty-state { text-align: center; padding: 60px 20px; color: var(--text2); }
+.empty-state .e-icon { font-size: 40px; margin-bottom: 12px; }
+.symptom-score-chip {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+}
+</style>
+</head>
+<body>
+
+<div class="dashboard-header">
+  <div>
+    <h1>🌿 カルテダッシュボード</h1>
+    <div style="font-size:11px;color:var(--text2);margin-top:2px;">はまこどもクリニック</div>
+  </div>
+  <button class="refresh-btn" onclick="loadData()">🔄 更新</button>
+</div>
+
+<div class="main">
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-pending" onclick="switchTab('pending')">未確認 <span id="pending-count" style="background:var(--red);color:white;border-radius:20px;padding:1px 7px;font-size:11px;margin-left:4px;"></span></button>
+    <button class="tab-btn" id="tab-reviewed" onclick="switchTab('reviewed')">確認済み</button>
+  </div>
+
+  <!-- 読み込み中 -->
+  <div id="loading-state" style="text-align:center;padding:60px 20px;">
+    <div class="spinner" style="margin:0 auto 12px;"></div>
+    <div style="color:var(--text2);font-size:14px;">読み込み中...</div>
+  </div>
+
+  <!-- 未確認 -->
+  <div id="tab-content-pending" style="display:none;"></div>
+  <!-- 確認済み -->
+  <div id="tab-content-reviewed" style="display:none;"></div>
+</div>
+
+<script>
+const POEM_LABELS = {
+  itch: 'かゆみ', sleep: '睡眠障害', bleed: '皮膚出血',
+  weep: '滲出', crack: 'ひび割れ', flake: '皮膚むけ', dry: '乾燥'
+};
+const REMAIN_LABELS = ['なし', 'ほとんどない', '少し残ってる', 'たくさん'];
+const SYMPTOM_LABELS = ['なし', '軽度', '中等度', '高度', '最重度'];
+const SYMPTOM_COLORS = ['var(--green)', '#81c784', 'var(--amber)', '#e57373', 'var(--red)'];
+
+let currentTab = 'pending';
+let dashboardData = { pending: [], reviewed: [] };
+
+function loadData() {
+  document.getElementById('loading-state').style.display = 'block';
+  document.getElementById('tab-content-pending').style.display = 'none';
+  document.getElementById('tab-content-reviewed').style.display = 'none';
+
+  google.script.run
+    .withSuccessHandler(data => {
+      dashboardData = data;
+      renderAll();
+    })
+    .withFailureHandler(err => {
+      document.getElementById('loading-state').innerHTML =
+        '<p style="color:var(--red);font-size:14px;">読み込みエラー: ' + esc(err.message) + '</p>';
+    })
+    .getDashboardData();
+}
+
+function renderAll() {
+  document.getElementById('loading-state').style.display = 'none';
+
+  const pendingCount = dashboardData.pending.length;
+  const countEl = document.getElementById('pending-count');
+  countEl.textContent = pendingCount;
+  countEl.style.display = pendingCount > 0 ? 'inline' : 'none';
+
+  renderList('pending', dashboardData.pending);
+  renderList('reviewed', dashboardData.reviewed);
+  switchTab(currentTab);
+}
+
+function renderList(type, reports) {
+  const container = document.getElementById('tab-content-' + type);
+  if (!reports || reports.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="e-icon">' +
+      (type === 'pending' ? '📭' : '✅') + '</div><div>' +
+      (type === 'pending' ? '未確認のレポートはありません' : '確認済みのレポートはありません') +
+      '</div></div>';
+    return;
+  }
+  container.innerHTML = reports.map(r => buildReportCard(r, type)).join('');
+}
+
+function buildReportCard(r, type) {
+  const poemTotal = Object.values(r.poemScores || {}).reduce((s, v) => s + (v || 0), 0);
+  const poemSeverity = poemTotal <= 2 ? '症状なし' : poemTotal <= 7 ? '軽症' : poemTotal <= 16 ? '中等症' : poemTotal <= 24 ? '重症' : '最重症';
+  const poemColor = poemTotal <= 2 ? 'var(--green-bg);color:var(--green-text)' :
+                    poemTotal <= 7 ? '#f1f8e9;color:#2e7d32' :
+                    poemTotal <= 16 ? 'var(--amber-bg);color:var(--amber-text)' : 'var(--red-bg);color:var(--red-text)';
+
+  const symptomColor = SYMPTOM_COLORS[r.symptomScore] || 'var(--text2)';
+  const dateStr = r.submittedAt ? new Date(r.submittedAt).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+
+  // POEM グリッド
+  const poemGrid = Object.entries(POEM_LABELS).map(([key, label]) => {
+    const val = (r.poemScores || {})[key];
+    return `<div class="poem-item"><div class="p-label">${esc(label)}</div><div class="p-val">${val !== null && val !== undefined ? val : '—'}</div></div>`;
+  }).join('');
+
+  // 薬の残量
+  const remainHtml = (r.medicationRemain || []).map(m => {
+    const levelLabel = m.remainLevel !== null && m.remainLevel !== undefined ? REMAIN_LABELS[m.remainLevel] : '—';
+    const levelColor = m.remainLevel === 0 ? 'var(--red-text)' : m.remainLevel === 1 ? 'var(--amber-text)' : 'var(--green-text)';
+    return `<div class="remain-item"><div class="r-name">${esc(m.drugName)}</div><div class="r-level" style="color:${levelColor};">${esc(levelLabel)}</div></div>`;
+  }).join('');
+
+  // 前回処方
+  const rxHtml = r.lastRx ? `
+    <div class="section-title">前回処方</div>
+    <div class="rx-summary">${esc(r.lastRx.rxSummaryText || r.lastRx.drugsJson.map(d => d.name + (d.partLabel ? '（' + d.partLabel + '）' : '')).join('\n'))}</div>
+  ` : '';
+
+  // 医師コメント欄 or 保存済みコメント
+  const commentHtml = type === 'pending' ? `
+    <div class="comment-area">
+      <label>🖊 医師コメント（処方・次回受診など）</label>
+      <textarea class="comment-input" id="comment-${esc(r.reportId)}" placeholder="例：ロコイドを減量して週3回に。次回2週間後。">${esc(r.doctorComment || '')}</textarea>
+      <div class="next-appt-row">
+        <label>次回受診日</label>
+        <input type="date" id="appt-${esc(r.reportId)}" value="${esc(r.nextAppointment || '')}">
+      </div>
+      <button class="save-btn" onclick="saveComment('${esc(r.reportId)}')">保存して確認済みにする</button>
+    </div>
+  ` : `
+    <div class="comment-area">
+      <div class="section-title">医師コメント</div>
+      ${r.doctorComment ? `<div class="saved-comment">${esc(r.doctorComment)}<div class="c-meta">${r.nextAppointment ? '次回：' + esc(r.nextAppointment) + '　' : ''}${esc(r.commentAt ? new Date(r.commentAt).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '')}</div></div>` : '<p style="font-size:12px;color:var(--text2);">コメントなし</p>'}
+    </div>
+  `;
+
+  return `
+    <div class="report-card${type === 'reviewed' ? ' reviewed' : ''}" id="card-${esc(r.reportId)}">
+      <div class="report-header">
+        <div>
+          <div class="report-patient-name">${esc(r.patientName)}<span style="font-size:13px;font-weight:400;color:var(--text2);margin-left:8px;">（${esc(r.patientNo)}）</span></div>
+          <div class="report-meta">送信：${esc(dateStr)}${r.patientNotes ? '　' + esc(r.patientNotes) : ''}</div>
+        </div>
+        <div>
+          <span class="symptom-score-chip" style="background:${symptomColor}20;color:${symptomColor};">
+            症状：${esc(SYMPTOM_LABELS[r.symptomScore] || '—')}
+          </span>
+        </div>
+      </div>
+
+      ${r.symptomNotes ? `<div style="font-size:13px;color:var(--text2);background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:12px;">${esc(r.symptomNotes)}</div>` : ''}
+
+      <div class="section-title">POEMスコア</div>
+      <span class="poem-total" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">合計 ${poemTotal} 点（${esc(poemSeverity)}）</span>
+      <div class="poem-grid">${poemGrid}</div>
+
+      ${remainHtml ? `<div class="section-title">薬の残量</div><div class="remain-grid">${remainHtml}</div>` : ''}
+
+      ${rxHtml}
+      ${commentHtml}
+    </div>`;
+}
+
+function saveComment(reportId) {
+  const comment = document.getElementById('comment-' + reportId).value.trim();
+  const nextAppt = document.getElementById('appt-' + reportId).value;
+
+  const btn = document.querySelector(`#card-${reportId} .save-btn`);
+  if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
+
+  google.script.run
+    .withSuccessHandler(res => {
+      if (res.ok) {
+        showToast('保存しました');
+        loadData(); // 再読み込み
+      } else {
+        if (btn) { btn.textContent = '保存して確認済みにする'; btn.disabled = false; }
+        alert('保存に失敗しました: ' + (res.reason || ''));
+      }
+    })
+    .withFailureHandler(err => {
+      if (btn) { btn.textContent = '保存して確認済みにする'; btn.disabled = false; }
+      alert('エラー: ' + err.message);
+    })
+    .saveComment(reportId, comment, nextAppt);
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['pending', 'reviewed'].forEach(t => {
+    document.getElementById('tab-btn-' + t) && null;
+    document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+    document.getElementById('tab-content-' + t).style.display = t === tab ? 'block' : 'none';
+  });
+}
+
+// トースト
+let _toastTimer;
+function showToast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1916;color:#fff;padding:10px 20px;border-radius:8px;font-size:14px;z-index:9999;transition:opacity .3s;pointer-events:none;';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// 起動
+window.addEventListener('load', loadData);
+</script>
+</body>
+</html>

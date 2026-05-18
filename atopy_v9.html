@@ -264,6 +264,25 @@ table.gantt th,table.gantt td{border:1px solid var(--border);padding:0;vertical-
   </div>
 </div>
 
+<!-- ===== モーダル：QRフォーム生成 ===== -->
+<div id="modal-qr-form" class="modal-overlay" onclick="if(event.target===this)closeQRFormModal()">
+  <div class="modal-box" style="text-align:center;">
+    <div class="modal-title">📱 患者フォームQRコード</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">患者さんのスマートフォンで読み取ってください。</p>
+    <div id="qr-form-canvas" style="display:inline-block;padding:12px;background:#fff;border:1px solid var(--border);border-radius:var(--radius);"></div>
+    <div style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);">
+      <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">万が一QRコードが読めない場合は、このURLを直接お伝えください</div>
+      <div id="qr-form-url" style="font-size:11px;word-break:break-all;color:var(--text);"></div>
+    </div>
+    <div style="margin-top:14px;padding:12px;background:var(--amber-bg);border-radius:var(--radius-sm);">
+      <div style="font-size:12px;color:var(--amber-text);font-weight:600;">有効期限：7日間</div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="closeQRFormModal()">閉じる</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== モーダル：データ管理 ===== -->
 <div id="modal-data" class="modal-overlay" onclick="if(event.target===this)closeDataModal()">
   <div class="modal-box">
@@ -323,6 +342,7 @@ table.gantt th,table.gantt td{border:1px solid var(--border);padding:0;vertical-
   <div class="patient-detail-actions">
     <button class="btn btn-green" onclick="startNewVisit(currentPatientId,null)">＋ 白紙で新規受診</button>
     <button class="btn btn-green" id="copy-visit-btn" onclick="startNewVisitFromLast()" style="background:var(--teal);display:none;">📋 前回処方をコピーして受診</button>
+    <button class="btn btn-green" onclick="generatePatientFormQR(currentPatientId)" style="background:var(--blue);">📱 QRフォームを生成</button>
   </div>
   <div class="visit-list-inner" id="visit-list-wrap">
     <div class="empty-state"><div class="empty-icon">📋</div><div class="empty-text">受診記録がありません</div></div>
@@ -572,6 +592,10 @@ table.gantt th,table.gantt td{border:1px solid var(--border);padding:0;vertical-
 </div>
 
 <script>
+// ===== GAS連携設定 =====
+// GASデプロイ後にこちらのURLを更新してください
+const GAS_URL = 'https://script.google.com/macros/s/YOUR_DEPLOYMENT_ID/exec';
+
 // ===== カルテシステム：DB =====
 const DB={
   getPatients(){return JSON.parse(localStorage.getItem('atopy_patients')||'[]');},
@@ -961,6 +985,58 @@ function importData(fileInput){
   };
   reader.readAsText(file);
 }
+
+// ===== GAS連携：QRフォーム生成 =====
+function generatePatientFormQR(patientId){
+  const patient=DB.getPatients().find(p=>p.id===patientId);
+  if(!patient){showToast('患者が見つかりません');return;}
+  if(!patient.patientNo){showToast('先に診察券番号を設定してください（患者編集から）');return;}
+  if(GAS_URL.includes('YOUR_DEPLOYMENT_ID')){
+    alert('GAS_URLが設定されていません。atopy_v9.htmlの先頭にあるGAS_URLを実際のGASデプロイURLに更新してください。');
+    return;
+  }
+  // 4桁トークン生成
+  const token=String(Math.floor(1000+Math.random()*9000));
+  const salt=Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b=>b.toString(16).padStart(2,'0')).join('');
+  const expires=new Date(Date.now()+7*86400000).toISOString();
+  patient.qrToken=token;
+  patient.qrTokenSalt=salt;
+  patient.qrTokenExpires=expires;
+  DB.savePatient(patient);
+  // GASにトークンを登録（fire-and-forget, no-cors）
+  fetch(GAS_URL,{method:'POST',mode:'no-cors',body:JSON.stringify({action:'registerToken',patientNo:patient.patientNo,token,salt,expires})})
+    .catch(()=>{}); // エラーは無視
+  const url=`${GAS_URL}?page=form&p=${encodeURIComponent(patient.patientNo)}&t=${token}`;
+  showQRFormModal(url);
+}
+
+function showQRFormModal(url){
+  document.getElementById('qr-form-url').textContent=url;
+  const wrap=document.getElementById('qr-form-canvas');
+  wrap.innerHTML='';
+  try{
+    const qr=qrcode(0,'M');
+    qr.addData(url,'Byte');
+    qr.make();
+    const moduleCount=qr.getModuleCount();
+    const moduleSize=5,margin=4;
+    const px=(moduleCount+margin*2)*moduleSize;
+    const canvas=document.createElement('canvas');
+    canvas.width=px;canvas.height=px;
+    const ctx=canvas.getContext('2d');
+    ctx.fillStyle='#fff';ctx.fillRect(0,0,px,px);
+    ctx.fillStyle='#0f6e56';
+    for(let r=0;r<moduleCount;r++)
+      for(let c=0;c<moduleCount;c++)
+        if(qr.isDark(r,c))ctx.fillRect((c+margin)*moduleSize,(r+margin)*moduleSize,moduleSize,moduleSize);
+    wrap.appendChild(canvas);
+  }catch(e){
+    wrap.innerHTML='<p style="font-size:12px;color:var(--text2);padding:8px;">QR生成に失敗しました</p>';
+  }
+  document.getElementById('modal-qr-form').classList.add('active');
+}
+
+function closeQRFormModal(){document.getElementById('modal-qr-form').classList.remove('active');}
 
 // ===== トースト =====
 let _toastTimer=null;
