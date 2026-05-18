@@ -1,6 +1,10 @@
 // ===== 設定 =====
-const SHEET_ID = 'YOUR_SPREADSHEET_ID'; // ← Google SheetsのIDに置き換えてください
-const CLINIC_SECRET = 'YOUR_CLINIC_SECRET'; // ← 医師ダッシュボード用のシークレットに置き換えてください
+// GASエディタの「プロジェクトの設定 → スクリプト プロパティ」で以下を設定してください:
+//   プロパティ名: SHEET_ID       値: Google SheetsのスプレッドシートID
+//   プロパティ名: CLINIC_SECRET  値: 医師ダッシュボード用の任意のパスワード文字列
+const PROPS = PropertiesService.getScriptProperties();
+const SHEET_ID = PROPS.getProperty('SHEET_ID');
+const CLINIC_SECRET = PROPS.getProperty('CLINIC_SECRET');
 
 // ===== ルーティング =====
 function doGet(e) {
