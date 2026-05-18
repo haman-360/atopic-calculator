@@ -132,10 +132,9 @@ let symptomScore = null;
 const medicationRemain = [];
 let patientContext = null;
 
-// URLパラメータ取得
-const urlParams = new URLSearchParams(window.location.search);
-const patientNo = urlParams.get('p') || '';
-const token = urlParams.get('t') || '';
+// GASテンプレート変数から取得（doGet で tmpl.patientNo / tmpl.token に代入済み）
+const patientNo = '<?= patientNo ?>';
+const token = '<?= token ?>';
 
 // 起動時に認証
 window.addEventListener('load', () => {

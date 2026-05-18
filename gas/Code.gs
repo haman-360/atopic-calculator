@@ -12,6 +12,9 @@ function doGet(e) {
 
   if (page === 'form') {
     const tmpl = HtmlService.createTemplateFromFile('patient_form');
+    // URLパラメータをテンプレート変数として渡す（window.location.searchは使えないため）
+    tmpl.patientNo = (e && e.parameter && e.parameter.p) || '';
+    tmpl.token     = (e && e.parameter && e.parameter.t) || '';
     return tmpl.evaluate()
       .setTitle('症状報告フォーム — はまこどもクリニック')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
