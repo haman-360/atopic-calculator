@@ -203,41 +203,50 @@ function getDashboardData() {
   // VisitHistory を最新処方マップ化
   const lastRxMap = {};
   for (let i = 1; i < vhData.length; i++) {
-    const pno = String(vhData[i][0]);
-    if (!lastRxMap[pno] || vhData[i][1] > lastRxMap[pno].visitDate) {
-      lastRxMap[pno] = {
-        visitDate: vhData[i][1],
-        nextVisitDate: vhData[i][2],
-        drugsJson: vhData[i][3] ? JSON.parse(vhData[i][3]) : [],
-        rxSummaryText: vhData[i][4] || ''
-      };
-    }
+    try {
+      const pno = String(vhData[i][0]);
+      if (!lastRxMap[pno] || vhData[i][1] > lastRxMap[pno].visitDate) {
+        let drugsJson = [];
+        try { drugsJson = vhData[i][3] ? JSON.parse(vhData[i][3]) : []; } catch(e) {}
+        lastRxMap[pno] = {
+          visitDate: vhData[i][1],
+          nextVisitDate: vhData[i][2],
+          drugsJson: drugsJson,
+          rxSummaryText: vhData[i][4] || ''
+        };
+      }
+    } catch(e) {}
   }
 
   const pending = [], reviewed = [];
   for (let i = 1; i < prData.length; i++) {
-    const row = prData[i];
-    const pno = String(row[1]).trim();
-    const reg = patientMap[pno] || patientMap[pno.replace(/^0+/, '')] || {};
-    const entry = {
-      reportId: row[0],
-      patientNo: pno,
-      ageLabel: calcAgeLabel_(reg.birthdate),
-      patientNotes: reg.notes || '',
-      submittedAt: row[2] ? new Date(row[2]).toISOString() : '',
-      symptomScore: row[3],
-      symptomNotes: row[4],
-      poemScores: row[5] ? JSON.parse(row[5]) : {},
-      medicationRemain: row[6] ? JSON.parse(row[6]) : [],
-      doctorComment: row[7] || '',
-      nextAppointment: row[8] || '',
-      commentAt: row[9] ? new Date(row[9]).toISOString() : '',
-      status: row[10] || 'pending',
-      lastRx: lastRxMap[pno] || null,
-      rowIndex: i + 1
-    };
-    if (entry.status === 'pending') pending.push(entry);
-    else reviewed.push(entry);
+    try {
+      const row = prData[i];
+      const pno = String(row[1]).trim();
+      const reg = patientMap[pno] || patientMap[pno.replace(/^0+/, '')] || {};
+      let poemScores = {}, medicationRemain = [];
+      try { poemScores = row[5] ? JSON.parse(row[5]) : {}; } catch(e) {}
+      try { medicationRemain = row[6] ? JSON.parse(row[6]) : []; } catch(e) {}
+      const entry = {
+        reportId: row[0],
+        patientNo: pno,
+        ageLabel: calcAgeLabel_(reg.birthdate),
+        patientNotes: reg.notes || '',
+        submittedAt: row[2] ? new Date(row[2]).toISOString() : '',
+        symptomScore: row[3],
+        symptomNotes: row[4],
+        poemScores: poemScores,
+        medicationRemain: medicationRemain,
+        doctorComment: row[7] || '',
+        nextAppointment: row[8] || '',
+        commentAt: row[9] ? new Date(row[9]).toISOString() : '',
+        status: row[10] || 'pending',
+        lastRx: lastRxMap[pno] || null,
+        rowIndex: i + 1
+      };
+      if (entry.status === 'pending') pending.push(entry);
+      else reviewed.push(entry);
+    } catch(e) {}
   }
 
   pending.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
