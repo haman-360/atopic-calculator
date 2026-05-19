@@ -841,7 +841,10 @@
       <h1>アトピー軟膏 処方量計算</h1>
       <div class="subtitle">はまこどもクリニック</div>
     </div>
-    <button class="btn btn-sm" style="background:var(--teal);color:white;flex-shrink:0;" onclick="generatePatientFormQR()">📱 QRフォーム</button>
+    <div style="display:flex;gap:8px;flex-shrink:0;">
+      <button class="btn btn-sm" style="background:var(--teal);color:white;" onclick="generatePatientFormQR()">📱 QRフォーム</button>
+      <button class="btn btn-sm" style="background:var(--green);color:white;" onclick="saveVisit()">💾 保存</button>
+    </div>
   </header>
   <div class="main">
 
@@ -1301,6 +1304,7 @@
       el.innerHTML = `経過: <strong>${days}日間</strong> ／ 次回まで: <strong>${nextDays}日</strong>`;
 
       const rxItems = [];
+      currentRxSnapshot = { patientNo: document.getElementById('patientId').value.trim(), visitDate: tv, nextVisitDate: nv, rxItems };
       let tbl = `<div style="overflow-x:auto"><table class="result-table">
   <tr><th>薬剤</th><th>1日消費</th><th>塗布部位・FTU</th><th>次回必要量</th><th>残量</th><th>今回処方量</th></tr>`;
 
@@ -4108,6 +4112,38 @@
       win.document.close();
       win.focus();
       setTimeout(() => win.print(), 400);
+    }
+
+    // ===== 処方保存 =====
+    let currentRxSnapshot = null;
+
+    async function saveVisit() {
+      if (!currentRxSnapshot || !currentRxSnapshot.rxItems.length) {
+        showToast('処方内容を入力してから保存してください');
+        return;
+      }
+      const { patientNo, visitDate, nextVisitDate, rxItems } = currentRxSnapshot;
+      if (!patientNo) { showToast('患者IDを入力してください'); return; }
+      if (!visitDate)  { showToast('受診日を入力してください'); return; }
+
+      const drugsJson = rxItems.map(r => ({
+        name: r.name,
+        partLabel: r.partNames.join('・'),
+        freqLabel: r.taperPhases
+          ? `${r.taperPhases.phase1.freqLabel}→${r.taperPhases.phase2.freqLabel}`
+          : r.freq
+      }));
+      const rxSummaryText = rxItems.map(r => `${r.name} ${r.prescribeG}g`).join('、');
+
+      showToast('保存中...');
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST', mode: 'no-cors',
+          body: JSON.stringify({ action: 'saveVisit', patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryText })
+        });
+      } catch (_) {}
+      await new Promise(r => setTimeout(r, 1500));
+      showToast(`✅ 保存しました（患者ID: ${patientNo}　${visitDate}）`);
     }
 
     // ===== GAS連携：患者フォームQR生成 =====

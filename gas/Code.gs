@@ -34,17 +34,34 @@ function doGet(e) {
   return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">ページが見つかりません</p>');
 }
 
-// atopy_v9.html からの POST（トークン登録, no-cors）
+// atopic_calculator.html / atopy_v9.html からの POST（no-cors）
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
     if (data.action === 'registerToken') {
       registerToken_(data.patientNo, data.token, data.salt, data.expires);
+    } else if (data.action === 'saveVisit') {
+      saveVisit_(data.patientNo, data.visitDate, data.nextVisitDate, data.drugsJson, data.rxSummaryText);
     }
   } catch (err) {
     // fire-and-forget なのでエラーは握り潰す
   }
   return ContentService.createTextOutput('ok').setMimeType(ContentService.MimeType.TEXT);
+}
+
+// ===== 処方履歴保存 =====
+function saveVisit_(patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryText) {
+  const sheet = getSheet_('VisitHistory');
+  const data = sheet.getDataRange().getValues();
+  // 同じ患者・同じ受診日のレコードがあれば上書き
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(patientNo) && String(data[i][1]) === String(visitDate)) {
+      sheet.getRange(i + 1, 3, 1, 3).setValues([[nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]]);
+      return;
+    }
+  }
+  // なければ新規追加
+  sheet.appendRow([patientNo, visitDate, nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]);
 }
 
 // ===== HtmlService include ヘルパー =====
