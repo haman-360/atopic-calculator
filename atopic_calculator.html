@@ -379,6 +379,55 @@
       font-size: 13px;
     }
 
+    /* ===== QRフォームモーダル ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 500;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-box {
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 24px 20px 20px;
+      width: 100%;
+      max-width: 360px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    }
+    .modal-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .modal-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 18px;
+    }
+    /* ===== トースト ===== */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: #1a1916;
+      color: #fff;
+      font-size: 13px;
+      padding: 10px 18px;
+      border-radius: 20px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s, transform 0.2s;
+      white-space: nowrap;
+      z-index: 600;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
     .result-table {
       width: 100%;
       border-collapse: collapse;
@@ -783,6 +832,22 @@
         padding: 12px 14px;
       }
     }
+    /* ===== Ganttスケジュール ===== */
+    .gantt-outer { overflow-x: auto; margin-top: 4px; }
+    table.gantt { border-collapse: collapse; font-size: 11px; white-space: nowrap; }
+    table.gantt th, table.gantt td { border: 1px solid var(--border); text-align: center; }
+    table.gantt th { background: var(--surface2); font-weight: 600; padding: 4px 6px; font-size: 10px; }
+    .gantt-part { min-width: 70px; max-width: 90px; font-size: 11px; padding: 4px 6px; text-align: left !important; word-break: break-all; white-space: normal; }
+    .gantt-drug { min-width: 110px; font-size: 11px; padding: 4px 6px; text-align: left !important; }
+    .gantt-freq { min-width: 64px; font-size: 10px; padding: 4px 5px; color: var(--text2); }
+    .gantt-day  { width: 28px; }
+    .day-cell   { width: 28px; height: 36px; position: relative; padding: 0 !important; }
+    .fill-block { position: absolute; left: 2px; right: 2px; bottom: 2px; border-radius: 2px; }
+    .phase-border { border-left: 2px dashed #c0392b !important; }
+    .gantt-legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+    .gantt-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+    .gantt-legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
+    .schedule-text-box { background: var(--surface2); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 12px; line-height: 1.8; margin-top: 12px; white-space: pre-wrap; color: var(--text2); }
   </style>
 </head>
 
@@ -791,6 +856,10 @@
     <div>
       <h1>アトピー軟膏 処方量計算</h1>
       <div class="subtitle">はまこどもクリニック</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-shrink:0;">
+      <button class="btn btn-sm" style="background:var(--teal);color:white;" onclick="generatePatientFormQR()">📱 QRフォーム</button>
+      <button class="btn btn-sm" style="background:var(--green);color:white;" onclick="saveVisit()">💾 保存</button>
     </div>
   </header>
   <div class="main">
@@ -847,6 +916,7 @@
         <button class="tab-btn on" onclick="switchTab('result',this)">処方量計算結果</button>
         <button class="tab-btn" onclick="switchTab('text',this)">テキスト出力</button>
         <button class="tab-btn" onclick="switchTab('patient',this)">患者向け共有</button>
+        <button class="tab-btn" onclick="switchTab('schedule',this)">📅 スケジュール</button>
       </div>
       <div id="panel-result">
         <div id="calc-area">
@@ -859,6 +929,11 @@
         <div style="display:flex;gap:10px;margin-top:10px;align-items:center;">
           <button class="btn btn-green" onclick="copyText()">📋 テキストをコピー</button>
           <div id="copy-notice" class="copy-notice">コピーしました！</div>
+        </div>
+      </div>
+      <div id="panel-schedule" style="display:none;">
+        <div id="schedule-area">
+          <p style="font-size:13px;color:var(--text2);">処方量計算後にスケジュールが表示されます。</p>
         </div>
       </div>
       <div id="panel-patient" style="display:none;">
@@ -878,6 +953,29 @@
     </div>
 
   </div>
+
+  <!-- ===== モーダル：QRフォーム生成 ===== -->
+  <div id="modal-qr-form" class="modal-overlay" onclick="if(event.target===this)closeQRFormModal()">
+    <div class="modal-box" style="text-align:center;">
+      <div class="modal-title">📱 患者フォームQRコード</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">患者さんのスマートフォンで読み取ってください。</p>
+      <div id="qr-form-canvas" style="display:inline-block;padding:12px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);"></div>
+      <div style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">QRコードが読めない場合はこのURLを直接お伝えください</div>
+        <div id="qr-form-url" style="font-size:11px;word-break:break-all;color:var(--text);"></div>
+      </div>
+      <div style="margin-top:14px;padding:12px;background:var(--amber-bg);border-radius:var(--radius-sm);">
+        <div style="font-size:12px;color:var(--amber-text);font-weight:600;">有効期限：7日間</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeQRFormModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- トースト -->
+  <div id="toast"></div>
+
   <script>
     const PRESETS = [
       // 1FTU=0.35g: モイゼルト（大塚製薬資料より）
@@ -1228,6 +1326,7 @@
       el.innerHTML = `経過: <strong>${days}日間</strong> ／ 次回まで: <strong>${nextDays}日</strong>`;
 
       const rxItems = [];
+      currentRxSnapshot = { patientNo: document.getElementById('patientId').value.trim(), visitDate: tv, nextVisitDate: nv, rxItems };
       let tbl = `<div style="overflow-x:auto"><table class="result-table">
   <tr><th>薬剤</th><th>1日消費</th><th>塗布部位・FTU</th><th>次回必要量</th><th>残量</th><th>今回処方量</th></tr>`;
 
@@ -1374,6 +1473,7 @@
         rxHtml += '</div>';
       }
       area.innerHTML = tbl + rxHtml;
+      renderScheduleGantt();
 
       // text output
       const pid = document.getElementById('patientId').value || '未入力';
@@ -1462,6 +1562,7 @@
       btn.classList.add('on');
       document.getElementById('panel-result').style.display = id === 'result' ? 'block' : 'none';
       document.getElementById('panel-text').style.display = id === 'text' ? 'block' : 'none';
+      document.getElementById('panel-schedule').style.display = id === 'schedule' ? 'block' : 'none';
       document.getElementById('panel-patient').style.display = id === 'patient' ? 'block' : 'none';
       if (id === 'patient') renderPatientCard();
     }
@@ -4035,6 +4136,211 @@
       win.document.close();
       win.focus();
       setTimeout(() => win.print(), 400);
+    }
+
+    // ===== スケジュールGantt =====
+    const GANTT_COLORS = [
+      { bg: '#5DCAA5', fg: '#04342C' },
+      { bg: '#85B7EB', fg: '#042C53' },
+      { bg: '#FAC775', fg: '#412402' },
+      { bg: '#AFA9EC', fg: '#26215C' },
+      { bg: '#F0997B', fg: '#4A1B0C' },
+      { bg: '#B4B2A9', fg: '#2C2C2A' },
+    ];
+    const DOW_JA = ['日','月','火','水','木','金','土'];
+
+    function freqValToShowEvery(v) {
+      if (v >= 2) return 1;   // 1日2回: 毎日
+      if (v >= 1) return 1;   // 1日1回: 毎日
+      if (v >= 0.5) return 2; // 2日に1回
+      if (v >= 3/7 - 0.01) return 2; // 週3回: 2日おき近似
+      if (v >= 2/7 - 0.01) return 4; // 週2回: 4日おき近似
+      return 7; // 週1回
+    }
+
+    function buildScheduleText(r, visitDate, nextVisitDate) {
+      const parts = r.partNames.join('・');
+      let txt = `${r.name}を${parts}に`;
+      const fmtDate = d => {
+        const dt = new Date(d);
+        return `${dt.getMonth()+1}/${dt.getDate()}`;
+      };
+      if (r.taperPhases) {
+        const p1 = r.taperPhases.phase1, p2 = r.taperPhases.phase2;
+        txt += `、${fmtDate(p1.startDate)}〜${fmtDate(p1.endDate)}（${p1.days}日間）${p1.freqLabel}`;
+        txt += `、${fmtDate(p2.startDate)}〜${fmtDate(p2.endDate)}（${p2.days}日間）${p2.freqLabel}`;
+      } else {
+        const nd = Math.round((new Date(nextVisitDate) - new Date(visitDate)) / 86400000);
+        txt += `、${fmtDate(visitDate)}〜${fmtDate(nextVisitDate)}（${nd}日間）${r.freq}`;
+      }
+      return txt;
+    }
+
+    function renderScheduleGantt() {
+      const el = document.getElementById('schedule-area');
+      const snap = currentRxSnapshot;
+      if (!snap || !snap.rxItems || !snap.rxItems.length) {
+        el.innerHTML = '<p style="font-size:13px;color:var(--text2);">処方量計算後にスケジュールが表示されます。</p>';
+        return;
+      }
+      const { rxItems, visitDate, nextVisitDate } = snap;
+      const startDt = new Date(visitDate);
+      const nd = Math.round((new Date(nextVisitDate) - startDt) / 86400000);
+      if (nd <= 0) { el.innerHTML = '<p style="font-size:13px;color:var(--text2);">日付を確認してください。</p>'; return; }
+
+      // ヘッダー行
+      let hdr = '<tr><th class="gantt-part">部位</th><th class="gantt-drug">薬剤</th><th class="gantt-freq">頻度</th>';
+      for (let i = 0; i < nd; i++) {
+        const dt = new Date(startDt); dt.setDate(dt.getDate() + i);
+        hdr += `<th class="gantt-day"><div>${dt.getMonth()+1}/${dt.getDate()}</div><div style="font-size:9px;color:var(--text3);">${DOW_JA[dt.getDay()]}</div></th>`;
+      }
+      hdr += '</tr>';
+
+      // 薬ごとの行
+      let rows = '';
+      let legendHtml = '<div class="gantt-legend">';
+      rxItems.forEach((r, idx) => {
+        const col = GANTT_COLORS[idx % GANTT_COLORS.length];
+        legendHtml += `<div class="gantt-legend-item"><div class="gantt-legend-swatch" style="background:${col.bg};"></div><span>${r.name}</span></div>`;
+
+        const freqLabel = r.taperPhases
+          ? `${r.taperPhases.phase1.freqLabel}→${r.taperPhases.phase2.freqLabel}`
+          : r.freq;
+
+        let cells = '';
+        for (let i = 0; i < nd; i++) {
+          let freqVal, fillRatio;
+          // phase境界チェック
+          let isPhBorder = false;
+          if (r.taperPhases) {
+            const p1days = r.taperPhases.phase1.days;
+            isPhBorder = (i === p1days);
+            freqVal = i < p1days ? r.taperPhases.phase1.freqVal : r.taperPhases.phase2.freqVal;
+          } else {
+            freqVal = r.freqVal;
+          }
+          fillRatio = freqVal >= 2 ? 1.0 : 0.5;
+          const showEvery = freqValToShowEvery(freqVal);
+          // phase1内のoffset vs phase2内のoffset
+          let offset = i;
+          if (r.taperPhases && i >= r.taperPhases.phase1.days) {
+            offset = i - r.taperPhases.phase1.days;
+          }
+          const show = offset % showEvery === 0;
+          const cellH = 36;
+          const fillH = Math.round((cellH - 4) * fillRatio);
+          const borderClass = isPhBorder ? ' phase-border' : '';
+          cells += `<td class="day-cell${borderClass}">${show ? `<div class="fill-block" style="height:${fillH}px;background:${col.bg};"></div>` : ''}</td>`;
+        }
+
+        rows += `<tr>
+          <td class="gantt-part" style="color:${col.fg};background:${col.bg}22;">${r.partNames.join('<br>')}</td>
+          <td class="gantt-drug" style="font-size:11px;">${r.name}</td>
+          <td class="gantt-freq">${freqLabel}</td>
+          ${cells}
+        </tr>`;
+      });
+      legendHtml += '</div>';
+
+      // スケジュールテキスト
+      const schedTxt = rxItems.map(r => buildScheduleText(r, visitDate, nextVisitDate)).join('\n');
+
+      el.innerHTML = legendHtml
+        + '<div class="gantt-outer"><table class="gantt"><thead>' + hdr + '</thead><tbody>' + rows + '</tbody></table></div>'
+        + '<div class="schedule-text-box">' + schedTxt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+    }
+
+    // ===== 処方保存 =====
+    let currentRxSnapshot = null;
+
+    async function saveVisit() {
+      if (!currentRxSnapshot || !currentRxSnapshot.rxItems.length) {
+        showToast('処方内容を入力してから保存してください');
+        return;
+      }
+      const { patientNo, visitDate, nextVisitDate, rxItems } = currentRxSnapshot;
+      if (!patientNo) { showToast('患者IDを入力してください'); return; }
+      if (!visitDate)  { showToast('受診日を入力してください'); return; }
+
+      const drugsJson = rxItems.map(r => ({
+        name: r.name,
+        partLabel: r.partNames.join('・'),
+        freqLabel: r.taperPhases
+          ? `${r.taperPhases.phase1.freqLabel}→${r.taperPhases.phase2.freqLabel}`
+          : r.freq,
+        scheduleText: buildScheduleText(r, snap.visitDate, snap.nextVisitDate)
+      }));
+      const rxSummaryText = rxItems.map(r => buildScheduleText(r, snap.visitDate, snap.nextVisitDate)).join('\n');
+
+      showToast('保存中...');
+      try {
+        await fetch(GAS_URL, {
+          method: 'POST', mode: 'no-cors',
+          body: JSON.stringify({ action: 'saveVisit', patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryText })
+        });
+      } catch (_) {}
+      await new Promise(r => setTimeout(r, 1500));
+      showToast(`✅ 保存しました（患者ID: ${patientNo}　${visitDate}）`);
+    }
+
+    // ===== GAS連携：患者フォームQR生成 =====
+    const GAS_URL = 'https://script.google.com/macros/s/AKfycbyYlP8b_E-X4tDYZQm6uDn3cbsaAcAezMjsJw4coN_nW-QCTbLqMtz0tkNShej1gLApYw/exec';
+
+    async function generatePatientFormQR() {
+      const patientNo = document.getElementById('patientId').value.trim();
+      if (!patientNo) {
+        showToast('患者IDを入力してください');
+        return;
+      }
+      // 4桁トークン生成
+      const token = String(Math.floor(1000 + Math.random() * 9000));
+      const salt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
+      const expires = new Date(Date.now() + 7 * 86400000).toISOString();
+      // GASにトークンを登録し、書き込み完了を待ってからQR表示
+      showToast('トークンを登録中...');
+      try {
+        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'registerToken', patientNo, token, salt, expires }) });
+      } catch (_) {}
+      // no-cors はレスポンスが読めないため、GAS側の書き込み完了を待つ
+      await new Promise(r => setTimeout(r, 2000));
+      const url = `${GAS_URL}?page=form&p=${encodeURIComponent(patientNo)}&t=${token}`;
+      showQRFormModal(url);
+    }
+
+    function showQRFormModal(url) {
+      document.getElementById('qr-form-url').textContent = url;
+      const wrap = document.getElementById('qr-form-canvas');
+      wrap.innerHTML = '';
+      try {
+        const qr = qrcode(0, 'M');
+        qr.addData(url, 'Byte');
+        qr.make();
+        const moduleCount = qr.getModuleCount();
+        const moduleSize = 5, margin = 4;
+        const px = (moduleCount + margin * 2) * moduleSize;
+        const canvas = document.createElement('canvas');
+        canvas.width = px; canvas.height = px;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, px, px);
+        ctx.fillStyle = '#0f6e56';
+        for (let r = 0; r < moduleCount; r++)
+          for (let c = 0; c < moduleCount; c++)
+            if (qr.isDark(r, c)) ctx.fillRect((c + margin) * moduleSize, (r + margin) * moduleSize, moduleSize, moduleSize);
+        wrap.appendChild(canvas);
+      } catch (e) {
+        wrap.innerHTML = '<p style="font-size:12px;color:var(--text2);padding:8px;">QR生成に失敗しました</p>';
+      }
+      document.getElementById('modal-qr-form').classList.add('active');
+    }
+
+    function closeQRFormModal() { document.getElementById('modal-qr-form').classList.remove('active'); }
+
+    let _toastTimer = null;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.classList.add('show');
+      if (_toastTimer) clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
     }
 
     initDates(); renderDrugs(); calc();
