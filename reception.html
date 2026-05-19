@@ -61,9 +61,6 @@ input:focus { outline: none; border-color: var(--green); }
     <label>診察券番号</label>
     <input type="text" id="patientId" placeholder="例：09539" inputmode="numeric" maxlength="10">
 
-    <label>生年月日</label>
-    <input type="date" id="birthdate" max="">
-
     <label>受診日</label>
     <input type="date" id="visitDate">
 
@@ -75,11 +72,8 @@ input:focus { outline: none; border-color: var(--green); }
     <div style="font-size:14px;color:var(--text2);margin-bottom:12px;">患者さんのスマートフォンで読み取ってください</div>
     <div class="qr-canvas-wrap"><canvas id="qr-canvas"></canvas></div>
 
-    <div class="info-row" style="margin-bottom:4px;">
-      <span class="info-label">診察券番号</span><span class="info-value" id="disp-id"></span>
-    </div>
     <div class="info-row" style="margin-bottom:12px;">
-      <span class="info-label">年齢（受診日時点）</span><span class="info-value" id="disp-age"></span>
+      <span class="info-label">診察券番号</span><span class="info-value" id="disp-id"></span>
     </div>
 
     <div class="qr-expiry">有効期限：発行から7日間</div>
@@ -101,16 +95,13 @@ const GAS_URL = 'https://script.google.com/macros/s/AKfycbyYlP8b_E-X4tDYZQm6uDn3
 window.addEventListener('load', () => {
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('visitDate').value = today;
-  document.getElementById('birthdate').max = today;
 });
 
 async function generateQR() {
   const patientId = document.getElementById('patientId').value.trim();
-  const birthdate  = document.getElementById('birthdate').value;
   const visitDate  = document.getElementById('visitDate').value;
 
   if (!patientId) { showToast('診察券番号を入力してください'); return; }
-  if (!birthdate)  { showToast('生年月日を入力してください'); return; }
   if (!visitDate)  { showToast('受診日を入力してください'); return; }
 
   const btn = document.getElementById('gen-btn');
@@ -125,7 +116,7 @@ async function generateQR() {
   try {
     await fetch(GAS_URL, {
       method: 'POST', mode: 'no-cors',
-      body: JSON.stringify({ action: 'registerToken', patientNo: patientId, token, salt, expires, birthdate })
+      body: JSON.stringify({ action: 'registerToken', patientNo: patientId, token, salt, expires, birthdate: '' })
     });
   } catch (_) {}
 
@@ -134,18 +125,14 @@ async function generateQR() {
   setStatus('');
 
   const url = `${GAS_URL}?page=form&p=${encodeURIComponent(patientId)}&t=${token}`;
-  renderQR(url, patientId, birthdate, visitDate);
+  renderQR(url, patientId);
 
   btn.disabled = false;
   btn.textContent = 'QRコードを発行する';
 }
 
-function renderQR(url, patientId, birthdate, visitDate) {
-  // 受診日時点の年齢を計算
-  const ageLabel = calcAgeLabel(birthdate, visitDate);
-
+function renderQR(url, patientId) {
   document.getElementById('disp-id').textContent  = patientId;
-  document.getElementById('disp-age').textContent = ageLabel || '不明';
   document.getElementById('disp-url').textContent = url;
 
   const canvas = document.getElementById('qr-canvas');
@@ -172,24 +159,10 @@ function renderQR(url, patientId, birthdate, visitDate) {
   document.getElementById('qr-card').style.display  = 'block';
 }
 
-function calcAgeLabel(birthdate, referenceDate) {
-  if (!birthdate) return '';
-  const birth = new Date(birthdate);
-  const ref   = referenceDate ? new Date(referenceDate) : new Date();
-  let years  = ref.getFullYear() - birth.getFullYear();
-  let months = ref.getMonth()    - birth.getMonth();
-  if (months < 0) { years--; months += 12; }
-  if (years < 0) return '';
-  if (years < 1)  return months + 'か月';
-  if (years < 3)  return years + '歳' + (months > 0 ? months + 'か月' : '');
-  return years + '歳';
-}
-
 function resetForm() {
   document.getElementById('form-card').style.display = 'block';
   document.getElementById('qr-card').style.display  = 'none';
   document.getElementById('patientId').value = '';
-  document.getElementById('birthdate').value  = '';
 }
 
 function setStatus(msg) {
