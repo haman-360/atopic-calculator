@@ -209,8 +209,8 @@ function getDashboardData() {
         let drugsJson = [];
         try { drugsJson = vhData[i][3] ? JSON.parse(vhData[i][3]) : []; } catch(e) {}
         lastRxMap[pno] = {
-          visitDate: vhData[i][1],
-          nextVisitDate: vhData[i][2],
+          visitDate: dateToStr_(vhData[i][1]),
+          nextVisitDate: dateToStr_(vhData[i][2]),
           drugsJson: drugsJson,
           rxSummaryText: vhData[i][4] || ''
         };
@@ -238,7 +238,7 @@ function getDashboardData() {
         poemScores: poemScores,
         medicationRemain: medicationRemain,
         doctorComment: row[7] || '',
-        nextAppointment: row[8] || '',
+        nextAppointment: dateToStr_(row[8]),
         commentAt: row[9] ? new Date(row[9]).toISOString() : '',
         status: row[10] || 'pending',
         lastRx: lastRxMap[pno] || null,
@@ -314,8 +314,33 @@ function hashToken_(salt, token) {
   return bytes.map(b => (b < 0 ? b + 256 : b).toString(16).padStart(2, '0')).join('');
 }
 
+function dateToStr_(v) {
+  if (!v) return '';
+  if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM-dd');
+  return String(v).substring(0, 10);
+}
+
 function auditLog_(sheet, patientNo, action) {
   sheet.appendRow([new Date().toISOString(), patientNo, action]);
+}
+
+// ===== デバッグ用（GASエディタから実行して実行ログを確認） =====
+function debugDashboard() {
+  try {
+    const prSheet = getSheet_('PatientReports');
+    const prData = prSheet.getDataRange().getValues();
+    Logger.log('PatientReports 行数: ' + prData.length);
+    for (let i = 0; i < prData.length; i++) {
+      Logger.log('行' + i + ': ' + JSON.stringify(prData[i].map(v => String(v).substring(0, 30))));
+    }
+
+    const result = getDashboardData();
+    Logger.log('pending件数: ' + result.pending.length);
+    Logger.log('reviewed件数: ' + result.reviewed.length);
+    if (result.pending.length > 0) Logger.log('pending[0]: ' + JSON.stringify(result.pending[0]));
+  } catch(e) {
+    Logger.log('エラー: ' + e.message + '\n' + e.stack);
+  }
 }
 
 // ===== スプレッドシート初期設定（初回のみ手動実行） =====
