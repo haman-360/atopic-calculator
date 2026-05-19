@@ -6,13 +6,16 @@ const PROPS = PropertiesService.getScriptProperties();
 const SHEET_ID = PROPS.getProperty('SHEET_ID');
 const CLINIC_SECRET = PROPS.getProperty('CLINIC_SECRET');
 
+// ===== PatientRegistry 列定義（0始まり） =====
+// [0] patientNo  [1] birthdate  [2] notes
+// [3] tokenHash  [4] tokenSalt  [5] tokenExpiresAt  [6] isActive
+
 // ===== ルーティング =====
 function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) || 'form';
 
   if (page === 'form') {
     const tmpl = HtmlService.createTemplateFromFile('patient_form');
-    // URLパラメータをテンプレート変数として渡す（window.location.searchは使えないため）
     tmpl.patientNo = (e && e.parameter && e.parameter.p) || '';
     tmpl.token     = (e && e.parameter && e.parameter.t) || '';
     return tmpl.evaluate()
@@ -34,12 +37,12 @@ function doGet(e) {
   return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">ページが見つかりません</p>');
 }
 
-// atopic_calculator.html / atopy_v9.html からの POST（no-cors）
+// ===== POST ルーティング（no-cors / fire-and-forget） =====
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
     if (data.action === 'registerToken') {
-      registerToken_(data.patientNo, data.token, data.salt, data.expires);
+      registerToken_(data.patientNo, data.token, data.salt, data.expires, data.birthdate || '');
     } else if (data.action === 'saveVisit') {
       saveVisit_(data.patientNo, data.visitDate, data.nextVisitDate, data.drugsJson, data.rxSummaryText);
     }
@@ -49,32 +52,16 @@ function doPost(e) {
   return ContentService.createTextOutput('ok').setMimeType(ContentService.MimeType.TEXT);
 }
 
-// ===== 処方履歴保存 =====
-function saveVisit_(patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryText) {
-  const sheet = getSheet_('VisitHistory');
-  const data = sheet.getDataRange().getValues();
-  // 同じ患者・同じ受診日のレコードがあれば上書き
-  for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(patientNo) && String(data[i][1]) === String(visitDate)) {
-      sheet.getRange(i + 1, 3, 1, 3).setValues([[nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]]);
-      return;
-    }
-  }
-  // なければ新規追加
-  sheet.appendRow([patientNo, visitDate, nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]);
-}
-
 // ===== HtmlService include ヘルパー =====
 function include(filename) {
   return HtmlService.createHtmlOutputFromFile(filename).getContent();
 }
 
 // ===== トークン登録 =====
-function registerToken_(patientNo, plainToken, salt, expiresAt) {
+function registerToken_(patientNo, plainToken, salt, expiresAt, birthdate) {
   const sheet = getSheet_('PatientRegistry');
   const data = sheet.getDataRange().getValues();
 
-  // patientNo が一致する行を探す
   let rowIdx = -1;
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(patientNo)) { rowIdx = i + 1; break; }
@@ -83,11 +70,13 @@ function registerToken_(patientNo, plainToken, salt, expiresAt) {
   const hash = hashToken_(salt, plainToken);
 
   if (rowIdx < 0) {
-    // 新規行として追加（患者名などは空欄のまま。後で手入力か同期で補完）
-    sheet.appendRow([patientNo, '', '', '', hash, salt, expiresAt, true]);
+    // 新規行: patientNo, birthdate, notes(空), tokenHash, tokenSalt, tokenExpiresAt, isActive
+    sheet.appendRow([patientNo, birthdate, '', hash, salt, expiresAt, true]);
   } else {
-    // 既存行を更新（E=tokenHash, F=salt, G=expires, H=isActive）
-    sheet.getRange(rowIdx, 5, 1, 4).setValues([[hash, salt, expiresAt, true]]);
+    // birthdateが渡されていれば更新
+    if (birthdate) sheet.getRange(rowIdx, 2).setValue(birthdate);
+    // D〜G列: tokenHash, tokenSalt, tokenExpiresAt, isActive
+    sheet.getRange(rowIdx, 4, 1, 4).setValues([[hash, salt, expiresAt, true]]);
   }
 }
 
@@ -100,26 +89,25 @@ function validateToken_(patientNo, plainToken) {
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
     if (String(row[0]) !== String(patientNo)) continue;
-    if (!row[7]) { // isActive=FALSE
+    if (!row[6]) { // isActive（G列）
       auditLog_(auditSheet, patientNo, 'token_inactive');
       return { valid: false, reason: 'inactive' };
     }
-    const expiresAt = new Date(row[6]);
+    const expiresAt = new Date(row[5]); // tokenExpiresAt（F列）
     if (new Date() > expiresAt) {
       auditLog_(auditSheet, patientNo, 'token_expired');
       return { valid: false, reason: 'expired' };
     }
-    const hash = hashToken_(String(row[5]), plainToken);
-    if (hash !== String(row[4])) {
+    const hash = hashToken_(String(row[4]), plainToken); // tokenSalt（E列）
+    if (hash !== String(row[3])) { // tokenHash（D列）
       auditLog_(auditSheet, patientNo, 'token_invalid');
       return { valid: false, reason: 'invalid' };
     }
     auditLog_(auditSheet, patientNo, 'token_valid');
     return {
       valid: true,
-      patientName: row[1] || '',
-      ageGroup: row[2] || '',
-      notes: row[3] || ''
+      birthdate: row[1] || '', // birthdate（B列）
+      notes: row[2] || ''      // notes（C列）
     };
   }
   auditLog_(auditSheet, patientNo, 'token_invalid');
@@ -150,8 +138,8 @@ function getPatientContext(patientNo, token) {
 
   return {
     valid: true,
-    patientName: validation.patientName,
-    ageGroup: validation.ageGroup,
+    ageLabel: calcAgeLabel_(validation.birthdate),
+    ageGroup: calcAgeGroup_(validation.birthdate),
     notes: validation.notes,
     lastVisit: lastVisit
   };
@@ -159,7 +147,6 @@ function getPatientContext(patientNo, token) {
 
 // ===== 患者フォーム送信 =====
 function submitPatientReport(reportData) {
-  // トークン再検証
   const validation = validateToken_(reportData.patientNo, reportData.token);
   if (!validation.valid) return { ok: false, reason: validation.reason };
 
@@ -173,12 +160,25 @@ function submitPatientReport(reportData) {
     reportData.symptomNotes || '',
     JSON.stringify(reportData.poemScores || {}),
     JSON.stringify(reportData.medicationRemain || []),
-    '', // doctorComment (空)
-    '', // nextAppointment (空)
-    '', // commentAt (空)
+    '', // doctorComment
+    '', // nextAppointment
+    '', // commentAt
     'pending'
   ]);
   return { ok: true, reportId: reportId };
+}
+
+// ===== 処方履歴保存 =====
+function saveVisit_(patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryText) {
+  const sheet = getSheet_('VisitHistory');
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(patientNo) && String(data[i][1]) === String(visitDate)) {
+      sheet.getRange(i + 1, 3, 1, 3).setValues([[nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]]);
+      return;
+    }
+  }
+  sheet.appendRow([patientNo, visitDate, nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]);
 }
 
 // ===== 医師ダッシュボード: データ取得 =====
@@ -190,10 +190,14 @@ function getDashboardData() {
   const regSheet = getSheet_('PatientRegistry');
   const regData = regSheet.getDataRange().getValues();
 
-  // PatientRegistry をマップ化
+  // PatientRegistry をマップ化（birthdate, notes）
   const patientMap = {};
   for (let i = 1; i < regData.length; i++) {
-    patientMap[String(regData[i][0])] = { name: regData[i][1], notes: regData[i][3] };
+    const pno = String(regData[i][0]);
+    patientMap[pno] = {
+      birthdate: regData[i][1] || '',
+      notes: regData[i][2] || ''
+    };
   }
 
   // VisitHistory を最新処方マップ化
@@ -210,16 +214,16 @@ function getDashboardData() {
     }
   }
 
-  // PatientReports を組み立て（pending を優先、新しい順）
   const pending = [], reviewed = [];
   for (let i = 1; i < prData.length; i++) {
     const row = prData[i];
     const pno = String(row[1]);
+    const reg = patientMap[pno] || {};
     const entry = {
       reportId: row[0],
       patientNo: pno,
-      patientName: (patientMap[pno] || {}).name || pno,
-      patientNotes: (patientMap[pno] || {}).notes || '',
+      ageLabel: calcAgeLabel_(reg.birthdate),
+      patientNotes: reg.notes || '',
       submittedAt: row[2],
       symptomScore: row[3],
       symptomNotes: row[4],
@@ -230,13 +234,12 @@ function getDashboardData() {
       commentAt: row[9] || '',
       status: row[10] || 'pending',
       lastRx: lastRxMap[pno] || null,
-      rowIndex: i + 1 // 1-indexed for Sheets
+      rowIndex: i + 1
     };
     if (entry.status === 'pending') pending.push(entry);
     else reviewed.push(entry);
   }
 
-  // 新しい順
   pending.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
   reviewed.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
 
@@ -250,14 +253,41 @@ function saveComment(reportId, comment, nextAppointment) {
   for (let i = 1; i < data.length; i++) {
     if (data[i][0] === reportId) {
       const row = i + 1;
-      sheet.getRange(row, 8).setValue(comment);           // H: doctorComment
-      sheet.getRange(row, 9).setValue(nextAppointment);   // I: nextAppointment
-      sheet.getRange(row, 10).setValue(new Date().toISOString()); // J: commentAt
-      sheet.getRange(row, 11).setValue('reviewed');       // K: status
+      sheet.getRange(row, 8).setValue(comment);
+      sheet.getRange(row, 9).setValue(nextAppointment);
+      sheet.getRange(row, 10).setValue(new Date().toISOString());
+      sheet.getRange(row, 11).setValue('reviewed');
       return { ok: true };
     }
   }
   return { ok: false, reason: 'not_found' };
+}
+
+// ===== 年齢計算ユーティリティ =====
+function calcAgeLabel_(birthdate) {
+  if (!birthdate) return '';
+  const birth = new Date(birthdate);
+  if (isNaN(birth.getTime())) return '';
+  const now = new Date();
+  let years = now.getFullYear() - birth.getFullYear();
+  let months = now.getMonth() - birth.getMonth();
+  if (months < 0) { years--; months += 12; }
+  if (years < 1) return months + 'か月';
+  if (years < 3) return years + '歳' + (months > 0 ? months + 'か月' : '');
+  return years + '歳';
+}
+
+function calcAgeGroup_(birthdate) {
+  if (!birthdate) return 'child3';
+  const birth = new Date(birthdate);
+  if (isNaN(birth.getTime())) return 'child3';
+  const now = new Date();
+  const months = (now.getFullYear() - birth.getFullYear()) * 12 + (now.getMonth() - birth.getMonth());
+  if (months < 12)  return 'infant';
+  if (months < 36)  return 'child1';
+  if (months < 72)  return 'child3';
+  if (months < 132) return 'child10';
+  return 'adult';
 }
 
 // ===== ユーティリティ =====
@@ -279,12 +309,11 @@ function auditLog_(sheet, patientNo, action) {
 }
 
 // ===== スプレッドシート初期設定（初回のみ手動実行） =====
-// Apps Script エディタから一度だけ実行してください
 function setupSheets() {
   const ss = SpreadsheetApp.openById(SHEET_ID);
 
   const sheets = {
-    'PatientRegistry': ['patientNo', 'patientName', 'defaultAgeGroup', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'],
+    'PatientRegistry': ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'],
     'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText'],
     'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status'],
     'AuditLog':        ['timestamp', 'patientNo', 'action']
@@ -300,4 +329,30 @@ function setupSheets() {
   }
 
   Logger.log('シート初期設定が完了しました');
+}
+
+// ===== PatientRegistry スキーマ移行（旧8列→新7列） =====
+// GASエディタから一度だけ実行してください（既存データがある場合のみ）
+function migratePatientRegistry() {
+  const sheet = getSheet_('PatientRegistry');
+  const data = sheet.getDataRange().getValues();
+  if (data.length === 0) return;
+
+  // ヘッダー行を新しい列名に書き換え
+  const newHeaders = ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'];
+  sheet.getRange(1, 1, 1, newHeaders.length).setValues([newHeaders]);
+
+  // 旧8列の場合: B=patientName, C=defaultAgeGroup, D=notes → B=birthdate(空), C=notes, D=tokenHash...
+  // 列Bをbirthdate（空）に、列CをnotesにするためC列（defaultAgeGroup）を削除
+  if (data[0].length >= 8) {
+    sheet.deleteColumn(3); // defaultAgeGroup列(C)を削除 → D以降が1列ずつ前にシフト
+    // B列（旧patientName）をbirthdate（空）に上書き
+    const rows = sheet.getLastRow();
+    if (rows > 1) {
+      sheet.getRange(2, 2, rows - 1, 1).clearContent(); // B列（名前）を空欄に
+    }
+    Logger.log('移行完了: ' + (rows - 1) + '件の患者レコードを処理しました');
+  } else {
+    Logger.log('既に新スキーマです');
+  }
 }

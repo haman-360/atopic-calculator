@@ -299,7 +299,7 @@ function buildReportCard(r, type) {
     <div class="report-card${type === 'reviewed' ? ' reviewed' : ''}" id="card-${esc(r.reportId)}">
       <div class="report-header">
         <div>
-          <div class="report-patient-name">${esc(r.patientName)}<span style="font-size:13px;font-weight:400;color:var(--text2);margin-left:8px;">（${esc(r.patientNo)}）</span></div>
+          <div class="report-patient-name">診察券 ${esc(r.patientNo)}<span style="font-size:14px;font-weight:400;color:var(--text2);margin-left:10px;">${esc(r.ageLabel)}</span></div>
           <div class="report-meta">送信：${esc(dateStr)}${r.patientNotes ? '　' + esc(r.patientNotes) : ''}</div>
         </div>
         <div>
