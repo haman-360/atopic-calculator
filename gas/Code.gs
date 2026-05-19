@@ -152,9 +152,12 @@ function submitPatientReport(reportData) {
 
   const sheet = getSheet_('PatientReports');
   const reportId = Utilities.getUuid();
+  // patientNo を文字列として保存（先頭ゼロが消えないよう B列を書式指定）
+  const lastRow = sheet.getLastRow() + 1;
+  sheet.getRange(lastRow, 2).setNumberFormat('@STRING@');
   sheet.appendRow([
     reportId,
-    reportData.patientNo,
+    String(reportData.patientNo),
     new Date().toISOString(),
     reportData.symptomScore,
     reportData.symptomNotes || '',
@@ -217,21 +220,21 @@ function getDashboardData() {
   const pending = [], reviewed = [];
   for (let i = 1; i < prData.length; i++) {
     const row = prData[i];
-    const pno = String(row[1]);
-    const reg = patientMap[pno] || {};
+    const pno = String(row[1]).trim();
+    const reg = patientMap[pno] || patientMap[pno.replace(/^0+/, '')] || {};
     const entry = {
       reportId: row[0],
       patientNo: pno,
       ageLabel: calcAgeLabel_(reg.birthdate),
       patientNotes: reg.notes || '',
-      submittedAt: row[2],
+      submittedAt: row[2] ? new Date(row[2]).toISOString() : '',
       symptomScore: row[3],
       symptomNotes: row[4],
       poemScores: row[5] ? JSON.parse(row[5]) : {},
       medicationRemain: row[6] ? JSON.parse(row[6]) : [],
       doctorComment: row[7] || '',
       nextAppointment: row[8] || '',
-      commentAt: row[9] || '',
+      commentAt: row[9] ? new Date(row[9]).toISOString() : '',
       status: row[10] || 'pending',
       lastRx: lastRxMap[pno] || null,
       rowIndex: i + 1
@@ -240,8 +243,8 @@ function getDashboardData() {
     else reviewed.push(entry);
   }
 
-  pending.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
-  reviewed.sort((a, b) => b.submittedAt.localeCompare(a.submittedAt));
+  pending.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
+  reviewed.sort((a, b) => new Date(b.submittedAt) - new Date(a.submittedAt));
 
   return { pending, reviewed };
 }
