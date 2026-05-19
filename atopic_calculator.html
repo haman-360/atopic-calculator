@@ -4113,7 +4113,7 @@
     // ===== GAS連携：患者フォームQR生成 =====
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbyYlP8b_E-X4tDYZQm6uDn3cbsaAcAezMjsJw4coN_nW-QCTbLqMtz0tkNShej1gLApYw/exec';
 
-    function generatePatientFormQR() {
+    async function generatePatientFormQR() {
       const patientNo = document.getElementById('patientId').value.trim();
       if (!patientNo) {
         showToast('患者IDを入力してください');
@@ -4123,9 +4123,13 @@
       const token = String(Math.floor(1000 + Math.random() * 9000));
       const salt = Array.from(crypto.getRandomValues(new Uint8Array(16))).map(b => b.toString(16).padStart(2, '0')).join('');
       const expires = new Date(Date.now() + 7 * 86400000).toISOString();
-      // GASにトークンを登録（fire-and-forget）
-      fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'registerToken', patientNo, token, salt, expires }) })
-        .catch(() => {});
+      // GASにトークンを登録し、書き込み完了を待ってからQR表示
+      showToast('トークンを登録中...');
+      try {
+        await fetch(GAS_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'registerToken', patientNo, token, salt, expires }) });
+      } catch (_) {}
+      // no-cors はレスポンスが読めないため、GAS側の書き込み完了を待つ
+      await new Promise(r => setTimeout(r, 2000));
       const url = `${GAS_URL}?page=form&p=${encodeURIComponent(patientNo)}&t=${token}`;
       showQRFormModal(url);
     }
