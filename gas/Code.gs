@@ -152,9 +152,6 @@ function submitPatientReport(reportData) {
 
   const sheet = getSheet_('PatientReports');
   const reportId = Utilities.getUuid();
-  // patientNo を文字列として保存（先頭ゼロが消えないよう B列を書式指定）
-  const lastRow = sheet.getLastRow() + 1;
-  sheet.getRange(lastRow, 2).setNumberFormat('@STRING@');
   sheet.appendRow([
     reportId,
     String(reportData.patientNo),
@@ -254,7 +251,7 @@ function saveComment(reportId, comment, nextAppointment) {
   const sheet = getSheet_('PatientReports');
   const data = sheet.getDataRange().getValues();
   for (let i = 1; i < data.length; i++) {
-    if (data[i][0] === reportId) {
+    if (String(data[i][0]).trim() === String(reportId).trim()) {
       const row = i + 1;
       sheet.getRange(row, 8).setValue(comment);
       sheet.getRange(row, 9).setValue(nextAppointment);
@@ -263,7 +260,8 @@ function saveComment(reportId, comment, nextAppointment) {
       return { ok: true };
     }
   }
-  return { ok: false, reason: 'not_found' };
+  // デバッグ用：何件あるか・最初のIDを返す
+  return { ok: false, reason: 'not_found', count: data.length - 1, firstId: String(data[1] ? data[1][0] : '') };
 }
 
 // ===== 年齢計算ユーティリティ =====

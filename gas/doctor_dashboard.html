@@ -331,17 +331,17 @@ function saveComment(reportId) {
 
   google.script.run
     .withSuccessHandler(res => {
+      if (btn) { btn.textContent = '保存して確認済みにする'; btn.disabled = false; }
       if (res.ok) {
         showToast('保存しました');
-        loadData(); // 再読み込み
+        loadData();
       } else {
-        if (btn) { btn.textContent = '保存して確認済みにする'; btn.disabled = false; }
-        alert('保存に失敗しました: ' + (res.reason || ''));
+        showToast('保存失敗: ' + esc(res.reason || '') + (res.firstId ? '（ID不一致）' : ''));
       }
     })
     .withFailureHandler(err => {
       if (btn) { btn.textContent = '保存して確認済みにする'; btn.disabled = false; }
-      alert('エラー: ' + err.message);
+      showToast('エラー: ' + esc(err.message || '不明なエラー'));
     })
     .saveComment(reportId, comment, nextAppt);
 }
