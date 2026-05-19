@@ -291,10 +291,16 @@ function buildReportCard(r, type) {
   }).join('');
 
   // 前回処方
-  const rxHtml = r.lastRx ? `
+  let rxHtml = '';
+  if (r.lastRx) {
+    const drugs = r.lastRx.drugsJson || [];
+    const schedLines = drugs.map(d => d.scheduleText || (d.name + (d.partLabel ? '（' + d.partLabel + '）' : '') + (d.freqLabel ? '　' + d.freqLabel : '')));
+    const schedDisplay = schedLines.length ? schedLines.join('\n') : (r.lastRx.rxSummaryText || '');
+    rxHtml = `
     <div class="section-title">前回処方</div>
-    <div class="rx-summary">${esc(r.lastRx.rxSummaryText || r.lastRx.drugsJson.map(d => d.name + (d.partLabel ? '（' + d.partLabel + '）' : '')).join('\n'))}</div>
-  ` : '';
+    <div class="rx-summary">${esc(schedDisplay)}</div>
+  `;
+  }
 
   // 医師コメント欄 or 保存済みコメント
   const commentHtml = type === 'pending' ? `
