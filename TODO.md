@@ -35,7 +35,7 @@
 **難易度:** 低〜中 / **影響範囲:** チェックボックス複数 + JSON保存
 
 ### patient_form.html
-- [ ] 感染徴候セクションを追加
+- [x] 感染徴候セクションを追加
   - チェックボックス（複数選択可）:
     - `infection_impetigo` — とびひのような症状（かさぶた・膿）
     - `infection_crust` — 黄色いかさぶた
@@ -45,12 +45,12 @@
   - 変数名: `infectionSigns`（配列、例: `["impetigo", "crust"]`）
 
 ### gas/Code.gs
-- [ ] `submitPatientReport` に `infectionSignsJson` を追加（JSON.stringify）
-- [ ] `setupSheets()` に `'infectionSignsJson'` 列を追加
+- [x] `submitPatientReport` に `infectionSignsJson` を追加（JSON.stringify）
+- [x] `setupSheets()` に `'infectionSignsJson'` 列を追加
 
 ### gas/doctor_dashboard.html
-- [ ] 感染徴候あり → 赤いアラートバッジで強調表示
-- [ ] 選択された徴候名を日本語で列挙表示
+- [x] 感染徴候あり → 赤いアラートバッジで強調表示
+- [x] 選択された徴候名を日本語で列挙表示
 
 ---
 
