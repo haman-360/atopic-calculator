@@ -169,6 +169,10 @@ function submitPatientReport(reportData) {
     '', // commentAt
     'pending'
   ]);
+  // B列（patientNo）をテキスト書式に設定（先頭0を保持するため）
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 2).setNumberFormat('@');
+  sheet.getRange(newRow, 2).setValue(String(reportData.patientNo));
   return { ok: true, reportId: reportId };
 }
 
@@ -328,7 +332,10 @@ function dateToStr_(v) {
 }
 
 function auditLog_(sheet, patientNo, action) {
-  sheet.appendRow([new Date().toISOString(), patientNo, action]);
+  sheet.appendRow([new Date().toISOString(), String(patientNo), action]);
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 2).setNumberFormat('@');
+  sheet.getRange(newRow, 2).setValue(String(patientNo));
 }
 
 // ===== デバッグ用（GASエディタから実行して実行ログを確認） =====
@@ -368,9 +375,12 @@ function setupSheets() {
       sheet.appendRow(headers);
       sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e8f5e9');
     }
-    // patientNo列（A列）を常にテキスト書式に設定（先頭0を保持するため）
-    if (['PatientRegistry', 'VisitHistory', 'PatientReports', 'AuditLog'].includes(name)) {
+    // patientNo列をテキスト書式に設定（先頭0を保持するため）
+    // PatientRegistry・VisitHistory: A列, PatientReports・AuditLog: B列
+    if (['PatientRegistry', 'VisitHistory'].includes(name)) {
       sheet.getRange('A:A').setNumberFormat('@');
+    } else if (['PatientReports', 'AuditLog'].includes(name)) {
+      sheet.getRange('B:B').setNumberFormat('@');
     }
   }
 
