@@ -1066,18 +1066,18 @@ function showToast(msg){
 
 // ===== データ定義 =====
 const PRESETS=[
-  {name:"ロコイド軟膏 10g",       tubeg:10, gPerFTU:0.3, mixed:false},
-  {name:"リンデロンV軟膏 10g",    tubeg:10, gPerFTU:0.3, mixed:false},
-  {name:"アンテベート軟膏 10g",   tubeg:10, gPerFTU:0.3, mixed:false},
-  {name:"ベタメタゾン軟膏 10g",   tubeg:10, gPerFTU:0.3, mixed:false},
-  {name:"モイゼルト軟膏 28g",     tubeg:28, gPerFTU:0.35,mixed:false},
-  {name:"コレクチム軟膏 10g",     tubeg:10, gPerFTU:0.5, mixed:false},
-  {name:"プロトピック軟膏 5g",    tubeg:5,  gPerFTU:0.2, mixed:false},
-  {name:"ヒルドイドクリーム 25g", tubeg:25, gPerFTU:0.5, mixed:false},
-  {name:"ヒルドイドソフト軟膏 25g",tubeg:25,gPerFTU:0.5, mixed:false},
-  {name:"ロコイド/ヘパリン混合 10g",  tubeg:10, gPerFTU:0.5, mixed:true},
-  {name:"ベタメタゾン/ヘパリン混合 10g",tubeg:10,gPerFTU:0.5,mixed:true},
-  {name:"その他（手入力）",        tubeg:10, gPerFTU:0.5, mixed:false, custom:true},
+  {name:"ロコイド軟膏",             tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"リンデロンV軟膏",          tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"アンテベート軟膏",         tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"ベタメタゾン軟膏",         tubeg:10, gPerFTU:0.3, mixed:false},
+  {name:"モイゼルト軟膏",           tubeg:28, gPerFTU:0.35,mixed:false},
+  {name:"コレクチム軟膏",           tubeg:10, gPerFTU:0.5, mixed:false},
+  {name:"プロトピック軟膏",         tubeg:5,  gPerFTU:0.2, mixed:false},
+  {name:"ヒルドイドクリーム",       tubeg:25, gPerFTU:0.5, mixed:false},
+  {name:"ヒルドイドソフト軟膏",     tubeg:25, gPerFTU:0.5, mixed:false},
+  {name:"ロコイド/ヘパリン混合",    tubeg:10, gPerFTU:0.5, mixed:true},
+  {name:"ベタメタゾン/ヘパリン混合",tubeg:10, gPerFTU:0.5, mixed:true},
+  {name:"その他（手入力）",          tubeg:10, gPerFTU:0.5, mixed:false, custom:true},
 ];
 const FREQS=[
   {label:"1日2回",  val:2,    fillRatio:1.0, showEvery:1, dow:null},
@@ -1145,7 +1145,10 @@ function parseDate(s){if(!s)return null;const p=s.split('-');return new Date(+p[
 function addDays(d,n){const r=new Date(d);r.setDate(r.getDate()+n);return r;}
 function dateDiff(a,b){if(!a||!b)return null;return Math.round((parseDate(b)-parseDate(a))/86400000);}
 function isToday(d){const t=new Date();return d.getFullYear()===t.getFullYear()&&d.getMonth()===t.getMonth()&&d.getDate()===t.getDate();}
-function getDrugName(r){return PRESETS[r.presetIdx].custom?(r.customName||'（薬剤名未入力）'):PRESETS[r.presetIdx].name;}
+function getDrugName(r){
+  if(PRESETS[r.presetIdx].custom)return r.customName||'（薬剤名未入力）';
+  return PRESETS[r.presetIdx].name.replace(/\s+\d+g$/,'');
+}
 // 同じプリセットの行をグループ化してユニーク薬剤リスト
 function uniqueDrugs(){
   const seen={},list=[];
