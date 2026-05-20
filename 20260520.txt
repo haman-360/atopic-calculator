@@ -1,6 +1,7 @@
-# Atopic Calculator — システム概要
+# Atopic Calculator — システム概要（Claude web 共有用）
 
-はまこどもクリニック向けアトピー性皮膚炎軟膏処方支援システム。
+> はまこどもクリニック向けアトピー性皮膚炎軟膏処方支援システムの技術仕様書。  
+> アンケート機能のパワーアップ設計に使用するため作成。
 
 ---
 
@@ -124,24 +125,32 @@ atopic-calculator/
 
 ---
 
-## 5. 患者フォーム（patient_form.html）仕様
+## 5. 患者フォーム（patient_form.html）現在の仕様
 
 ### 認証フロー
-1. GASテンプレート変数 `<?= patientNo ?>` でURLパラメータを注入（URLSearchParamsは使用不可）
+1. URLパラメータからpatientNo・tokenを取得（GASテンプレート変数 `<?= patientNo ?>` で注入）
 2. `google.script.run.getPatientContext(patientNo, token)` で検証
 3. 成功 → フォーム表示。失敗 → エラー画面
 
-### 入力項目
+### 現在の入力項目
 
 **1. 全体症状スコア（symptomScore）**
-- 0: なし / 1: 軽度 / 2: 中等度 / 3: 高度 / 4: 最重度
+- 0: なし
+- 1: 軽度
+- 2: 中等度
+- 3: 高度
+- 4: 最重度
 - 任意で自由記述メモ
 
 **2. 残薬確認（medicationRemain）**
-- 前回処方薬ごとに4段階ボタン:
-  - 0: ❌ なし / 1: 🟠 ほとんどない / 2: 🟡 少し残ってる / 3: 💊 たくさん残ってる
+- 前回処方薬ごとに以下4段階ボタン:
+  - 0: ❌ なし
+  - 1: 🟠 ほとんどない
+  - 2: 🟡 少し残ってる
+  - 3: 💊 たくさん残ってる
 
 **3. POEMスコア（poemScores）**
+7項目 × 5段階（0〜4点）:
 
 | キー | 質問内容 |
 |---|---|
@@ -153,7 +162,12 @@ atopic-calculator/
 | flake | 皮膚のむけ |
 | dry | 乾燥 |
 
-各項目: 0=症状なし / 1=1〜2日 / 2=3〜4日 / 3=5〜6日 / 4=毎日
+各項目の選択肢:
+- 0: 症状なし（0日）
+- 1: 1〜2日
+- 2: 3〜4日
+- 3: 5〜6日
+- 4: 毎日（7日）
 
 ### 送信データ構造
 ```javascript
@@ -176,7 +190,7 @@ atopic-calculator/
   valid: true,
   birthdate: "2020-04-01",
   ageLabel: "6歳1か月",
-  ageGroup: "child10",        // infant / child1 / child3 / child10 / adult
+  ageGroup: "child10",
   lastVisitDate: "2026-05-06",
   nextVisitDate: "2026-05-20",
   lastDrugs: "モイゼルト軟膏、ロコイド軟膏",
@@ -191,21 +205,21 @@ atopic-calculator/
 ### 薬剤データ（PRESETS）
 ```javascript
 [
-  { name: "モイゼルト軟膏",              tubeg: 28, gPerFTU: 0.35, mixed: false },
-  { name: "コレクチム軟膏",              tubeg: 10, gPerFTU: 0.5,  mixed: false },
-  { name: "プロトピック軟膏",            tubeg: 5,  gPerFTU: 0.2,  mixed: false },
-  { name: "ロコイド軟膏",                tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  { name: "リンデロンV軟膏",             tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  { name: "リンデロンVクリーム",         tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  { name: "アンテベート軟膏",            tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  { name: "ベタメタゾン軟膏",            tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  { name: "ベタメタゾンクリーム",        tubeg: 30, gPerFTU: 0.5,  mixed: false },
-  { name: "ロコイド/ヘパリン混合軟膏",   tubeg: 10, gPerFTU: 0.5,  mixed: true  },
+  { name: "モイゼルト軟膏",             tubeg: 28, gPerFTU: 0.35, mixed: false },
+  { name: "コレクチム軟膏",             tubeg: 10, gPerFTU: 0.5,  mixed: false },
+  { name: "プロトピック軟膏",           tubeg: 5,  gPerFTU: 0.2,  mixed: false },
+  { name: "ロコイド軟膏",               tubeg: 10, gPerFTU: 0.3,  mixed: false },
+  { name: "リンデロンV軟膏",            tubeg: 10, gPerFTU: 0.3,  mixed: false },
+  { name: "リンデロンVクリーム",        tubeg: 10, gPerFTU: 0.3,  mixed: false },
+  { name: "アンテベート軟膏",           tubeg: 10, gPerFTU: 0.3,  mixed: false },
+  { name: "ベタメタゾン軟膏",           tubeg: 10, gPerFTU: 0.3,  mixed: false },
+  { name: "ベタメタゾンクリーム",       tubeg: 30, gPerFTU: 0.5,  mixed: false },
+  { name: "ロコイド/ヘパリン混合軟膏",  tubeg: 10, gPerFTU: 0.5,  mixed: true  },
   { name: "ベタメタゾン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, mixed: true },
-  { name: "ヒルドイドクリーム",          tubeg: 25, gPerFTU: 0.5,  mixed: false },
-  { name: "ヒルドイドソフト軟膏",        tubeg: 25, gPerFTU: 0.5,  mixed: false },
-  { name: "ブイタマークリーム",          tubeg: 15, gPerFTU: 0.5,  mixed: false },
-  { name: "その他（手入力）",             tubeg: 10, gPerFTU: 0.5,  custom: true },
+  { name: "ヒルドイドクリーム",         tubeg: 25, gPerFTU: 0.5,  mixed: false },
+  { name: "ヒルドイドソフト軟膏",       tubeg: 25, gPerFTU: 0.5,  mixed: false },
+  { name: "ブイタマークリーム",         tubeg: 15, gPerFTU: 0.5,  mixed: false },
+  { name: "その他（手入力）",            tubeg: 10, gPerFTU: 0.5,  custom: true },
 ]
 ```
 
@@ -221,8 +235,8 @@ atopic-calculator/
 ### 処方量計算式
 ```
 onceTotalG = Σ(部位ごとのFTU × gPerFTU × 両側係数)
-neededG    = onceTotalG × 使用頻度(日換算) × 日数
-netG       = neededG - 残量g
+neededG = onceTotalG × 使用頻度(日換算) × 日数
+netG = neededG - 残量g
 prescribedG = チューブ単位に切り上げ(netG)
 ```
 
@@ -230,7 +244,7 @@ prescribedG = チューブ単位に切り上げ(netG)
 1. **処方量計算結果** — 計算表（必要量・残量・処方量）
 2. **テキスト出力** — カルテ貼り付け用テキスト
 3. **患者向け共有** — 印刷・QR用患者向け説明カード
-4. **スケジュール** — Ganttチャート + 画像共有（html2canvas）
+4. **スケジュール** — Ganttチャート + 画像共有
 
 ---
 
@@ -255,79 +269,43 @@ prescribedG = チューブ単位に切り上げ(netG)
 
 ---
 
-## 8. デプロイ情報
+## 8. テクノロジースタック
 
-- **GASデプロイID:** `AKfycbyYlP8b_E-X4tDYZQm6uDn3cbsaAcAezMjsJw4coN_nW-QCTbLqMtz0tkNShej1gLApYw`
-- **ベースURL:** `https://script.google.com/macros/s/AKfycbyYlP8b_E-X4tDYZQm6uDn3cbsaAcAezMjsJw4coN_nW-QCTbLqMtz0tkNShej1gLApYw/exec`
-- 患者フォーム: `...exec?page=form&p={患者番号}&t={トークン}`
-- 医師ダッシュボード: `...exec?page=dashboard&secret=（スクリプトプロパティ参照）`
-
-## スクリプトプロパティ（GASエディタで設定）
-| プロパティ名 | 内容 |
+| 要素 | 技術 |
 |---|---|
-| `SHEET_ID` | Google SheetsのスプレッドシートID |
-| `CLINIC_SECRET` | 医師ダッシュボードアクセス用パスワード |
-
-## ローカル開発
-```bash
-cd gas
-clasp push
-# GASエディタ → デプロイを管理 → 鉛筆アイコン → 新しいバージョン → デプロイ
-```
+| フロントエンド | Vanilla HTML5 / CSS3 / ES6（フレームワークなし） |
+| バックエンド | Google Apps Script |
+| DB | Google Sheets |
+| 画像生成 | html2canvas（CDN） |
+| QRコード | JavaScript内蔵ライブラリ |
+| ホスティング | GitHub Pages + GAS |
+| セキュリティ | SHA256トークンハッシュ・7日有効期限・secret-protected dashboard |
 
 ---
 
-## 9. 注意事項
+## 9. 現在の課題・未実装事項
 
-- `CLINIC_SECRET` はソースコードに書かず、スクリプトプロパティで管理
-- `patient_form.html` のパラメータ取得は `<?= patientNo ?>` テンプレート変数方式（URLSearchParamsは使えない）
-- `Code.gs`（英語ファイル名）のみ使用。`コード.gs`（日本語）はGASエディタ上で削除済み
-- 混合軟膏（mixed: true）はFTUではなくg単位で表示（チューブではなく容器のため）
-- アンケート拡張時は `submitPatientReport` のペイロード + PatientReportsシート列 + `setupSheets()` を同時に更新する
-
----
-
-## 10. アンケート強化計画（2026-05 設計）
-
-### 追加する項目（優先順）
-1. **かゆみNRS**（0〜10）← 最優先・1ファイル変更のみ
-2. **感染徴候チェック**（とびひ様・黄色痂皮・浸出液・痛み）
-3. **部位別外用頻度**（部位 × 薬剤 × 頻度）← シート構造変更あり
-4. **悪化因子**（汗・乾燥・花粉・プール・衣類など）
-5. **年齢別フォーム分岐**（ageGroupはすでにgetPatientContextが返している）
-
-### 設計方針
-- 部位別外用頻度は**縦持ち**で保存（横持ち禁止・薬剤変更時に破綻するため）
-- PatientReportsに `topicalUseJson` 列を追加する
-- 患者フォームはスマホ完結・シンプルさ優先
-- トークン認証の仕組みは変更しない
-
-### 年齢別フォーム分岐方針
-| ageGroup | 対象年齢 | 回答モード |
-|---|---|---|
-| infant / child1 / child3 | 0〜6歳 | 保護者回答モード |
-| child10 | 7〜11歳 | 保護者メイン＋本人のかゆみ・睡眠 |
-| adult | 12歳以上 | 本人回答モード |
-
-### 拡張時の必須手順（セットで行う）
-1. `gas/patient_form.html` — 入力UIを追加
-2. `gas/Code.gs` の `submitPatientReport` — ペイロードの新フィールドを受け取り・保存
-3. `gas/Code.gs` の `setupSheets()` — PatientReportsシートの列ヘッダーを追加
-4. `gas/doctor_dashboard.html` — 新項目を表示（必要に応じて）
-
----
-
-## 11. TODO
-
-- [ ] 患者フォームE2Eテスト（QR生成→スキャン→認証→送信→Sheets反映確認）
-- [ ] 医師ダッシュボードの動作確認
+- [ ] 患者フォームのE2Eテスト未完了（QR→スキャン→認証→送信→Sheets反映）
+- [ ] 医師ダッシュボードの動作確認未完了
+- [ ] VisitHistoryへの処方履歴の自動同期（現在は手動保存）
 - [ ] POEMスコアの推移グラフ・経過観察機能
-- [ ] VisitHistoryへの処方履歴の自動同期
 
 ---
 
-## 変更履歴
+## 10. アンケート強化を検討する際の考慮点
 
-| 日付 | 内容 |
-|---|---|
-| 2026-05-20 | かゆみNRS実装・動作確認済み |
+**現状のアンケートで取得できているデータ:**
+- 全体症状スコア（主観的 0〜4）
+- POEMスコア（7項目 × 客観的頻度）
+- 残薬情報（薬ごと 4段階）
+
+**GASが返す患者コンテキスト:**
+- 年齢グループ（FTU計算に使用）
+- 前回処方薬一覧
+- 前回・次回受診日
+
+**追加を検討する際に注意すべき点:**
+- `submitPatientReport` のペイロード構造変更 → GAS側のシート列追加も必要
+- PatientReportsシートに新しい列を追加する場合は `setupSheets()` も更新
+- 患者フォームはスマホ完結なのでUI/UXはシンプルさ優先
+- トークン認証済みでないと送信できない仕組みは維持する

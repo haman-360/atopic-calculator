@@ -161,6 +161,7 @@ function submitPatientReport(reportData) {
     String(reportData.patientNo),
     new Date().toISOString(),
     reportData.symptomScore,
+    reportData.nrsScore !== undefined ? reportData.nrsScore : '', // nrsScore
     reportData.symptomNotes || '',
     JSON.stringify(reportData.poemScores || {}),
     JSON.stringify(reportData.medicationRemain || []),
@@ -236,8 +237,8 @@ function getDashboardData() {
       const pno = String(row[1]).trim();
       const reg = patientMap[pno] || patientMap[pno.replace(/^0+/, '')] || {};
       let poemScores = {}, medicationRemain = [];
-      try { poemScores = row[5] ? JSON.parse(row[5]) : {}; } catch(e) {}
-      try { medicationRemain = row[6] ? JSON.parse(row[6]) : []; } catch(e) {}
+      try { poemScores = row[6] ? JSON.parse(row[6]) : {}; } catch(e) {}
+      try { medicationRemain = row[7] ? JSON.parse(row[7]) : []; } catch(e) {}
       const entry = {
         reportId: row[0],
         patientNo: pno,
@@ -245,13 +246,14 @@ function getDashboardData() {
         patientNotes: reg.notes || '',
         submittedAt: row[2] ? new Date(row[2]).toISOString() : '',
         symptomScore: row[3],
-        symptomNotes: row[4],
+        nrsScore: row[4] !== '' ? row[4] : null, // nrsScore
+        symptomNotes: row[5],
         poemScores: poemScores,
         medicationRemain: medicationRemain,
-        doctorComment: row[7] || '',
-        nextAppointment: dateToStr_(row[8]),
-        commentAt: row[9] ? new Date(row[9]).toISOString() : '',
-        status: row[10] || 'pending',
+        doctorComment: row[8] || '',
+        nextAppointment: dateToStr_(row[9]),
+        commentAt: row[10] ? new Date(row[10]).toISOString() : '',
+        status: row[11] || 'pending',
         lastRx: lastRxMap[pno] || null,
         rowIndex: i + 1
       };
@@ -273,10 +275,10 @@ function saveComment(reportId, comment, nextAppointment) {
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim() === String(reportId).trim()) {
       const row = i + 1;
-      sheet.getRange(row, 8).setValue(comment);
-      sheet.getRange(row, 9).setValue(nextAppointment);
-      sheet.getRange(row, 10).setValue(new Date().toISOString());
-      sheet.getRange(row, 11).setValue('reviewed');
+      sheet.getRange(row, 9).setValue(comment);
+      sheet.getRange(row, 10).setValue(nextAppointment);
+      sheet.getRange(row, 11).setValue(new Date().toISOString());
+      sheet.getRange(row, 12).setValue('reviewed');
       return { ok: true };
     }
   }
@@ -364,7 +366,7 @@ function setupSheets() {
   const sheets = {
     'PatientRegistry': ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'],
     'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText'],
-    'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status'],
+    'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status'],
     'AuditLog':        ['timestamp', 'patientNo', 'action']
   };
 

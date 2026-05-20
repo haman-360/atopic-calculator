@@ -327,10 +327,11 @@ function buildReportCard(r, type) {
           <div class="report-patient-name">診察券 ${esc(r.patientNo)}<span style="font-size:14px;font-weight:400;color:var(--text2);margin-left:10px;">${esc(r.ageLabel)}</span></div>
           <div class="report-meta">送信：${esc(dateStr)}${r.patientNotes ? '　' + esc(r.patientNotes) : ''}</div>
         </div>
-        <div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
           <span class="symptom-score-chip" style="background:${symptomColor}20;color:${symptomColor};">
             症状：${esc(SYMPTOM_LABELS[r.symptomScore] || '—')}
           </span>
+          ${r.nrsScore !== null && r.nrsScore !== undefined ? `<span class="symptom-score-chip" style="background:#e8f5f0;color:#085041;">かゆみ NRS：${esc(String(r.nrsScore))} / 10</span>` : ''}
         </div>
       </div>
 
