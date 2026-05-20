@@ -387,7 +387,7 @@ table.gantt th,table.gantt td{border:1px solid var(--border);padding:0;vertical-
     <div id="visit-editor-title">受診記録</div>
     <button class="btn-ghost-white btn-sm" style="font-size:11px;" onclick="loadSample()">サンプル</button>
     <button class="btn-ghost-white btn-sm" style="font-size:11px;" onclick="window.print()">🖨</button>
-    <button onclick="saveCurrentVisit()" style="background:white;color:var(--teal);border:none;border-radius:var(--radius-sm);padding:7px 16px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">💾 保存</button>
+    <button onclick="saveCurrentVisit(this)" style="background:white;color:var(--teal);border:none;border-radius:var(--radius-sm);padding:7px 16px;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">💾 保存</button>
   </div>
 <header style="display:none;">
   <div>
@@ -540,7 +540,7 @@ table.gantt th,table.gantt td{border:1px solid var(--border);padding:0;vertical-
       <div style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap;">
         <button class="btn btn-green btn-sm" onclick="copyKarte()">📋 コピー</button>
         <span id="copy-notice" style="font-size:12px;color:var(--teal);display:none;">コピーしました！</span>
-        <button class="btn btn-green btn-sm no-print" onclick="saveCurrentVisit()" style="margin-left:auto;">💾 保存してカルテを閉じる</button>
+        <button class="btn btn-green btn-sm no-print" onclick="saveCurrentVisit(this)" style="margin-left:auto;">💾 保存してカルテを閉じる</button>
       </div>
     </div>
   </div>
@@ -771,7 +771,24 @@ function openVisitEditor(visitId){
   showScreen('visitEditor');
 }
 
-function saveCurrentVisit(){
+function saveCurrentVisit(btn){
+  if(btn){
+    const orig=btn.innerHTML;
+    btn.innerHTML='保存中...';
+    btn.disabled=true;
+    setTimeout(()=>{
+      const visit=snapshotCalculatorToVisit(currentVisitId);
+      currentVisitId=visit.id;
+      DB.saveVisit(visit);
+      const patient=DB.getPatients().find(p=>p.id===currentPatientId);
+      if(patient){patient.updatedAt=new Date().toISOString();DB.savePatient(patient);}
+      btn.innerHTML=orig;
+      btn.disabled=false;
+      showToast('保存しました ✓');
+      showScreen('patientDetail',{patientId:currentPatientId});
+    },80);
+    return;
+  }
   const visit=snapshotCalculatorToVisit(currentVisitId);
   currentVisitId=visit.id;
   DB.saveVisit(visit);
