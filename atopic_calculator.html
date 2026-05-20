@@ -1628,11 +1628,12 @@
         const taperPhases = calcTaperPhases(d, ageKey, tv, nv);
         const neededG = nextDays > 0 ? calcFTU(d, ageKey, nextDays, tv, nv) : 0;
         let partRowsHtml = '';
+        const mixed = isMixed(d);
         partDeets.forEach(p => {
           const ftuDisp = +(p.ftuOnce).toFixed(1);
           partRowsHtml += `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #e0ddd4;gap:8px;">` +
             `<span style="flex:1">${p.label}</span>` +
-            `<span style="font-size:12px;color:#085041;background:#e1f5ee;padding:1px 8px;border-radius:10px;">${ftuDisp} FTU</span>` +
+            (!mixed ? `<span style="font-size:12px;color:#085041;background:#e1f5ee;padding:1px 8px;border-radius:10px;">${ftuDisp} FTU</span>` : '') +
             `<span style="font-weight:600;color:#0f6e56;min-width:60px;text-align:right;">${p.gOnce.toFixed(2)}g / 1回</span>` +
             `</div>`;
         });
@@ -1691,7 +1692,7 @@
 
         const summaryHtml = partDeets.length
           ? `<div style="margin-top:10px;">` +
-          `<div style="font-size:11px;font-weight:600;color:#9b9890;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">部位別の塗布量（1 FTU ＝ 人差し指の先から第1関節分）</div>` +
+          `<div style="font-size:11px;font-weight:600;color:#9b9890;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">部位別の塗布量${mixed ? '' : '（1 FTU ＝ 人差し指の先から第1関節分）'}</div>` +
           partRowsHtml +
           `<div style="background:#e1f5ee;border-radius:6px;padding:8px 10px;margin-top:8px;font-size:13px;">` +
           `1回合計 <strong style="color:#0f6e56;">${onceTotal.toFixed(2)}g</strong>　×　${freq}　＝　1日 <strong style="color:#0f6e56;">${dayTotal.toFixed(2)}g</strong>` +
