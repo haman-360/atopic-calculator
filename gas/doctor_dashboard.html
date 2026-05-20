@@ -164,6 +164,29 @@ body { max-width: none; }
   font-size: 12px;
   font-weight: 700;
 }
+.infection-alert {
+  background: var(--red-bg);
+  border: 1px solid var(--red-text);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.infection-alert-icon { font-size: 18px; flex-shrink: 0; }
+.infection-alert-body { flex: 1; }
+.infection-alert-title { font-size: 13px; font-weight: 700; color: var(--red-text); margin-bottom: 4px; }
+.infection-sign-tag {
+  display: inline-block;
+  background: var(--red-text);
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 20px;
+  padding: 2px 9px;
+  margin: 2px 3px 2px 0;
+}
 </style>
 </head>
 <body>
@@ -195,6 +218,12 @@ body { max-width: none; }
 </div>
 
 <script>
+const INFECTION_LABELS = {
+  impetigo: 'とびひのような症状（かさぶた・膿）',
+  crust:    '黄色いかさぶた',
+  exudate:  '浸出液（じゅくじゅく）',
+  pain:     '痛み・熱感'
+};
 const POEM_LABELS = {
   itch: 'かゆみ', sleep: '睡眠障害', bleed: '皮膚出血',
   weep: '滲出', crack: 'ひび割れ', flake: '皮膚むけ', dry: '乾燥'
@@ -336,6 +365,15 @@ function buildReportCard(r, type) {
       </div>
 
       ${r.symptomNotes ? `<div style="font-size:13px;color:var(--text2);background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:12px;">${esc(r.symptomNotes)}</div>` : ''}
+
+      ${(r.infectionSigns && r.infectionSigns.length > 0) ? `
+      <div class="infection-alert">
+        <div class="infection-alert-icon">⚠️</div>
+        <div class="infection-alert-body">
+          <div class="infection-alert-title">感染徴候あり</div>
+          <div>${r.infectionSigns.map(k => `<span class="infection-sign-tag">${esc(INFECTION_LABELS[k] || k)}</span>`).join('')}</div>
+        </div>
+      </div>` : ''}
 
       <div class="section-title">POEMスコア</div>
       <span class="poem-total" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">合計 ${poemTotal} 点（${esc(poemSeverity)}）</span>

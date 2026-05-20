@@ -6,6 +6,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>症状報告フォーム</title>
   <?!= include('shared_styles'); ?>
+  <style>
+    .infection-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+      user-select: none;
+    }
+    .infection-check { font-size: 18px; flex-shrink: 0; color: var(--teal); }
+    .infection-label { font-size: 14px; line-height: 1.4; }
+  </style>
 </head>
 
 <body>
@@ -82,6 +98,32 @@
         </div>
       </div>
 
+      <!-- 感染徴候チェック -->
+      <div class="card">
+        <div class="card-title">🔍 皮膚の感染徴候（過去1週間）</div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6;">
+          当てはまるものをすべて選んでください。なければスキップしてください。
+        </p>
+        <div id="infection-signs-list">
+          <label class="infection-item" onclick="toggleInfection('impetigo', this)">
+            <span class="infection-check" id="chk-impetigo">☐</span>
+            <span class="infection-label">とびひのような症状（かさぶた・膿）</span>
+          </label>
+          <label class="infection-item" onclick="toggleInfection('crust', this)">
+            <span class="infection-check" id="chk-crust">☐</span>
+            <span class="infection-label">黄色いかさぶた</span>
+          </label>
+          <label class="infection-item" onclick="toggleInfection('exudate', this)">
+            <span class="infection-check" id="chk-exudate">☐</span>
+            <span class="infection-label">じゅくじゅく（浸出液が出ている）</span>
+          </label>
+          <label class="infection-item" onclick="toggleInfection('pain', this)">
+            <span class="infection-check" id="chk-pain">☐</span>
+            <span class="infection-label">痛み・熱感がある</span>
+          </label>
+        </div>
+      </div>
+
       <!-- 薬の残量 -->
       <div class="card" id="medication-remain-card">
         <div class="card-title">💉 薬の残量確認</div>
@@ -154,6 +196,7 @@
     const poemScores = {};
     let symptomScore = null;
     let nrsScore = 5; // スライダー初期値
+    const infectionSigns = []; // 感染徴候（複数選択）
     const medicationRemain = [];
     let patientContext = null;
 
@@ -273,6 +316,22 @@
       });
     }
 
+    function toggleInfection(key, labelEl) {
+      const idx = infectionSigns.indexOf(key);
+      const chk = document.getElementById('chk-' + key);
+      if (idx >= 0) {
+        infectionSigns.splice(idx, 1);
+        chk.textContent = '☐';
+        labelEl.style.background = '';
+        labelEl.style.borderColor = '';
+      } else {
+        infectionSigns.push(key);
+        chk.textContent = '☑';
+        labelEl.style.background = 'var(--green-bg)';
+        labelEl.style.borderColor = 'var(--teal)';
+      }
+    }
+
     function onNrsInput(val) {
       nrsScore = parseInt(val, 10);
       document.getElementById('nrs-display').textContent = nrsScore;
@@ -308,7 +367,8 @@
         nrsScore: nrsScore,
         symptomNotes: document.getElementById('symptom-notes').value.trim(),
         poemScores: poemScores,
-        medicationRemain: medicationRemain
+        medicationRemain: medicationRemain,
+        infectionSigns: infectionSigns
       };
 
       google.script.run
