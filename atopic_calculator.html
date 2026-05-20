@@ -4157,6 +4157,22 @@
     ];
     const DOW_JA = ['日','月','火','水','木','金','土'];
 
+    function formatPartsForGantt(d) {
+      const p = d.parts;
+      const checkedCount = PARTS.filter(pt => p[pt.key].checked).length;
+      if (checkedCount === 0) return '—';
+      if (checkedCount === PARTS.length) return '全身';
+      if (!p.face.checked && checkedCount === PARTS.length - 1) return '全身<br>（顔なし）';
+      const parts = [];
+      if (p.face.checked) parts.push('顔・首');
+      if (p.trunk_f.checked && p.trunk_b.checked) parts.push('体幹（前後）');
+      else if (p.trunk_f.checked) parts.push('体幹前面');
+      else if (p.trunk_b.checked) parts.push('体幹後面');
+      if (p.arm.checked) parts.push(p.arm.sides === 2 ? '両腕' : '片腕');
+      if (p.leg.checked) parts.push(p.leg.sides === 2 ? '両足' : '片足');
+      return parts.join('<br>');
+    }
+
     function freqValToShowEvery(v) {
       if (v >= 2) return 1;   // 1日2回: 毎日
       if (v >= 1) return 1;   // 1日1回: 毎日
@@ -4242,7 +4258,7 @@
         }
 
         rows += `<tr>
-          <td class="gantt-part" style="color:${col.fg};background:${col.bg}22;">${r.partNames.join('<br>')}</td>
+          <td class="gantt-part" style="color:${col.fg};background:${col.bg}22;">${formatPartsForGantt(r.drugRef)}</td>
           <td class="gantt-drug" style="font-size:11px;">${r.name}</td>
           <td class="gantt-freq">${freqLabel}</td>
           ${cells}
