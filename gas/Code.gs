@@ -71,7 +71,11 @@ function registerToken_(patientNo, plainToken, salt, expiresAt, birthdate) {
 
   if (rowIdx < 0) {
     // 新規行: patientNo, birthdate, notes(空), tokenHash, tokenSalt, tokenExpiresAt, isActive
-    sheet.appendRow([patientNo, birthdate, '', hash, salt, expiresAt, true]);
+    // A列をテキスト書式に設定してから値を書き込む（先頭0を保持するため）
+    sheet.appendRow([String(patientNo), birthdate, '', hash, salt, expiresAt, true]);
+    const newRow = sheet.getLastRow();
+    sheet.getRange(newRow, 1).setNumberFormat('@');
+    sheet.getRange(newRow, 1).setValue(String(patientNo));
   } else {
     // birthdateが渡されていれば更新
     if (birthdate) sheet.getRange(rowIdx, 2).setValue(birthdate);
@@ -178,7 +182,10 @@ function saveVisit_(patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryTex
       return;
     }
   }
-  sheet.appendRow([patientNo, visitDate, nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]);
+  sheet.appendRow([String(patientNo), visitDate, nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]);
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 1).setNumberFormat('@');
+  sheet.getRange(newRow, 1).setValue(String(patientNo));
 }
 
 // ===== 医師ダッシュボード: データ取得 =====
@@ -360,6 +367,10 @@ function setupSheets() {
     if (sheet.getLastRow() === 0) {
       sheet.appendRow(headers);
       sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e8f5e9');
+    }
+    // patientNo列（A列）を常にテキスト書式に設定（先頭0を保持するため）
+    if (['PatientRegistry', 'VisitHistory', 'PatientReports', 'AuditLog'].includes(name)) {
+      sheet.getRange('A:A').setNumberFormat('@');
     }
   }
 
