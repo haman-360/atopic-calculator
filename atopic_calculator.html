@@ -4278,9 +4278,42 @@
       // スケジュールテキスト
       const schedTxt = rxItems.map(r => buildScheduleText(r, visitDate, nextVisitDate)).join('\n');
 
+      // 塗り方詳細セクション
+      const ageKey = document.getElementById('globalAge').value;
+      let doseDetailHtml = '<div style="margin-top:14px;border:1px solid #d6d3cc;border-radius:8px;overflow:hidden;">';
+      doseDetailHtml += '<div style="background:#e8f5f0;padding:7px 12px;font-size:12px;font-weight:700;color:#085041;">💊 塗り方の詳細</div>';
+      rxItems.forEach((r, idx) => {
+        const col = GANTT_COLORS[idx % GANTT_COLORS.length];
+        const partDeets = r.hasFTU ? calcPartDetails(r.drugRef, ageKey) : [];
+        const onceTotal = partDeets.reduce((s, p) => s + p.gOnce, 0);
+        const dayTotal = onceTotal * r.freqVal;
+        doseDetailHtml += `<div style="padding:10px 12px;border-top:1px solid #e0ddd4;">`;
+        doseDetailHtml += `<div style="display:flex;align-items:center;gap:7px;font-weight:700;font-size:13px;margin-bottom:6px;">
+          <span style="width:12px;height:12px;background:${col.bg};border-radius:3px;flex-shrink:0;display:inline-block;"></span>
+          ${r.name}
+        </div>`;
+        if (partDeets.length) {
+          partDeets.forEach(p => {
+            const ftuDisp = +(p.ftuOnce).toFixed(1);
+            doseDetailHtml += `<div style="font-size:12px;color:#3a3832;padding:2px 0 2px 19px;">`;
+            if (r.isMixed) {
+              doseDetailHtml += `${p.label}：${p.gOnce.toFixed(2)}g / 1回`;
+            } else {
+              doseDetailHtml += `${p.label}：${ftuDisp} FTU（${p.gOnce.toFixed(2)}g）/ 1回`;
+            }
+            doseDetailHtml += `</div>`;
+          });
+          doseDetailHtml += `<div style="font-size:12px;color:#6b6760;padding:3px 0 3px 19px;">→ 1回合計 ${onceTotal.toFixed(2)}g　×　${r.freq}　＝　1日 ${dayTotal.toFixed(2)}g</div>`;
+        }
+        doseDetailHtml += `<div style="font-size:12px;font-weight:600;color:#0f6e56;margin-top:4px;padding-left:19px;">必要量 ${r.neededG.toFixed(1)}g − 残量 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g</div>`;
+        doseDetailHtml += `</div>`;
+      });
+      doseDetailHtml += '</div>';
+
       el.innerHTML = legendHtml
         + '<div class="gantt-outer"><table class="gantt"><thead>' + hdr + '</thead><tbody>' + rows + '</tbody></table></div>'
-        + '<div class="schedule-text-box">' + schedTxt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>';
+        + '<div class="schedule-text-box">' + schedTxt.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</div>'
+        + doseDetailHtml;
     }
 
     // ===== 処方保存 =====
