@@ -984,26 +984,26 @@
   <script>
     const PRESETS = [
       // 1FTU=0.35g: モイゼルト（大塚製薬資料より）
-      { name: "モイゼルト軟膏 28g", tubeg: 28, gPerFTU: 0.35, custom: false },
+      { name: "モイゼルト軟膏", tubeg: 28, gPerFTU: 0.35, custom: false },
       // 1FTU=0.5g: コレクチム10g（鳥居薬品資料より）
-      { name: "コレクチム軟膏 10g", tubeg: 10, gPerFTU: 0.5, custom: false },
+      { name: "コレクチム軟膏", tubeg: 10, gPerFTU: 0.5, custom: false },
       // 1FTU=0.2g: プロトピック5g（細口チューブ実務換算）
-      { name: "プロトピック軟膏 5g", tubeg: 5, gPerFTU: 0.2, custom: false },
+      { name: "プロトピック軟膏", tubeg: 5, gPerFTU: 0.2, custom: false },
       // 1FTU=0.3g: ロコイド・リンデロンV 10g（実務換算）
-      { name: "ロコイド軟膏 10g", tubeg: 10, gPerFTU: 0.3, custom: false },
-      { name: "リンデロンV軟膏 10g", tubeg: 10, gPerFTU: 0.3, custom: false },
-      { name: "リンデロンVクリーム 10g", tubeg: 10, gPerFTU: 0.3, custom: false },
+      { name: "ロコイド軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
+      { name: "リンデロンV軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
+      { name: "リンデロンVクリーム", tubeg: 10, gPerFTU: 0.3, custom: false },
       // ステロイド（標準10g・30g）
-      { name: "アンテベート軟膏 10g", tubeg: 10, gPerFTU: 0.3, custom: false },
-      { name: "ベタメタゾン軟膏 10g", tubeg: 10, gPerFTU: 0.3, custom: false },
-      { name: "ベタメタゾンクリーム 30g", tubeg: 30, gPerFTU: 0.5, custom: false },
+      { name: "アンテベート軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
+      { name: "ベタメタゾン軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
+      { name: "ベタメタゾンクリーム", tubeg: 30, gPerFTU: 0.5, custom: false },
       // 混合軟膏
-      { name: "ロコイド/ヘパリン混合軟膏 10g", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
-      { name: "ベタメタゾン/ヘパリン混合軟膏 10g", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
+      { name: "ロコイド/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
+      { name: "ベタメタゾン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
       // 保湿剤（1FTU≒0.5g）
-      { name: "ヒルドイドクリーム 25g", tubeg: 25, gPerFTU: 0.5, custom: false },
-      { name: "ヒルドイドソフト軟膏 25g", tubeg: 25, gPerFTU: 0.5, custom: false },
-      { name: "ブイタマークリーム 15g", tubeg: 15, gPerFTU: 0.5, custom: false },
+      { name: "ヒルドイドクリーム", tubeg: 25, gPerFTU: 0.5, custom: false },
+      { name: "ヒルドイドソフト軟膏", tubeg: 25, gPerFTU: 0.5, custom: false },
+      { name: "ブイタマークリーム", tubeg: 15, gPerFTU: 0.5, custom: false },
       { name: "その他（手入力）", tubeg: 10, gPerFTU: 0.5, custom: true },
     ];
     const FREQS = [
@@ -1045,7 +1045,10 @@
     const drugs = [newDrug(0)];
     drugs[0].givenG = 28 * 1; drugs[0].remainG = 0;
 
-    function getDrugName(d) { return PRESETS[d.preset].custom ? (d.customName || '（薬剤名未入力）') : PRESETS[d.preset].name; }
+    function getDrugName(d) {
+      if (PRESETS[d.preset].custom) return d.customName || '（薬剤名未入力）';
+      return PRESETS[d.preset].name.replace(/\s+\d+g$/, '');
+    }
     function toB(g, tg) { return tg > 0 ? +(g / tg).toFixed(2) : '—'; }
     function roundUpTube(netG, tg) {
       if (tg <= 0) return { g: Math.ceil(netG), b: null };
