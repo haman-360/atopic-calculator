@@ -1124,9 +1124,9 @@
           <div class="input-note" id="rGn-${i}">${remB}本</div>
         </div>
       </div>
-      <div class="drug-summary">
-        前回処方: <strong>${d.givenG.toFixed(1)}g</strong>（${givenB}本）　
-        残量: <strong>${d.remainG.toFixed(1)}g</strong>（${remB}本）　
+      <div class="drug-summary" id="drug-summary-${i}">
+        前回処方: <strong>${d.givenG.toFixed(1)}g</strong>（${givenB}本）
+        残量: <strong>${d.remainG.toFixed(1)}g</strong>（${remB}本）
         消費: <strong>${consumed}g</strong>
       </div>
       <div class="section-sub" style="display:flex;align-items:center;justify-content:space-between;">
@@ -1178,6 +1178,14 @@
       s(`gG-${i}`, d.givenG.toFixed(1)); n(`gGn-${i}`, gB + '本');
       s(`rB-${i}`, rB); n(`rBn-${i}`, d.remainG.toFixed(1) + 'g');
       s(`rG-${i}`, d.remainG.toFixed(1)); n(`rGn-${i}`, rB + '本');
+      // サマリー行を更新
+      const summary = document.getElementById(`drug-summary-${i}`);
+      if (summary) {
+        const consumed = Math.max(0, d.givenG - d.remainG).toFixed(1);
+        summary.innerHTML = `前回処方: <strong>${d.givenG.toFixed(1)}g</strong>（${gB}本）
+        残量: <strong>${d.remainG.toFixed(1)}g</strong>（${rB}本）
+        消費: <strong>${consumed}g</strong>`;
+      }
     }
     function onTubeG(i, v) {
       drugs[i].tubeg = parseFloat(v) || 0;
