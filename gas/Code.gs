@@ -254,6 +254,7 @@ function getDashboardData() {
         reportId: row[0],
         patientNo: pno,
         ageLabel: calcAgeLabel_(reg.birthdate),
+        ageGroup: calcAgeGroup_(reg.birthdate),
         patientNotes: reg.notes || '',
         submittedAt: row[2] ? new Date(row[2]).toISOString() : '',
         symptomScore: row[3],                                    // D

@@ -4513,8 +4513,27 @@
       const params = new URLSearchParams(location.search);
       const p = params.get('p');
       const t = params.get('t');
-      if (!p || !t) return;
+      const ageGroupParam = params.get('ageGroup');
+      const ageLabelParam = params.get('ageLabel');
 
+      if (!p) return;
+
+      // ダッシュボード経由: ageGroup が直接渡される（GAS呼び出し不要）
+      if (ageGroupParam) {
+        document.getElementById('globalAge').value = ageGroupParam;
+        renderDrugs(); calc();
+
+        const pidEl = document.getElementById('patientId');
+        if (pidEl && !pidEl.value) pidEl.value = p;
+
+        document.getElementById('patient-banner-text').textContent =
+          `患者番号: ${p} / ${ageLabelParam || ageGroupParam}`;
+        document.getElementById('patient-banner').style.display = 'flex';
+        return;
+      }
+
+      // 受付経由: トークンで GAS に問い合わせ
+      if (!t) return;
       try {
         const res = await fetch(
           `${GAS_URL}?page=patientContext&p=${encodeURIComponent(p)}&t=${encodeURIComponent(t)}`

@@ -305,6 +305,10 @@ function buildReportCard(r, type) {
 
   const symptomColor = SYMPTOM_COLORS[r.symptomScore] || 'var(--text2)';
   const dateStr = r.submittedAt ? new Date(r.submittedAt).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+  const calcUrl = 'https://haman-360.github.io/atopic-calculator/atopic_calculator.html'
+    + '?p=' + encodeURIComponent(r.patientNo)
+    + '&ageGroup=' + encodeURIComponent(r.ageGroup || 'child3')
+    + '&ageLabel=' + encodeURIComponent(r.ageLabel || '');
 
   // POEM グリッド
   const poemGrid = Object.entries(POEM_LABELS).map(([key, label]) => {
@@ -357,6 +361,10 @@ function buildReportCard(r, type) {
           <div class="report-meta">送信：${esc(dateStr)}${r.patientNotes ? '　' + esc(r.patientNotes) : ''}</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <a href="${calcUrl}" target="_blank"
+             style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:var(--green);color:#fff;border-radius:var(--radius-sm);font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;">
+            💊 処方計算を開く
+          </a>
           <span class="symptom-score-chip" style="background:${symptomColor}20;color:${symptomColor};">
             症状：${esc(SYMPTOM_LABELS[r.symptomScore] || '—')}
           </span>
