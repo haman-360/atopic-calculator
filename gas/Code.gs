@@ -180,7 +180,8 @@ function submitPatientReport(reportData) {
     '', // [11] L commentAt
     'pending',                                                    // [12] M status
     JSON.stringify(reportData.triggers || []),                    // [13] N triggersJson
-    reportData.triggerNote || ''                                  // [14] O triggerNote
+    reportData.triggerNote || '',                                 // [14] O triggerNote
+    JSON.stringify(reportData.topicalUse || [])                   // [15] P topicalUseJson
   ]);
   // B列（patientNo）をテキスト書式に設定（先頭0を保持するため）
   const newRow = sheet.getLastRow();
@@ -248,11 +249,12 @@ function getDashboardData() {
       const row = prData[i];
       const pno = String(row[1]).trim();
       const reg = patientMap[pno] || patientMap[pno.replace(/^0+/, '')] || {};
-      let infectionSigns = [], poemScores = {}, medicationRemain = [], triggers = [];
-      try { infectionSigns  = row[5]  ? JSON.parse(row[5])  : []; } catch(e) {} // F infectionSignsJson
-      try { poemScores      = row[7]  ? JSON.parse(row[7])  : {}; } catch(e) {} // H poemJson
-      try { medicationRemain = row[8] ? JSON.parse(row[8])  : []; } catch(e) {} // I medicationJson
-      try { triggers        = row[13] ? JSON.parse(row[13]) : []; } catch(e) {} // N triggersJson
+      let infectionSigns = [], poemScores = {}, medicationRemain = [], triggers = [], topicalUse = [];
+      try { infectionSigns   = row[5]  ? JSON.parse(row[5])  : []; } catch(e) {} // F infectionSignsJson
+      try { poemScores       = row[7]  ? JSON.parse(row[7])  : {}; } catch(e) {} // H poemJson
+      try { medicationRemain = row[8]  ? JSON.parse(row[8])  : []; } catch(e) {} // I medicationJson
+      try { triggers         = row[13] ? JSON.parse(row[13]) : []; } catch(e) {} // N triggersJson
+      try { topicalUse       = row[15] ? JSON.parse(row[15]) : []; } catch(e) {} // P topicalUseJson
       const entry = {
         reportId: row[0],
         patientNo: pno,
@@ -272,6 +274,7 @@ function getDashboardData() {
         status: row[12] || 'pending',                            // M
         triggers: triggers,                                      // N
         triggerNote: row[14] || '',                              // O
+        topicalUse: topicalUse,                                  // P
         lastRx: lastRxMap[pno] || null,
         rowIndex: i + 1
       };
@@ -384,7 +387,7 @@ function setupSheets() {
   const sheets = {
     'PatientRegistry': ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'],
     'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText'],
-    'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status', 'triggersJson', 'triggerNote'],
+    'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status', 'triggersJson', 'triggerNote', 'topicalUseJson'],
     'AuditLog':        ['timestamp', 'patientNo', 'action']
   };
 
@@ -419,6 +422,16 @@ function addTriggersColumns() {
     sheet.getRange(1, col).setValue('triggerNote');
   }
   Logger.log('triggersJson / triggerNote 列を追加しました');
+}
+
+// ===== PatientReports: topicalUseJson 列追加（既存シート用・1回のみ実行） =====
+function addTopicalUseColumn() {
+  const sheet = getSheet_('PatientReports');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (!headers.includes('topicalUseJson')) {
+    sheet.getRange(1, headers.length + 1).setValue('topicalUseJson');
+  }
+  Logger.log('topicalUseJson 列を追加しました');
 }
 
 // ===== PatientRegistry スキーマ移行（旧8列→新7列） =====

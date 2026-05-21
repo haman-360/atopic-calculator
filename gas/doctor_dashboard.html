@@ -346,6 +346,32 @@ function buildReportCard(r, type) {
     return `<div class="remain-item"><div class="r-name">${esc(m.drugName)}</div><div class="r-level" style="color:${levelColor};">${esc(levelLabel)}</div></div>`;
   }).join('');
 
+  // 部位別外用頻度
+  let topicalHtml = '';
+  if (r.topicalUse && r.topicalUse.length > 0) {
+    const byDrug = {};
+    r.topicalUse.forEach(entry => {
+      if (!byDrug[entry.drug]) byDrug[entry.drug] = [];
+      byDrug[entry.drug].push(entry);
+    });
+    const rows = Object.entries(byDrug).map(([drug, entries]) => {
+      const applied = entries
+        .filter(e => e.freq !== '塗っていない')
+        .map(e => `<span style="font-size:12px;">${esc(e.part)}→${esc(e.freq)}</span>`)
+        .join('　');
+      const notApplied = entries
+        .filter(e => e.freq === '塗っていない')
+        .map(e => esc(e.part))
+        .join('・');
+      return `<div style="margin-bottom:6px;">
+        <span style="font-size:13px;font-weight:700;color:var(--teal);">${esc(drug)}</span>
+        ${applied ? `<span style="margin-left:8px;color:var(--text);">${applied}</span>` : ''}
+        ${notApplied ? `<span style="margin-left:8px;font-size:11px;color:var(--text3);">（${notApplied}：塗っていない）</span>` : ''}
+      </div>`;
+    }).join('');
+    topicalHtml = `<div class="section-title">部位別外用頻度</div><div style="margin-bottom:12px;">${rows}</div>`;
+  }
+
   // 前回処方
   let rxHtml = '';
   if (r.lastRx) {
