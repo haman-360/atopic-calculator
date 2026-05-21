@@ -95,24 +95,34 @@ function registerToken_(patientNo, plainToken, salt, expiresAt, birthdate) {
 
 // ===== トークン検証 =====
 function validateToken_(patientNo, plainToken) {
+  Logger.log('[validateToken_] 開始 patientNo=' + patientNo + ' tokenLen=' + (plainToken ? plainToken.length : 0));
   const sheet = getSheet_('PatientRegistry');
   const data = sheet.getDataRange().getValues();
+  Logger.log('[validateToken_] PatientRegistry 行数=' + data.length);
   const auditSheet = getSheet_('AuditLog');
 
   for (let i = 1; i < data.length; i++) {
     const row = data[i];
+    Logger.log('[validateToken_] 行' + i + ': row[0]=' + JSON.stringify(String(row[0])) + ' patientNo=' + JSON.stringify(String(patientNo)) + ' 一致=' + (String(row[0]) === String(patientNo)));
     if (String(row[0]) !== String(patientNo)) continue;
+
+    Logger.log('[validateToken_] 患者発見 isActive=' + row[6] + ' expiresAt=' + row[5]);
     if (!row[6]) { // isActive（G列）
       auditLog_(auditSheet, patientNo, 'token_inactive');
       return { valid: false, reason: 'inactive' };
     }
     const expiresAt = new Date(row[5]); // tokenExpiresAt（F列）
-    if (new Date() > expiresAt) {
+    const now = new Date();
+    Logger.log('[validateToken_] 有効期限チェック now=' + now.toISOString() + ' expiresAt=' + expiresAt.toISOString() + ' 期限切れ=' + (now > expiresAt));
+    if (now > expiresAt) {
       auditLog_(auditSheet, patientNo, 'token_expired');
       return { valid: false, reason: 'expired' };
     }
-    const hash = hashToken_(String(row[4]), plainToken); // tokenSalt（E列）
-    if (hash !== String(row[3])) { // tokenHash（D列）
+    const storedSalt = String(row[4]);
+    const storedHash = String(row[3]);
+    const calcHash = hashToken_(storedSalt, plainToken); // tokenSalt（E列）
+    Logger.log('[validateToken_] ハッシュチェック storedHash=' + storedHash.substring(0,8) + '... calcHash=' + calcHash.substring(0,8) + '... 一致=' + (calcHash === storedHash));
+    if (calcHash !== storedHash) { // tokenHash（D列）
       auditLog_(auditSheet, patientNo, 'token_invalid');
       return { valid: false, reason: 'invalid' };
     }
@@ -123,22 +133,27 @@ function validateToken_(patientNo, plainToken) {
       notes: row[2] || ''      // notes（C列）
     };
   }
+  Logger.log('[validateToken_] 患者番号が見つからなかった patientNo=' + patientNo);
   auditLog_(auditSheet, patientNo, 'token_invalid');
   return { valid: false, reason: 'invalid' };
 }
 
 // ===== 患者コンテキスト取得（患者フォームから呼ばれる） =====
 function getPatientContext(patientNo, token) {
+  Logger.log('[getPatientContext] 開始 patientNo=' + patientNo);
   const validation = validateToken_(patientNo, token);
+  Logger.log('[getPatientContext] validateToken_ 結果=' + JSON.stringify(validation));
   if (!validation.valid) return validation;
 
   // VisitHistory から最新処方を取得
   const vhSheet = getSheet_('VisitHistory');
   const vhData = vhSheet.getDataRange().getValues();
+  Logger.log('[getPatientContext] VisitHistory 行数=' + vhData.length);
   let lastVisit = null;
   for (let i = 1; i < vhData.length; i++) {
     const row = vhData[i];
     if (String(row[0]) !== String(patientNo)) continue;
+    Logger.log('[getPatientContext] 処方履歴発見 visitDate=' + row[1]);
     if (!lastVisit || row[1] > lastVisit.visitDate) {
       lastVisit = {
         visitDate: row[1],
@@ -155,14 +170,17 @@ function getPatientContext(patientNo, token) {
       };
     }
   }
+  Logger.log('[getPatientContext] lastVisit=' + JSON.stringify(lastVisit));
 
-  return {
+  const result = {
     valid: true,
     ageLabel: calcAgeLabel_(validation.birthdate),
     ageGroup: calcAgeGroup_(validation.birthdate),
     notes: validation.notes,
     lastVisit: lastVisit
   };
+  Logger.log('[getPatientContext] 返却=' + JSON.stringify(result));
+  return result;
 }
 
 // ===== 患者フォーム送信 =====
@@ -366,6 +384,18 @@ function auditLog_(sheet, patientNo, action) {
   const newRow = sheet.getLastRow();
   sheet.getRange(newRow, 2).setNumberFormat('@');
   sheet.getRange(newRow, 2).setValue(String(patientNo));
+}
+
+// ===== デバッグ用: getPatientContext 手動実行（GASエディタからTOKENを書き換えて実行） =====
+function debugGetPatientContext() {
+  const PATIENT_NO = '01631';
+  const TOKEN = 'XXXX'; // 実際のトークン4桁に書き換えてから実行
+  try {
+    const result = getPatientContext(PATIENT_NO, TOKEN);
+    Logger.log('最終結果: ' + JSON.stringify(result));
+  } catch(e) {
+    Logger.log('例外: ' + e.message + '\n' + e.stack);
+  }
 }
 
 // ===== デバッグ用（GASエディタから実行して実行ログを確認） =====
