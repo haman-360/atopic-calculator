@@ -892,7 +892,7 @@
         <div>
           <label>年齢グループ</label>
           <select id="globalAge"
-            onchange="drugs.forEach(d=>PARTS.forEach(p=>{d.parts[p.key].customFTU=null;}));renderDrugs();calc()">
+            onchange="drugs.forEach(d=>getAllParts().forEach(p=>{d.parts[p.key].customFTU=null;}));renderDrugs();calc()">
             <option value="infant" selected>3〜6か月</option>
             <option value="child1">1〜2歳</option>
             <option value="child3">3〜5歳</option>
@@ -908,6 +908,7 @@
     <div class="card">
       <div class="card-title"><span class="icon">💊</span>処方薬剤</div>
       <div id="drug-list"></div>
+      <div id="custom-parts-ui" style="margin-top:8px;margin-bottom:4px;"></div>
       <button class="btn btn-ghost btn-sm" onclick="addDrug()" style="margin-top:4px;">＋ 薬剤を追加</button>
     </div>
 
@@ -1028,9 +1029,82 @@
       { key: "leg", label: "片足（大腿〜足）", bilateral: true },
     ];
 
+    // カスタム部位管理
+    let customParts = [];       // { key, label, bilateral, ftu, isCustom:true }
+    let _customPartCounter = 0;
+    let _showCustomPartForm = false;
+
+    function getAllParts() { return [...PARTS, ...customParts]; }
+
+    function addCustomPart(label, ftu, bilateral) {
+      const key = 'cp_' + (_customPartCounter++);
+      customParts.push({ key, label, bilateral, ftu, isCustom: true });
+      drugs.forEach(d => { d.parts[key] = { checked: false, sides: 2, customFTU: null }; });
+      _showCustomPartForm = false;
+      renderCustomPartsUI(); renderDrugs(); calc();
+    }
+
+    function removeCustomPart(key) {
+      customParts = customParts.filter(p => p.key !== key);
+      drugs.forEach(d => { delete d.parts[key]; });
+      renderCustomPartsUI(); renderDrugs(); calc();
+    }
+
+    function toggleAddCustomPartForm() {
+      _showCustomPartForm = !_showCustomPartForm;
+      renderCustomPartsUI();
+    }
+
+    function submitAddCustomPart() {
+      const label = document.getElementById('cp-label')?.value?.trim();
+      const ftu   = parseFloat(document.getElementById('cp-ftu')?.value);
+      const bilateral = document.getElementById('cp-bilateral')?.checked ?? true;
+      if (!label || isNaN(ftu) || ftu <= 0) {
+        alert('部位名とFTU値を入力してください'); return;
+      }
+      addCustomPart(label, ftu, bilateral);
+    }
+
+    function renderCustomPartsUI() {
+      const el = document.getElementById('custom-parts-ui');
+      if (!el) return;
+      let html = '';
+      if (customParts.length > 0) {
+        html += `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">`;
+        customParts.forEach(cp => {
+          html += `<span style="display:inline-flex;align-items:center;gap:4px;background:#e6f7f5;border:1px solid var(--teal,#5DCAA5);border-radius:20px;padding:3px 10px;font-size:12px;color:var(--text);">
+            ${cp.label}（FTU:${cp.ftu}${cp.bilateral ? '/片側' : ''}）
+            <button onclick="removeCustomPart('${cp.key}')" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:14px;padding:0;line-height:1;">×</button>
+          </span>`;
+        });
+        html += `</div>`;
+      }
+      if (_showCustomPartForm) {
+        html += `<div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">
+          <input type="text" id="cp-label" placeholder="部位名（例: 肘関節）"
+            style="flex:1;min-width:120px;padding:6px 10px;font-size:13px;border:1px solid var(--border);border-radius:4px;">
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span style="font-size:11px;color:var(--text3);">FTU/片側:</span>
+            <input type="number" id="cp-ftu" value="1.0" min="0.25" step="0.25" inputmode="decimal"
+              style="width:64px;padding:6px 8px;font-size:13px;border:1px solid var(--border);border-radius:4px;">
+          </div>
+          <label style="display:flex;align-items:center;gap:4px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="cp-bilateral" checked style="accent-color:var(--teal,#5DCAA5);width:15px;height:15px;">
+            両側あり
+          </label>
+          <button class="btn btn-sm" style="background:var(--teal,#5DCAA5);color:white;" onclick="submitAddCustomPart()">追加</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleAddCustomPartForm()">キャンセル</button>
+        </div>`;
+      } else {
+        html += `<button class="btn btn-ghost btn-sm" onclick="toggleAddCustomPartForm()"
+          style="border-style:dashed;color:var(--teal,#5DCAA5);">＋ カスタム部位を追加</button>`;
+      }
+      el.innerHTML = html;
+    }
+
     function newDrug(pi = 0) {
       const parts = {};
-      PARTS.forEach(p => { parts[p.key] = { checked: false, sides: 2, customFTU: null }; });
+      getAllParts().forEach(p => { parts[p.key] = { checked: false, sides: 2, customFTU: null }; });
       return {
         preset: pi, tubeg: PRESETS[pi].tubeg, customName: "",
         givenG: PRESETS[pi].tubeg * 4, remainG: 0, freqIdx: 0, parts,
@@ -1069,25 +1143,32 @@
         let partsHtml = '';
         const ageKeyForRender = document.getElementById('globalAge')?.value || 'infant';
         const fdRender = FTU_AGE[ageKeyForRender];
-        PARTS.forEach(pt => {
-          const st = d.parts[pt.key], on = st.checked;
+        getAllParts().forEach(pt => {
+          const st = d.parts[pt.key];
+          if (!st) return;
+          const on = st.checked;
           const sh = pt.bilateral && on ? `<div class="sides-wrap" onclick="event.stopPropagation()">
         <button class="sides-btn${st.sides === 1 ? ' on' : ''}" onclick="setSides(${i},'${pt.key}',1)">片</button>
         <button class="sides-btn${st.sides === 2 ? ' on' : ''}" onclick="setSides(${i},'${pt.key}',2)">両</button>
       </div>`: '';
-          const isCustom = st.customFTU !== null;
-          const ftuVal = isCustom ? st.customFTU : fdRender[pt.key];
+          const isCustomFtu = st.customFTU !== null;
+          const baseFTU = pt.isCustom ? pt.ftu : fdRender[pt.key];
+          const ftuVal = isCustomFtu ? st.customFTU : baseFTU;
+          const resetHint = isCustomFtu
+            ? `<button onclick="event.stopPropagation();resetCustomFTU(${i},'${pt.key}')" style="font-size:10px;padding:2px 6px;border:1px solid var(--border2);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--text3);">リセット</button><span style="font-size:10px;color:var(--amber);">${pt.isCustom ? '定義値' : '目安'}: ${baseFTU} FTU</span>`
+            : '';
           const ftuAdj = on ? `<div onclick="event.stopPropagation()" style="width:100%;margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
         <span style="font-size:10px;color:var(--text3);white-space:nowrap;">FTU/片側:</span>
         <input type="number" value="${ftuVal}" min="0.25" step="0.25" inputmode="decimal"
-          style="width:64px;padding:3px 6px;font-size:13px;border:1px solid ${isCustom ? 'var(--amber)' : 'var(--border)'};border-radius:4px;background:${isCustom ? 'var(--amber-bg)' : 'var(--surface)'};"
+          style="width:64px;padding:3px 6px;font-size:13px;border:1px solid ${isCustomFtu ? 'var(--amber)' : 'var(--border)'};border-radius:4px;background:${isCustomFtu ? 'var(--amber-bg)' : 'var(--surface)'};"
           oninput="setCustomFTU(${i},'${pt.key}',this.value)">
-        ${isCustom ? `<button onclick="event.stopPropagation();resetCustomFTU(${i},'${pt.key}')" style="font-size:10px;padding:2px 6px;border:1px solid var(--border2);border-radius:4px;background:var(--surface);cursor:pointer;color:var(--text3);">リセット</button><span style="font-size:10px;color:var(--amber);">目安: ${fdRender[pt.key]} FTU</span>` : ''}
+        ${resetHint}
       </div>`: '';
-          partsHtml += `<div class="part-chip${on ? ' on' : ''}${isCustom ? ' custom-ftu' : ''}" onclick="togglePart(${i},'${pt.key}')" style="${on && isCustom ? 'border-color:var(--amber);background:var(--amber-bg);' : ''}">
+          const deleteBtn = pt.isCustom ? `<button onclick="event.stopPropagation();removeCustomPart('${pt.key}')" title="この部位を削除" style="font-size:12px;padding:0 4px;background:none;border:none;cursor:pointer;color:var(--text3);line-height:1;">×</button>` : '';
+          partsHtml += `<div class="part-chip${on ? ' on' : ''}${isCustomFtu ? ' custom-ftu' : ''}" onclick="togglePart(${i},'${pt.key}')" style="${on && isCustomFtu ? 'border-color:var(--amber);background:var(--amber-bg);' : ''}">
         <div style="display:flex;align-items:center;width:100%;gap:7px;">
           <input type="checkbox"${on ? ' checked' : ''} onclick="event.stopPropagation();togglePart(${i},'${pt.key}')">
-          <span style="flex:1">${pt.label}</span>${sh}
+          <span style="flex:1">${pt.label}</span>${sh}${deleteBtn}
         </div>${ftuAdj}</div>`;
         });
         el.innerHTML += `<div class="drug-block">
@@ -1234,7 +1315,7 @@
       drugs[i].parts[key].customFTU = null;
       renderDrugs(); calc();
     }
-    function setAllParts(i, checked) { PARTS.forEach(p => { drugs[i].parts[p.key].checked = checked; }); renderDrugs(); calc(); }
+    function setAllParts(i, checked) { getAllParts().forEach(p => { drugs[i].parts[p.key].checked = checked; }); renderDrugs(); calc(); }
     function addDrug() { drugs.push(newDrug(0)); renderDrugs(); calc(); }
     function removeDrug(i) { drugs.splice(i, 1); renderDrugs(); calc(); }
 
@@ -1242,10 +1323,10 @@
     function calcPartDetails(d, ageKey) {
       const fd = FTU_AGE[ageKey], gf = PRESETS[d.preset].gPerFTU;
       const parts = [];
-      PARTS.forEach(p => {
-        if (!d.parts[p.key].checked) return;
+      getAllParts().forEach(p => {
+        if (!d.parts[p.key]?.checked) return;
         const sides = p.bilateral ? d.parts[p.key].sides : 1;
-        const baseFTU = fd[p.key];
+        const baseFTU = p.isCustom ? p.ftu : fd[p.key];
         const ftuOnce = (d.parts[p.key].customFTU !== null ? d.parts[p.key].customFTU : baseFTU) * sides;
         const gOnce = ftuOnce * gf;
         const sLabel = p.bilateral ? (sides === 2 ? '（両側）' : '（片側）') : '';
@@ -1352,12 +1433,12 @@
         if (consumedG < 0) { tbl += `<tr><td><strong>${pname}</strong></td><td colspan="5"><span class="badge badge-warn">残量が処方量を超えています</span></td></tr>`; return; }
         const perDayG = consumedG / days;
         const ftuG = calcFTU(d, ak, nextDays, tv, nv);
-        const hasFTU = PARTS.some(p => d.parts[p.key].checked);
+        const hasFTU = getAllParts().some(p => d.parts[p.key]?.checked);
         const taperPhases = calcTaperPhases(d, ak, tv, nv);
         const neededG = hasFTU ? ftuG : perDayG * nextDays;
         const netG = Math.max(0, neededG - d.remainG);
         const ru = roundUpTube(netG, d.tubeg);
-        const ptags = PARTS.filter(p => d.parts[p.key].checked).map(p => {
+        const ptags = getAllParts().filter(p => d.parts[p.key]?.checked).map(p => {
           const s = p.bilateral ? (d.parts[p.key].sides === 2 ? '両' : '片') : '';
           return `<span class="ftu-tag">${p.label}${s ? `(${s})` : ''}</span>`;
         }).join('');
@@ -1451,7 +1532,7 @@
           drugRef: d, taperPhases,
           isMixed: isMixed(d),
           mixedPlan: mixedPlanSel ? mixedPlanSel.plan : null,
-          partNames: PARTS.filter(p => d.parts[p.key].checked).map(p => {
+          partNames: getAllParts().filter(p => d.parts[p.key]?.checked).map(p => {
             const s = p.bilateral ? (d.parts[p.key].sides === 2 ? '両側' : '片側') : '';
             return p.label + (s ? `(${s})` : '');
           })
@@ -1620,7 +1701,7 @@
         const freqVal = FREQS[d.freqIdx].val;
         const gPerFTU = PRESETS[d.preset].gPerFTU;
         const ftuData = FTU_AGE[ageKey];
-        const checkedParts = PARTS.filter(p => d.parts[p.key].checked);
+        const checkedParts = getAllParts().filter(p => d.parts[p.key]?.checked);
 
         // build per-part rows using calcPartDetails
         const partDeets = calcPartDetails(d, ageKey);
@@ -1728,7 +1809,7 @@
         const name = getDrugName(d);
         const freq = FREQS[d.freqIdx].label;
         const freqVal = FREQS[d.freqIdx].val;
-        const checkedParts = PARTS.filter(p => d.parts[p.key].checked);
+        const checkedParts = getAllParts().filter(p => d.parts[p.key]?.checked);
         const taperPhases = calcTaperPhases(d, ageKey, tv, nv);
         txt += `${i + 1}. ${name}\n`;
         if (taperPhases) {
@@ -4168,17 +4249,25 @@
 
     function formatPartsForGantt(d) {
       const p = d.parts;
-      const checkedCount = PARTS.filter(pt => p[pt.key].checked).length;
+      const stdCheckedCount = PARTS.filter(pt => p[pt.key]?.checked).length;
+      const customCheckedCount = customParts.filter(cp => p[cp.key]?.checked).length;
+      const checkedCount = stdCheckedCount + customCheckedCount;
       if (checkedCount === 0) return '—';
-      if (checkedCount === PARTS.length) return '全身';
-      if (!p.face.checked && checkedCount === PARTS.length - 1) return '全身<br>（顔なし）';
+      if (stdCheckedCount === PARTS.length && customCheckedCount === 0) return '全身';
+      if (!p.face?.checked && stdCheckedCount === PARTS.length - 1 && customCheckedCount === 0) return '全身<br>（顔なし）';
       const parts = [];
-      if (p.face.checked) parts.push('顔・首');
-      if (p.trunk_f.checked && p.trunk_b.checked) parts.push('体幹（前後）');
-      else if (p.trunk_f.checked) parts.push('体幹前面');
-      else if (p.trunk_b.checked) parts.push('体幹後面');
-      if (p.arm.checked) parts.push(p.arm.sides === 2 ? '両腕' : '片腕');
-      if (p.leg.checked) parts.push(p.leg.sides === 2 ? '両足' : '片足');
+      if (p.face?.checked) parts.push('顔・首');
+      if (p.trunk_f?.checked && p.trunk_b?.checked) parts.push('体幹（前後）');
+      else if (p.trunk_f?.checked) parts.push('体幹前面');
+      else if (p.trunk_b?.checked) parts.push('体幹後面');
+      if (p.arm?.checked) parts.push(p.arm.sides === 2 ? '両腕' : '片腕');
+      if (p.leg?.checked) parts.push(p.leg.sides === 2 ? '両足' : '片足');
+      customParts.forEach(cp => {
+        if (p[cp.key]?.checked) {
+          const s = cp.bilateral ? (p[cp.key].sides === 2 ? '（両側）' : '（片側）') : '';
+          parts.push(cp.label + s);
+        }
+      });
       return parts.join('<br>');
     }
 
@@ -4460,7 +4549,7 @@
       setTimeout(() => URL.revokeObjectURL(url), 3000);
     }
 
-    initDates(); renderDrugs(); calc();
+    initDates(); renderCustomPartsUI(); renderDrugs(); calc();
   </script>
 </body>
 
