@@ -128,6 +128,24 @@
 
 ---
 
+## ⑤ 患者連携・年齢自動設定
+
+**難易度:** 低 / **影響範囲:** 3ファイル変更（GAS, reception, calculator）
+
+### gas/Code.gs
+- [x] `doGet` に `patientContext` ルートを追加（既存 `getPatientContext` を流用してJSON返却）
+
+### reception.html
+- [x] QR発行後に処方計算アプリへのリンクを表示（「処方計算アプリを開く」ボタン）
+- [x] URL形式: `atopic_calculator.html?p={患者番号}&t={トークン}`
+
+### atopic_calculator.html
+- [x] 起動時にURLパラメータ `p` / `t` を検出し `getPatientContext` を呼び出す
+- [x] 成功時: `globalAge` セレクタを自動設定 + 患者バナー（患者番号・年齢ラベル）表示
+- [x] 失敗・パラメータなし: サイレントフォールバック（手動選択モード継続）
+
+---
+
 ## clasp push チェックリスト
 
 各フェーズ完了後:

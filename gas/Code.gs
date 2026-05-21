@@ -34,6 +34,15 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
+  if (page === 'patientContext') {
+    const p = (e && e.parameter && e.parameter.p) || '';
+    const t = (e && e.parameter && e.parameter.t) || '';
+    const result = getPatientContext(p, t);
+    return ContentService
+      .createTextOutput(JSON.stringify(result))
+      .setMimeType(MimeType.JSON);
+  }
+
   return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">ページが見つかりません</p>');
 }
 

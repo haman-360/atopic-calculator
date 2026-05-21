@@ -79,6 +79,15 @@ input:focus { outline: none; border-color: var(--green); }
     <div class="qr-expiry">有効期限：発行から7日間</div>
     <div class="qr-url" id="disp-url"></div>
 
+    <div id="calc-link-wrap" style="margin-bottom:12px;">
+      <div style="font-size:13px;font-weight:700;color:var(--text2);margin-bottom:6px;">処方計算アプリ（医師用）</div>
+      <div class="qr-url" id="disp-calc-url"></div>
+      <a id="calc-link-btn" href="#" target="_blank"
+         style="display:block;text-align:center;padding:11px;margin-top:6px;background:var(--green);color:#fff;font-weight:700;font-size:14px;border-radius:6px;text-decoration:none;">
+        処方計算アプリを開く
+      </a>
+    </div>
+
     <button class="new-btn" onclick="resetForm()">← 別の患者のQRを発行する</button>
   </div>
 
@@ -125,6 +134,9 @@ async function generateQR() {
   setStatus('');
 
   const url = `${GAS_URL}?page=form&p=${encodeURIComponent(patientId)}&t=${token}`;
+  const calcUrl = `https://haman-360.github.io/atopic-calculator/atopic_calculator.html?p=${encodeURIComponent(patientId)}&t=${token}`;
+  document.getElementById('disp-calc-url').textContent = calcUrl;
+  document.getElementById('calc-link-btn').href = calcUrl;
   renderQR(url, patientId);
 
   btn.disabled = false;
@@ -163,6 +175,8 @@ function resetForm() {
   document.getElementById('form-card').style.display = 'block';
   document.getElementById('qr-card').style.display  = 'none';
   document.getElementById('patientId').value = '';
+  document.getElementById('disp-calc-url').textContent = '';
+  document.getElementById('calc-link-btn').href = '#';
 }
 
 function setStatus(msg) {

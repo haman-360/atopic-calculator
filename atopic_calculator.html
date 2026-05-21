@@ -890,6 +890,12 @@
           </div>
         </div>
         <div>
+          <div id="patient-banner"
+               style="display:none;background:#e1f5ee;border:1px solid #1d9e75;border-radius:6px;padding:8px 12px;font-size:13px;margin-bottom:8px;justify-content:space-between;align-items:center;">
+            <span id="patient-banner-text" style="font-weight:700;color:#085041;"></span>
+            <button onclick="clearPatientBanner()"
+                    style="background:none;border:none;font-size:16px;cursor:pointer;color:#085041;padding:0 0 0 8px;line-height:1;">✕</button>
+          </div>
           <label>年齢グループ</label>
           <select id="globalAge"
             onchange="drugs.forEach(d=>getAllParts().forEach(p=>{d.parts[p.key].customFTU=null;}));renderDrugs();calc()">
@@ -4502,6 +4508,36 @@
     // ===== GAS連携：患者フォームQR生成 =====
     const GAS_URL = 'https://script.google.com/macros/s/AKfycbyYlP8b_E-X4tDYZQm6uDn3cbsaAcAezMjsJw4coN_nW-QCTbLqMtz0tkNShej1gLApYw/exec';
 
+    // ===== 患者連携：URLパラメータから年齢自動設定 =====
+    async function loadPatientContext() {
+      const params = new URLSearchParams(location.search);
+      const p = params.get('p');
+      const t = params.get('t');
+      if (!p || !t) return;
+
+      try {
+        const res = await fetch(
+          `${GAS_URL}?page=patientContext&p=${encodeURIComponent(p)}&t=${encodeURIComponent(t)}`
+        );
+        const ctx = await res.json();
+        if (!ctx.valid) return;
+
+        document.getElementById('globalAge').value = ctx.ageGroup;
+        renderDrugs(); calc();
+
+        const pidEl = document.getElementById('patientId');
+        if (pidEl && !pidEl.value) pidEl.value = p;
+
+        document.getElementById('patient-banner-text').textContent =
+          `患者番号: ${p} / ${ctx.ageLabel}`;
+        document.getElementById('patient-banner').style.display = 'flex';
+      } catch (_) {}
+    }
+
+    function clearPatientBanner() {
+      document.getElementById('patient-banner').style.display = 'none';
+    }
+
     async function generatePatientFormQR() {
       const patientNo = document.getElementById('patientId').value.trim();
       if (!patientNo) {
@@ -4611,6 +4647,7 @@
     }
 
     initDates(); renderCustomPartsUI(); renderDrugs(); calc();
+    loadPatientContext();
   </script>
 </body>
 
