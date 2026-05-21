@@ -386,6 +386,33 @@ function auditLog_(sheet, patientNo, action) {
   sheet.getRange(newRow, 2).setValue(String(patientNo));
 }
 
+// ===== PatientRegistry ヘッダー修正（1回だけ実行） =====
+function fixPatientRegistryHeaders() {
+  const sheet = getSheet_('PatientRegistry');
+  const correctHeaders = ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'];
+  sheet.getRange(1, 1, 1, correctHeaders.length).setValues([correctHeaders]);
+  sheet.getRange(1, 1, 1, correctHeaders.length).setFontWeight('bold').setBackground('#e8f5e9');
+  Logger.log('ヘッダー修正完了: ' + correctHeaders.join(', '));
+}
+
+// ===== 特定患者の列データ確認（患者番号を書き換えて実行） =====
+function debugPatientRow() {
+  const PATIENT_NO = '01631';
+  const sheet = getSheet_('PatientRegistry');
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  Logger.log('ヘッダー: ' + JSON.stringify(headers));
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== String(PATIENT_NO)) continue;
+    Logger.log('行' + i + 'の列数: ' + data[i].length);
+    for (let j = 0; j < data[i].length; j++) {
+      const val = String(data[i][j]);
+      Logger.log('  [' + j + '] ' + (headers[j] || '(ヘッダーなし)') + ' = ' + val.substring(0, 40));
+    }
+    break;
+  }
+}
+
 // ===== デバッグ用: getPatientContext 手動実行（GASエディタからTOKENを書き換えて実行） =====
 function debugGetPatientContext() {
   const PATIENT_NO = '01631';
