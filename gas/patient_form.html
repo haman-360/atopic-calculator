@@ -290,9 +290,13 @@
 
       // 前回処方
       if (ctx.lastVisit && ctx.lastVisit.drugsJson && ctx.lastVisit.drugsJson.length > 0) {
-        buildPrevRxCard(ctx.lastVisit);
-        buildMedicationRemainList(ctx.lastVisit.drugsJson);
-        buildTopicalUseSection(ctx.lastVisit.drugsJson);
+        try {
+          buildPrevRxCard(ctx.lastVisit);
+          buildMedicationRemainList(ctx.lastVisit.drugsJson);
+          buildTopicalUseSection(ctx.lastVisit.drugsJson);
+        } catch (e) {
+          console.error('前回処方表示エラー:', e);
+        }
       }
 
       // POEM フォーム構築
@@ -354,7 +358,7 @@
           <div style="font-size:14px;font-weight:700;margin-bottom:10px;color:var(--teal);">${esc(dname)}</div>`;
         TOPICAL_PARTS.forEach(part => {
           const freqBtns = TOPICAL_FREQS.map(freq =>
-            `<button class="score-btn" onclick="selectTopicalFreq(${JSON.stringify(dname)},${JSON.stringify(part)},${JSON.stringify(freq)},this)">${esc(freq)}</button>`
+            `<button class="score-btn" data-drug="${esc(dname)}" data-part="${esc(part)}" data-freq="${esc(freq)}" onclick="selectTopicalFreq(this.dataset.drug,this.dataset.part,this.dataset.freq,this)">${esc(freq)}</button>`
           ).join('');
           html += `
           <div style="margin-bottom:10px;">

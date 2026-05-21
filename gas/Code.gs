@@ -143,7 +143,14 @@ function getPatientContext(patientNo, token) {
       lastVisit = {
         visitDate: row[1],
         nextVisitDate: row[2],
-        drugsJson: row[3] ? JSON.parse(row[3]) : [],
+        drugsJson: (() => {
+          if (!row[3]) return [];
+          try {
+            return JSON.parse(row[3]).map(function(d) {
+              return { name: d.name || '', partLabel: d.partLabel || '', freqLabel: d.freqLabel || '' };
+            });
+          } catch (e) { return []; }
+        })(),
         rxSummaryText: row[4] || ''
       };
     }
