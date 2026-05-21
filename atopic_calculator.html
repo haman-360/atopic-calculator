@@ -4484,9 +4484,9 @@
         freqLabel: r.taperPhases
           ? `${r.taperPhases.phase1.freqLabel}→${r.taperPhases.phase2.freqLabel}`
           : r.freq,
-        scheduleText: buildScheduleText(r, snap.visitDate, snap.nextVisitDate)
+        scheduleText: buildScheduleText(r, visitDate, nextVisitDate)
       }));
-      const rxSummaryText = rxItems.map(r => buildScheduleText(r, snap.visitDate, snap.nextVisitDate)).join('\n');
+      const rxSummaryText = rxItems.map(r => buildScheduleText(r, visitDate, nextVisitDate)).join('\n');
 
       showToast('保存中...');
       try {
