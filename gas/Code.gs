@@ -413,6 +413,18 @@ function debugPatientRow() {
   }
 }
 
+// ===== デバッグ用: validateToken_ 直接テスト =====
+function testValidateToken() {
+  const PATIENT_NO = '01631';
+  const TOKEN = '4695';
+  try {
+    const result = validateToken_(PATIENT_NO, TOKEN);
+    Logger.log('validateToken_ 結果: ' + JSON.stringify(result));
+  } catch(e) {
+    Logger.log('例外: ' + e.message + '\n' + e.stack);
+  }
+}
+
 // ===== デバッグ用: getPatientContext 手動実行（GASエディタからTOKENを書き換えて実行） =====
 function debugGetPatientContext() {
   const PATIENT_NO = '01631';
