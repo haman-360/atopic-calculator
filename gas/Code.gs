@@ -178,7 +178,9 @@ function submitPatientReport(reportData) {
     '', // [9]  J doctorComment
     '', // [10] K nextAppointment
     '', // [11] L commentAt
-    'pending' // [12] M status
+    'pending',                                                    // [12] M status
+    JSON.stringify(reportData.triggers || []),                    // [13] N triggersJson
+    reportData.triggerNote || ''                                  // [14] O triggerNote
   ]);
   // B列（patientNo）をテキスト書式に設定（先頭0を保持するため）
   const newRow = sheet.getLastRow();
@@ -246,10 +248,11 @@ function getDashboardData() {
       const row = prData[i];
       const pno = String(row[1]).trim();
       const reg = patientMap[pno] || patientMap[pno.replace(/^0+/, '')] || {};
-      let infectionSigns = [], poemScores = {}, medicationRemain = [];
-      try { infectionSigns = row[5] ? JSON.parse(row[5]) : []; } catch(e) {} // F infectionSignsJson
-      try { poemScores    = row[7] ? JSON.parse(row[7]) : {}; } catch(e) {}  // H poemJson
-      try { medicationRemain = row[8] ? JSON.parse(row[8]) : []; } catch(e) {} // I medicationJson
+      let infectionSigns = [], poemScores = {}, medicationRemain = [], triggers = [];
+      try { infectionSigns  = row[5]  ? JSON.parse(row[5])  : []; } catch(e) {} // F infectionSignsJson
+      try { poemScores      = row[7]  ? JSON.parse(row[7])  : {}; } catch(e) {} // H poemJson
+      try { medicationRemain = row[8] ? JSON.parse(row[8])  : []; } catch(e) {} // I medicationJson
+      try { triggers        = row[13] ? JSON.parse(row[13]) : []; } catch(e) {} // N triggersJson
       const entry = {
         reportId: row[0],
         patientNo: pno,
@@ -267,6 +270,8 @@ function getDashboardData() {
         nextAppointment: dateToStr_(row[10]),                    // K
         commentAt: row[11] ? new Date(row[11]).toISOString() : '', // L
         status: row[12] || 'pending',                            // M
+        triggers: triggers,                                      // N
+        triggerNote: row[14] || '',                              // O
         lastRx: lastRxMap[pno] || null,
         rowIndex: i + 1
       };
@@ -379,7 +384,7 @@ function setupSheets() {
   const sheets = {
     'PatientRegistry': ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'],
     'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText'],
-    'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status'],
+    'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status', 'triggersJson', 'triggerNote'],
     'AuditLog':        ['timestamp', 'patientNo', 'action']
   };
 
@@ -400,6 +405,20 @@ function setupSheets() {
   }
 
   Logger.log('シート初期設定が完了しました');
+}
+
+// ===== PatientReports: triggersJson / triggerNote 列追加（既存シート用・1回のみ実行） =====
+function addTriggersColumns() {
+  const sheet = getSheet_('PatientReports');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (!headers.includes('triggersJson')) {
+    sheet.getRange(1, headers.length + 1).setValue('triggersJson');
+  }
+  if (!headers.includes('triggerNote')) {
+    const col = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].length + 1;
+    sheet.getRange(1, col).setValue('triggerNote');
+  }
+  Logger.log('triggersJson / triggerNote 列を追加しました');
 }
 
 // ===== PatientRegistry スキーマ移行（旧8列→新7列） =====

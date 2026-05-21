@@ -92,26 +92,26 @@
 **難易度:** 低 / **影響範囲:** チェックボックス複数 + JSON保存
 
 ### patient_form.html
-- [ ] 悪化因子セクションを追加
+- [x] 悪化因子セクションを追加
   - チェックボックス（複数選択可）:
-    - `trigger_sweat` — 汗
-    - `trigger_dry` — 乾燥・空気の乾き
-    - `trigger_pollen` — 花粉・ほこり
-    - `trigger_pool` — プール
-    - `trigger_clothes` — 衣類・繊維
-    - `trigger_food` — 食べ物
-    - `trigger_stress` — ストレス・疲れ
-    - `trigger_other` — その他（自由記述欄）
-  - 「この1週間で症状が悪化したと思う原因は？（なければスキップ）」
-  - 変数名: `triggers`（配列）+ `triggerNote`（自由記述）
+    - [x] `trigger_sweat` — 汗
+    - [x] `trigger_dry` — 乾燥・空気の乾き
+    - [x] `trigger_pollen` — 花粉・ほこり
+    - [x] `trigger_pool` — プール
+    - [x] `trigger_clothes` — 衣類・繊維
+    - [x] `trigger_food` — 食べ物
+    - [x] `trigger_stress` — ストレス・疲れ
+    - [x] `trigger_other` — その他（自由記述欄）
+  - [x] 「この1週間で症状が悪化したと思う原因は？（なければスキップ）」
+  - [x] 変数名: `triggers`（配列）+ `triggerNote`（自由記述）
 
 ### gas/Code.gs
-- [ ] `submitPatientReport` に `triggersJson`・`triggerNote` を追加
-- [ ] `setupSheets()` に `'triggersJson'`・`'triggerNote'` 列を追加
+- [x] `submitPatientReport` に `triggersJson`・`triggerNote` を追加
+- [x] `setupSheets()` に `'triggersJson'`・`'triggerNote'` 列を追加
 
 ### gas/doctor_dashboard.html
-- [ ] 悪化因子を色付きタグで表示
-- [ ] 自由記述があれば表示
+- [x] 悪化因子を色付きタグで表示
+- [x] 自由記述があれば表示
 
 ---
 

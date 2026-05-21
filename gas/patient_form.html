@@ -142,6 +142,52 @@
         <div id="poem-items"></div>
       </div>
 
+      <!-- 悪化因子 -->
+      <div class="card">
+        <div class="card-title">🌡️ 悪化因子（過去1週間）</div>
+        <p style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6;">
+          この1週間で症状が悪化したと思う原因は？（なければスキップ）
+        </p>
+        <div id="triggers-list">
+          <label class="infection-item" onclick="toggleTrigger('sweat', this)">
+            <span class="infection-check" id="chk-t-sweat">☐</span>
+            <span class="infection-label">汗</span>
+          </label>
+          <label class="infection-item" onclick="toggleTrigger('dry', this)">
+            <span class="infection-check" id="chk-t-dry">☐</span>
+            <span class="infection-label">乾燥・空気の乾き</span>
+          </label>
+          <label class="infection-item" onclick="toggleTrigger('pollen', this)">
+            <span class="infection-check" id="chk-t-pollen">☐</span>
+            <span class="infection-label">花粉・ほこり</span>
+          </label>
+          <label class="infection-item" onclick="toggleTrigger('pool', this)">
+            <span class="infection-check" id="chk-t-pool">☐</span>
+            <span class="infection-label">プール</span>
+          </label>
+          <label class="infection-item" onclick="toggleTrigger('clothes', this)">
+            <span class="infection-check" id="chk-t-clothes">☐</span>
+            <span class="infection-label">衣類・繊維</span>
+          </label>
+          <label class="infection-item" onclick="toggleTrigger('food', this)">
+            <span class="infection-check" id="chk-t-food">☐</span>
+            <span class="infection-label">食べ物</span>
+          </label>
+          <label class="infection-item" onclick="toggleTrigger('stress', this)">
+            <span class="infection-check" id="chk-t-stress">☐</span>
+            <span class="infection-label">ストレス・疲れ</span>
+          </label>
+          <label class="infection-item" onclick="toggleTrigger('other', this)">
+            <span class="infection-check" id="chk-t-other">☐</span>
+            <span class="infection-label">その他</span>
+          </label>
+        </div>
+        <div id="trigger-note-wrap" style="display:none;margin-top:10px;">
+          <textarea id="trigger-note" placeholder="その他の原因を入力してください"
+            style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;resize:vertical;min-height:60px;box-sizing:border-box;"></textarea>
+        </div>
+      </div>
+
       <!-- 送信ボタン -->
       <button class="btn btn-green btn-full" id="submit-btn" onclick="submitForm()"
         style="margin-top:4px;padding:16px;">
@@ -198,6 +244,7 @@
     let nrsScore = 5; // スライダー初期値
     const infectionSigns = []; // 感染徴候（複数選択）
     const medicationRemain = [];
+    const triggers = []; // 悪化因子（複数選択）
     let patientContext = null;
 
     // URLパラメータ取得
@@ -332,6 +379,24 @@
       }
     }
 
+    function toggleTrigger(key, labelEl) {
+      const idx = triggers.indexOf(key);
+      const chk = document.getElementById('chk-t-' + key);
+      if (idx >= 0) {
+        triggers.splice(idx, 1);
+        chk.textContent = '☐';
+        labelEl.style.background = '';
+        labelEl.style.borderColor = '';
+      } else {
+        triggers.push(key);
+        chk.textContent = '☑';
+        labelEl.style.background = 'var(--green-bg)';
+        labelEl.style.borderColor = 'var(--teal)';
+      }
+      document.getElementById('trigger-note-wrap').style.display =
+        triggers.includes('other') ? 'block' : 'none';
+    }
+
     function onNrsInput(val) {
       nrsScore = parseInt(val, 10);
       document.getElementById('nrs-display').textContent = nrsScore;
@@ -368,7 +433,9 @@
         symptomNotes: document.getElementById('symptom-notes').value.trim(),
         poemScores: poemScores,
         medicationRemain: medicationRemain,
-        infectionSigns: infectionSigns
+        infectionSigns: infectionSigns,
+        triggers: triggers,
+        triggerNote: document.getElementById('trigger-note').value.trim()
       };
 
       google.script.run

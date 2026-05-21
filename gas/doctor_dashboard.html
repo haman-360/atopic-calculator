@@ -224,6 +224,16 @@ const INFECTION_LABELS = {
   exudate:  '浸出液（じゅくじゅく）',
   pain:     '痛み・熱感'
 };
+const TRIGGER_LABELS = {
+  sweat:   '汗',
+  dry:     '乾燥・空気の乾き',
+  pollen:  '花粉・ほこり',
+  pool:    'プール',
+  clothes: '衣類・繊維',
+  food:    '食べ物',
+  stress:  'ストレス・疲れ',
+  other:   'その他',
+};
 const POEM_LABELS = {
   itch: 'かゆみ', sleep: '睡眠障害', bleed: '皮膚出血',
   weep: '滲出', crack: 'ひび割れ', flake: '皮膚むけ', dry: '乾燥'
@@ -305,6 +315,19 @@ function buildReportCard(r, type) {
 
   const symptomColor = SYMPTOM_COLORS[r.symptomScore] || 'var(--text2)';
   const dateStr = r.submittedAt ? new Date(r.submittedAt).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+
+  // 悪化因子
+  const triggersHtml = (r.triggers && r.triggers.length > 0)
+    ? `<div class="section-title">悪化因子</div>
+       <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
+         ${r.triggers.map(k => `<span style="background:#fff3e0;color:#e65100;border-radius:20px;padding:4px 10px;font-size:12px;font-weight:600;">${esc(TRIGGER_LABELS[k] || k)}</span>`).join('')}
+       </div>
+       ${r.triggerNote ? `<div style="font-size:13px;color:var(--text2);background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:12px;">${esc(r.triggerNote)}</div>` : ''}`
+    : (r.triggerNote
+      ? `<div class="section-title">悪化因子（その他）</div>
+         <div style="font-size:13px;color:var(--text2);background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:12px;">${esc(r.triggerNote)}</div>`
+      : '');
+
   const calcUrl = 'https://haman-360.github.io/atopic-calculator/atopic_calculator.html'
     + '?p=' + encodeURIComponent(r.patientNo)
     + '&ageGroup=' + encodeURIComponent(r.ageGroup || 'child3')
@@ -389,6 +412,7 @@ function buildReportCard(r, type) {
 
       ${remainHtml ? `<div class="section-title">薬の残量</div><div class="remain-grid">${remainHtml}</div>` : ''}
 
+      ${triggersHtml}
       ${rxHtml}
       ${commentHtml}
     </div>`;
