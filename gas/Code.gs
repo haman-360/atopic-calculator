@@ -18,6 +18,9 @@ function doGet(e) {
     const tmpl = HtmlService.createTemplateFromFile('patient_form');
     tmpl.patientNo = (e && e.parameter && e.parameter.p) || '';
     tmpl.token     = (e && e.parameter && e.parameter.t) || '';
+    Logger.log('[doGet] queryString=' + (e && e.queryString));
+    Logger.log('[doGet] parameter=' + JSON.stringify(e && e.parameter));
+    Logger.log('[doGet] form p=' + tmpl.patientNo + ' t=' + tmpl.token);
     return tmpl.evaluate()
       .setTitle('症状報告フォーム — はまこどもクリニック')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
@@ -146,40 +149,55 @@ function getPatientContext(patientNo, token) {
   if (!validation.valid) return validation;
 
   // VisitHistory から最新処方を取得
+  Logger.log('[getPatientContext] VisitHistory 取得開始');
   const vhSheet = getSheet_('VisitHistory');
+  Logger.log('[getPatientContext] VisitHistory シート取得完了');
   const vhData = vhSheet.getDataRange().getValues();
   Logger.log('[getPatientContext] VisitHistory 行数=' + vhData.length);
   let lastVisit = null;
   for (let i = 1; i < vhData.length; i++) {
     const row = vhData[i];
     if (String(row[0]) !== String(patientNo)) continue;
-    Logger.log('[getPatientContext] 処方履歴発見 visitDate=' + row[1]);
+    Logger.log('[getPatientContext] 処方履歴発見 row=' + i + ' visitDate=' + row[1] + ' drugsJsonLen=' + (row[3] ? String(row[3]).length : 0));
     if (!lastVisit || row[1] > lastVisit.visitDate) {
+      Logger.log('[getPatientContext] drugsJson パース開始');
+      let parsedDrugs = [];
+      if (row[3]) {
+        try {
+          const raw = JSON.parse(row[3]);
+          Logger.log('[getPatientContext] drugsJson パース成功 件数=' + raw.length);
+          parsedDrugs = raw.map(function(d) {
+            return { name: d.name || '', partLabel: d.partLabel || '', freqLabel: d.freqLabel || '' };
+          });
+        } catch (e) {
+          Logger.log('[getPatientContext] drugsJson パースエラー: ' + e.message);
+        }
+      }
       lastVisit = {
         visitDate: row[1],
         nextVisitDate: row[2],
-        drugsJson: (() => {
-          if (!row[3]) return [];
-          try {
-            return JSON.parse(row[3]).map(function(d) {
-              return { name: d.name || '', partLabel: d.partLabel || '', freqLabel: d.freqLabel || '' };
-            });
-          } catch (e) { return []; }
-        })(),
+        drugsJson: parsedDrugs,
         rxSummaryText: row[4] || ''
       };
+      Logger.log('[getPatientContext] lastVisit 更新完了');
     }
   }
-  Logger.log('[getPatientContext] lastVisit=' + JSON.stringify(lastVisit));
+  Logger.log('[getPatientContext] VisitHistory ループ完了 lastVisit=' + (lastVisit ? 'あり' : 'なし'));
+
+  Logger.log('[getPatientContext] ageLabel計算開始');
+  const ageLabel = calcAgeLabel_(validation.birthdate);
+  Logger.log('[getPatientContext] ageGroup計算開始');
+  const ageGroup = calcAgeGroup_(validation.birthdate);
+  Logger.log('[getPatientContext] age計算完了 ageLabel=' + ageLabel + ' ageGroup=' + ageGroup);
 
   const result = {
     valid: true,
-    ageLabel: calcAgeLabel_(validation.birthdate),
-    ageGroup: calcAgeGroup_(validation.birthdate),
+    ageLabel: ageLabel,
+    ageGroup: ageGroup,
     notes: validation.notes,
     lastVisit: lastVisit
   };
-  Logger.log('[getPatientContext] 返却=' + JSON.stringify(result));
+  Logger.log('[getPatientContext] 返却完了');
   return result;
 }
 
