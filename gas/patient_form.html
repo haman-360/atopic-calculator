@@ -267,41 +267,46 @@
     });
 
     function onContextLoaded(ctx) {
-      if (!ctx.valid) {
-        if (ctx.reason === 'expired') {
-          showError('QRコードの有効期限が切れています。受付にお声がけください。', 'QRコードの有効期限切れ');
-        } else if (ctx.reason === 'inactive') {
-          showError('このQRコードは無効になっています。受付にお声がけください。', 'QRコード無効');
-        } else {
-          showError('認証に失敗しました。QRコードを読み直してください。', '認証エラー');
+      try {
+        if (!ctx.valid) {
+          if (ctx.reason === 'expired') {
+            showError('QRコードの有効期限が切れています。受付にお声がけください。', 'QRコードの有効期限切れ');
+          } else if (ctx.reason === 'inactive') {
+            showError('このQRコードは無効になっています。受付にお声がけください。', 'QRコード無効');
+          } else {
+            showError('認証に失敗しました。QRコードを読み直してください。', '認証エラー');
+          }
+          return;
         }
-        return;
-      }
 
-      patientContext = ctx;
+        patientContext = ctx;
 
-      // 診察券番号・年齢
-      document.getElementById('disp-patientno').textContent = patientNo;
-      if (ctx.ageLabel) {
-        document.getElementById('disp-age').textContent = ctx.ageLabel;
-        document.getElementById('disp-age-row').style.display = 'flex';
-      }
-
-      // 前回処方
-      if (ctx.lastVisit && ctx.lastVisit.drugsJson && ctx.lastVisit.drugsJson.length > 0) {
-        try {
-          buildPrevRxCard(ctx.lastVisit);
-          buildMedicationRemainList(ctx.lastVisit.drugsJson);
-          buildTopicalUseSection(ctx.lastVisit.drugsJson);
-        } catch (e) {
-          console.error('前回処方表示エラー:', e);
+        // 診察券番号・年齢
+        document.getElementById('disp-patientno').textContent = patientNo;
+        if (ctx.ageLabel) {
+          document.getElementById('disp-age').textContent = ctx.ageLabel;
+          document.getElementById('disp-age-row').style.display = 'flex';
         }
+
+        // 前回処方
+        if (ctx.lastVisit && ctx.lastVisit.drugsJson && ctx.lastVisit.drugsJson.length > 0) {
+          try {
+            buildPrevRxCard(ctx.lastVisit);
+            buildMedicationRemainList(ctx.lastVisit.drugsJson);
+            buildTopicalUseSection(ctx.lastVisit.drugsJson);
+          } catch (e) {
+            console.error('前回処方表示エラー:', e);
+          }
+        }
+
+        // POEM フォーム構築
+        buildPoemItems();
+
+        showPhase('form');
+      } catch (e) {
+        console.error('[DEBUG] onContextLoaded crashed:', e.message, e.stack);
+        showError('フォームの表示に失敗しました。ページを再読み込みしてください。', '表示エラー');
       }
-
-      // POEM フォーム構築
-      buildPoemItems();
-
-      showPhase('form');
     }
 
     function buildPrevRxCard(lastVisit) {

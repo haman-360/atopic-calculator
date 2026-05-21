@@ -12,13 +12,11 @@ const CLINIC_SECRET = PROPS.getProperty('CLINIC_SECRET');
 
 // ===== ルーティング =====
 function doGet(e) {
-  Logger.log('doGet called. queryString=' + (e && e.queryString) + ' parameter=' + JSON.stringify(e && e.parameter));
   const page = (e && e.parameter && e.parameter.page) || 'form';
 
   if (page === 'form') {
     const patientNo = (e && e.parameter && e.parameter.p) || '';
     const token     = (e && e.parameter && e.parameter.t) || '';
-    Logger.log('form page: patientNo=' + patientNo + ' tokenLen=' + token.length);
     const tmpl = HtmlService.createTemplateFromFile('patient_form');
     tmpl.patientNo = patientNo;
     tmpl.token     = token;
@@ -174,9 +172,14 @@ function getPatientContext(patientNo, token) {
           Logger.log('[getPatientContext] drugsJson パースエラー: ' + e.message);
         }
       }
+      const fmtDate = function(v) {
+        if (!v) return '';
+        if (v instanceof Date) return Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM-dd');
+        return String(v);
+      };
       lastVisit = {
-        visitDate: row[1],
-        nextVisitDate: row[2],
+        visitDate: fmtDate(row[1]),
+        nextVisitDate: fmtDate(row[2]),
         drugsJson: parsedDrugs,
         rxSummaryText: row[4] || ''
       };
