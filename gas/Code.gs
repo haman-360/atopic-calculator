@@ -12,15 +12,16 @@ const CLINIC_SECRET = PROPS.getProperty('CLINIC_SECRET');
 
 // ===== ルーティング =====
 function doGet(e) {
+  Logger.log('doGet called. queryString=' + (e && e.queryString) + ' parameter=' + JSON.stringify(e && e.parameter));
   const page = (e && e.parameter && e.parameter.page) || 'form';
 
   if (page === 'form') {
+    const patientNo = (e && e.parameter && e.parameter.p) || '';
+    const token     = (e && e.parameter && e.parameter.t) || '';
+    Logger.log('form page: patientNo=' + patientNo + ' tokenLen=' + token.length);
     const tmpl = HtmlService.createTemplateFromFile('patient_form');
-    tmpl.patientNo = (e && e.parameter && e.parameter.p) || '';
-    tmpl.token     = (e && e.parameter && e.parameter.t) || '';
-    Logger.log('[doGet] queryString=' + (e && e.queryString));
-    Logger.log('[doGet] parameter=' + JSON.stringify(e && e.parameter));
-    Logger.log('[doGet] form p=' + tmpl.patientNo + ' t=' + tmpl.token);
+    tmpl.patientNo = patientNo;
+    tmpl.token     = token;
     return tmpl.evaluate()
       .setTitle('症状報告フォーム — はまこどもクリニック')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)

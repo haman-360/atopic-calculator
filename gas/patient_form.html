@@ -251,9 +251,8 @@
     const topicalUseMap = {}; // topicalUseMap[drugName][part] = freq
     let patientContext = null;
 
-    // URLパラメータ取得
     const patientNo = '<?= patientNo ?>';
-    const token = '<?= token ?>';
+    const token     = '<?= token ?>';
 
     // 起動時に認証
     window.addEventListener('load', () => {
