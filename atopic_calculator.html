@@ -1331,7 +1331,7 @@
         const gOnce = ftuOnce * gf;
         const sLabel = p.bilateral ? (sides === 2 ? '（両側）' : '（片側）') : '';
         const isCustom = d.parts[p.key].customFTU !== null;
-        parts.push({ label: p.label + sLabel, ftuOnce, gOnce, baseFTU, isCustom });
+        parts.push({ label: p.label + sLabel, ftuOnce, gOnce, baseFTU, isCustom, isCustomPart: !!p.isCustom });
       });
       return parts;
     }
@@ -4247,6 +4247,24 @@
     ];
     const DOW_JA = ['日','月','火','水','木','金','土'];
 
+    // 標準部位のみのGantt表示用（カスタム部位は別行なので含めない）
+    // 標準部位が1つもチェックされていなければ null を返す
+    function formatStdPartsForGantt(d) {
+      const p = d.parts;
+      const stdChecked = PARTS.filter(pt => p[pt.key]?.checked);
+      if (stdChecked.length === 0) return null;
+      if (stdChecked.length === PARTS.length) return '全身';
+      if (!p.face?.checked && stdChecked.length === PARTS.length - 1) return '全身<br>（顔なし）';
+      const parts = [];
+      if (p.face?.checked) parts.push('顔・首');
+      if (p.trunk_f?.checked && p.trunk_b?.checked) parts.push('体幹（前後）');
+      else if (p.trunk_f?.checked) parts.push('体幹前面');
+      else if (p.trunk_b?.checked) parts.push('体幹後面');
+      if (p.arm?.checked) parts.push(p.arm.sides === 2 ? '両腕' : '片腕');
+      if (p.leg?.checked) parts.push(p.leg.sides === 2 ? '両足' : '片足');
+      return parts.join('<br>');
+    }
+
     function formatPartsForGantt(d) {
       const p = d.parts;
       const stdCheckedCount = PARTS.filter(pt => p[pt.key]?.checked).length;
@@ -4355,12 +4373,40 @@
           cells += `<td class="day-cell${borderClass}">${show ? `<div class="fill-block" style="height:${fillH}px;background:${col.bg};"></div>` : ''}</td>`;
         }
 
-        rows += `<tr>
-          <td class="gantt-part" style="color:${col.fg};background:${col.bg}22;">${formatPartsForGantt(r.drugRef)}</td>
-          <td class="gantt-drug" style="font-size:11px;">${r.name}</td>
-          <td class="gantt-freq">${freqLabel}</td>
-          ${cells}
-        </tr>`;
+        // 標準部位は1行まとめ、カスタム部位は1部位1行
+        const d = r.drugRef;
+        const stdLabel = formatStdPartsForGantt(d);
+        const customCheckedParts = customParts.filter(cp => d.parts[cp.key]?.checked);
+        const rowBg = `color:${col.fg};background:${col.bg}22;`;
+
+        if (stdLabel !== null) {
+          rows += `<tr>
+            <td class="gantt-part" style="${rowBg}">${stdLabel}</td>
+            <td class="gantt-drug" style="font-size:11px;">${r.name}</td>
+            <td class="gantt-freq">${freqLabel}</td>
+            ${cells}
+          </tr>`;
+        }
+        customCheckedParts.forEach(cp => {
+          const sides = d.parts[cp.key].sides;
+          const sLabel = cp.bilateral
+            ? `<br><span style="font-size:10px;opacity:.8;">${sides === 2 ? '両側' : '片側'}</span>`
+            : '';
+          rows += `<tr>
+            <td class="gantt-part" style="${rowBg}">${cp.label}${sLabel}</td>
+            <td class="gantt-drug" style="font-size:11px;">${r.name}</td>
+            <td class="gantt-freq">${freqLabel}</td>
+            ${cells}
+          </tr>`;
+        });
+        if (stdLabel === null && customCheckedParts.length === 0) {
+          rows += `<tr>
+            <td class="gantt-part" style="${rowBg}">—</td>
+            <td class="gantt-drug" style="font-size:11px;">${r.name}</td>
+            <td class="gantt-freq">${freqLabel}</td>
+            ${cells}
+          </tr>`;
+        }
       });
       legendHtml += '</div>';
 
@@ -4374,6 +4420,8 @@
       rxItems.forEach((r, idx) => {
         const col = GANTT_COLORS[idx % GANTT_COLORS.length];
         const partDeets = r.hasFTU ? calcPartDetails(r.drugRef, ageKey) : [];
+        const stdDeets = partDeets.filter(p => !p.isCustomPart);
+        const customDeets = partDeets.filter(p => p.isCustomPart);
         const onceTotal = partDeets.reduce((s, p) => s + p.gOnce, 0);
         const dayTotal = onceTotal * r.freqVal;
         doseDetailHtml += `<div style="padding:10px 12px;border-top:1px solid #e0ddd4;">`;
@@ -4382,16 +4430,29 @@
           ${r.name}
         </div>`;
         if (partDeets.length) {
-          partDeets.forEach(p => {
+          // 標準部位
+          stdDeets.forEach(p => {
             const ftuDisp = +(p.ftuOnce).toFixed(1);
             doseDetailHtml += `<div style="font-size:12px;color:#3a3832;padding:2px 0 2px 19px;">`;
-            if (r.isMixed) {
-              doseDetailHtml += `${p.label}：${p.gOnce.toFixed(2)}g / 1回`;
-            } else {
-              doseDetailHtml += `${p.label}：${ftuDisp} FTU（${p.gOnce.toFixed(2)}g）/ 1回`;
-            }
+            doseDetailHtml += r.isMixed
+              ? `${p.label}：${p.gOnce.toFixed(2)}g / 1回`
+              : `${p.label}：${ftuDisp} FTU（${p.gOnce.toFixed(2)}g）/ 1回`;
             doseDetailHtml += `</div>`;
           });
+          // カスタム部位（区切り線 + 部位ごとにタイル）
+          if (customDeets.length) {
+            if (stdDeets.length) {
+              doseDetailHtml += `<div style="margin:6px 0 4px 19px;border-top:1px dashed #c9c6be;font-size:10px;color:#6b6760;padding-top:4px;">カスタム部位</div>`;
+            }
+            customDeets.forEach(p => {
+              const ftuDisp = +(p.ftuOnce).toFixed(1);
+              doseDetailHtml += `<div style="font-size:12px;color:#3a3832;padding:2px 0 2px 19px;background:#edf7f5;border-left:3px solid ${col.bg};margin-left:12px;padding-left:8px;border-radius:0 3px 3px 0;margin-bottom:2px;">`;
+              doseDetailHtml += r.isMixed
+                ? `${p.label}：${p.gOnce.toFixed(2)}g / 1回`
+                : `${p.label}：${ftuDisp} FTU（${p.gOnce.toFixed(2)}g）/ 1回`;
+              doseDetailHtml += `</div>`;
+            });
+          }
           doseDetailHtml += `<div style="font-size:12px;color:#6b6760;padding:3px 0 3px 19px;">→ 1回合計 ${onceTotal.toFixed(2)}g　×　${r.freq}　＝　1日 ${dayTotal.toFixed(2)}g</div>`;
         }
         doseDetailHtml += `<div style="font-size:12px;font-weight:600;color:#0f6e56;margin-top:4px;padding-left:19px;">必要量 ${r.neededG.toFixed(1)}g − 残量 ${r.remainG.toFixed(1)}g = ${r.netG.toFixed(1)}g</div>`;
