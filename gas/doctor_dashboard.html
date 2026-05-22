@@ -480,9 +480,7 @@ function renderList(type, reports) {
 
   container.innerHTML = cards.join('');
 
-  if (type === 'pending') {
-    reports.forEach(r => { try { initEasiState(r.reportId, r.lastAssessment || null); } catch(e) {} });
-  }
+  reports.forEach(r => { try { initEasiState(r.reportId, r.lastAssessment || null); } catch(e) {} });
 
   // グラフ非同期読み込み（全カード）
   reports.forEach(r => { try { loadPatientChart(r.reportId, r.patientNo); } catch(e) {} });
@@ -656,20 +654,6 @@ function getEasiSeverityLocal(total) {
 
 // EASI入力グリッド（pending用）を生成
 function buildEasiSection(r, type) {
-  if (type !== 'pending') {
-    // 確認済み：読み取り専用表示
-    if (!r.lastAssessment) return '';
-    const a = r.lastAssessment;
-    const sev = getEasiSeverityLocal(a.easiTotal);
-    return `
-      <div class="section-title">重症度評価（EASI/IGA）</div>
-      <div class="easi-readonly">
-        <span>EASI合計：<span class="easi-val">${a.easiTotal}</span></span>
-        <span class="easi-severity" style="background:${sev.bg};color:${sev.color};">${esc(sev.label)}</span>
-        ${a.iga !== null && a.iga !== undefined ? `<span>IGA：<span class="easi-val">${a.iga}</span></span>` : ''}
-        ${a.notes ? `<span style="font-size:12px;color:var(--text2);">${esc(a.notes)}</span>` : ''}
-      </div>`;
-  }
 
   const rid = esc(r.reportId);
 
