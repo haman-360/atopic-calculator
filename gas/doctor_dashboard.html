@@ -832,7 +832,7 @@ function saveAssessment(reportId, patientNo) {
       if (btn) { btn.textContent = '評価を保存'; btn.disabled = false; }
       showToast('エラー: ' + esc(err.message || '不明なエラー'));
     })
-    .saveAssessment_(payload);
+    .saveAssessment(payload);
 }
 
 // ===== スコア推移グラフ =====
@@ -862,7 +862,7 @@ function loadPatientChart(reportId, patientNo) {
     .withFailureHandler(function() {
       renderChart(reportId, poemData, []);
     })
-    .getAssessmentList_(patientNo);
+    .getAssessmentList(patientNo);
 }
 
 function renderChart(reportId, poemData, assessments) {

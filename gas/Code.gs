@@ -588,6 +588,10 @@ function getOrCreateClinicalAssessmentsSheet_() {
   return sheet;
 }
 
+// ===== google.script.run 用の公開ラッパー（アンダースコア付き関数は呼び出せないため） =====
+function saveAssessment(data)          { return saveAssessment_(data); }
+function getAssessmentList(patientNo)  { return getAssessmentList_(patientNo); }
+
 // ===== ClinicalAssessments: 既存スプレッドシートへの1回限り追加（移行用） =====
 function addClinicalAssessmentsSheet() {
   const sheet = getOrCreateClinicalAssessmentsSheet_();
