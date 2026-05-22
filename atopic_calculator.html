@@ -358,6 +358,11 @@
       color: var(--text2);
     }
 
+    .mode-btn-on {
+      background: var(--green);
+      color: white;
+    }
+
     .btn-green {
       background: var(--green);
       color: white;
@@ -912,7 +917,17 @@
 
     <!-- 処方薬剤 -->
     <div class="card">
-      <div class="card-title"><span class="icon">💊</span>処方薬剤</div>
+      <div class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <span><span class="icon">💊</span>処方薬剤</span>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:12px;color:var(--text2);">処方モード：</span>
+          <button id="mode-btn-ftu" class="btn btn-sm mode-btn-on" onclick="setCalcMode('ftu')">📐 計算</button>
+          <button id="mode-btn-direct" class="btn btn-ghost btn-sm" onclick="setCalcMode('direct')">✏️ 直接入力</button>
+        </div>
+      </div>
+      <div id="direct-mode-note" style="display:none;font-size:12px;color:var(--text2);background:var(--bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;">
+        安定期処方などで、処方量を直接入力するモードです。次回受診日・残量入力は不要です。
+      </div>
       <div id="drug-list"></div>
       <div id="custom-parts-ui" style="margin-top:8px;margin-bottom:4px;"></div>
       <button class="btn btn-ghost btn-sm" onclick="addDrug()" style="margin-top:4px;">＋ 薬剤を追加</button>
@@ -924,7 +939,7 @@
         <button class="tab-btn on" onclick="switchTab('result',this)">処方量計算結果</button>
         <button class="tab-btn" onclick="switchTab('text',this)">テキスト出力</button>
         <button class="tab-btn" onclick="switchTab('patient',this)">患者向け共有</button>
-        <button class="tab-btn" onclick="switchTab('schedule',this)">📅 スケジュール</button>
+        <button id="tab-btn-schedule" class="tab-btn" onclick="switchTab('schedule',this)">📅 スケジュール</button>
       </div>
       <div id="panel-result">
         <div id="calc-area">
@@ -1120,10 +1135,29 @@
         taperFreqIdx: 1,    // 後半の頻度インデックス（デフォルト1日1回）
         // 混合軟膏プラン選択
         mixedPlanIdx: 0,    // 選択中のプランインデックス
+        // 直接入力モード用
+        directG: 0,         // 今回処方量（g）直接入力
       };
     }
     const drugs = [newDrug(0)];
     drugs[0].givenG = 28 * 1; drugs[0].remainG = 0;
+
+    // ===== 処方モード =====
+    let calcMode = 'ftu'; // 'ftu'（計算モード） | 'direct'（直接入力モード）
+
+    function setCalcMode(mode) {
+      calcMode = mode;
+      const btnFtu    = document.getElementById('mode-btn-ftu');
+      const btnDirect = document.getElementById('mode-btn-direct');
+      btnFtu.className    = mode === 'ftu'    ? 'btn btn-sm mode-btn-on'  : 'btn btn-ghost btn-sm';
+      btnDirect.className = mode === 'direct' ? 'btn btn-sm mode-btn-on'  : 'btn btn-ghost btn-sm';
+      // 次回受診予定日・前回受診日 の required感を制御
+      const schedTabBtn = document.getElementById('tab-btn-schedule');
+      if (schedTabBtn) schedTabBtn.style.display = mode === 'direct' ? 'none' : '';
+      const elapsedLabel = document.getElementById('elapsed-label');
+      if (mode === 'direct') { if (elapsedLabel) elapsedLabel.textContent = ''; }
+      renderDrugs(); calc();
+    }
 
     function getDrugName(d) {
       if (PRESETS[d.preset].custom) return d.customName || '（薬剤名未入力）';
@@ -1137,11 +1171,67 @@
     }
 
     function renderDrugs() {
+      // 直接入力モードの説明文表示切替
+      const noteEl = document.getElementById('direct-mode-note');
+      if (noteEl) noteEl.style.display = calcMode === 'direct' ? 'block' : 'none';
+
       const el = document.getElementById('drug-list');
       el.innerHTML = '';
       drugs.forEach((d, i) => {
         const pre = PRESETS[d.preset];
         const opts = PRESETS.map((p, pi) => `<option value="${pi}"${pi === d.preset ? ' selected' : ''}>${p.name}</option>`).join('');
+
+        // ===== 直接入力モード =====
+        if (calcMode === 'direct') {
+          let partsHtml = '';
+          getAllParts().forEach(pt => {
+            const st = d.parts[pt.key];
+            if (!st) return;
+            const on = st.checked;
+            const sh = pt.bilateral && on ? `<div class="sides-wrap" onclick="event.stopPropagation()">
+          <button class="sides-btn${st.sides === 1 ? ' on' : ''}" onclick="setSides(${i},'${pt.key}',1)">片</button>
+          <button class="sides-btn${st.sides === 2 ? ' on' : ''}" onclick="setSides(${i},'${pt.key}',2)">両</button>
+        </div>` : '';
+            const deleteBtn = pt.isCustom ? `<button onclick="event.stopPropagation();removeCustomPart('${pt.key}')" title="削除" style="font-size:12px;padding:0 4px;background:none;border:none;cursor:pointer;color:var(--text3);line-height:1;">×</button>` : '';
+            partsHtml += `<div class="part-chip${on ? ' on' : ''}" onclick="togglePart(${i},'${pt.key}')">
+          <div style="display:flex;align-items:center;width:100%;gap:7px;">
+            <input type="checkbox"${on ? ' checked' : ''} onclick="event.stopPropagation();togglePart(${i},'${pt.key}')">
+            <span style="flex:1">${pt.label}</span>${sh}${deleteBtn}
+          </div></div>`;
+          });
+          const tubeNote = d.tubeg > 0 ? `（${(d.directG / d.tubeg).toFixed(1)}本）` : '';
+          el.innerHTML += `<div class="drug-block">
+        <div class="drug-block-header">
+          <div class="drug-num">${i + 1}</div>
+          <select onchange="onPresetChange(${i},this.value)">${opts}</select>
+          <button class="btn btn-danger" onclick="removeDrug(${i})">削除</button>
+        </div>
+        ${pre.custom ? `<div style="margin-bottom:10px;"><label>薬剤名（手入力）</label>
+          <input type="text" value="${d.customName}" placeholder="例: ○○軟膏 10g" oninput="drugs[${i}].customName=this.value;calc()"></div>` : ''}
+        <div class="section-sub" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>塗布部位</span>
+          <div style="display:flex;gap:6px;">
+            <button class="sides-btn" style="font-size:11px;padding:3px 10px;" onclick="setAllParts(${i},true)">全身</button>
+            <button class="sides-btn" style="font-size:11px;padding:3px 10px;" onclick="setAllParts(${i},false)">クリア</button>
+          </div>
+        </div>
+        <div class="part-grid">${partsHtml}</div>
+        <div style="margin-top:14px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;">
+          <div>
+            <label>今回処方量 (g)</label>
+            <input type="number" value="${d.directG}" min="0" step="1" inputmode="decimal" style="width:100px;font-size:18px;"
+              oninput="drugs[${i}].directG=parseFloat(this.value)||0;calc()">
+            <div class="input-note">${tubeNote}</div>
+          </div>
+          <div>
+            <label>1本の内容量 (g)</label>
+            <input type="number" value="${d.tubeg}" min="1" step="1" inputmode="decimal" style="width:80px;"
+              oninput="onTubeG(${i},this.value)">
+          </div>
+        </div>
+      </div>`;
+          return; // direct mode の薬剤ブロック描画完了
+        }
         const fOpts = FREQS.map((f, fi) => `<option value="${fi}"${fi === d.freqIdx ? ' selected' : ''}>${f.label}</option>`).join('');
         const givenB = toB(d.givenG, d.tubeg);
         const remB = toB(d.remainG, d.tubeg);
@@ -1406,6 +1496,8 @@
     }
 
     function calc() {
+      if (calcMode === 'direct') { calcDirect(); return; }
+
       const lv = document.getElementById('lastDate').value;
       const tv = document.getElementById('todayDate').value;
       const nv = document.getElementById('nextDate').value;
@@ -1655,6 +1747,57 @@
       });
     }
 
+    // ===== 直接入力モード計算 =====
+    function calcDirect() {
+      const tv  = document.getElementById('todayDate').value;
+      const pid = document.getElementById('patientId').value.trim();
+      const rxItems = [];
+      currentRxSnapshot = { patientNo: pid, visitDate: tv, nextVisitDate: '', rxItems };
+
+      let tbl = `<div style="overflow-x:auto"><table class="result-table">
+  <tr><th>薬剤</th><th>塗布部位</th><th>今回処方量</th></tr>`;
+
+      drugs.forEach(d => {
+        const pname = getDrugName(d);
+        const checkedParts = getAllParts().filter(p => d.parts[p.key]?.checked);
+        const partNames = checkedParts.map(p => {
+          const s = p.bilateral ? (d.parts[p.key].sides === 2 ? '両側' : '片側') : '';
+          return p.label + (s ? `(${s})` : '');
+        });
+        const ptags = partNames.length
+          ? partNames.map(n => `<span class="ftu-tag">${n}</span>`).join('')
+          : '<span style="font-size:11px;color:var(--text3);">部位未設定</span>';
+        const g = d.directG || 0;
+        const bCount = d.tubeg > 0 ? (g / d.tubeg).toFixed(1) : null;
+        const bNote  = bCount ? `<br><span style="font-size:11px;color:var(--text3);">${bCount}本</span>` : '';
+        tbl += `<tr>
+      <td style="font-weight:600;font-size:12px;">${pname}</td>
+      <td>${ptags}</td>
+      <td><span style="font-size:16px;font-weight:700;">${g}g</span>${bNote}</td>
+    </tr>`;
+        rxItems.push({
+          name: pname, tubeg: d.tubeg, directG: g,
+          prescribeG: g, prescribeB: bCount,
+          partNames, isMixed: isMixed(d), hasFTU: partNames.length > 0,
+          isDirect: true, drugRef: d
+        });
+      });
+      tbl += '</table></div>';
+      document.getElementById('panel-result').innerHTML = tbl;
+
+      // テキスト出力
+      let txt = `【アトピー性皮膚炎 軟膏処方記録（安定期処方）】\n`;
+      txt += `患者ID: ${pid || '未入力'}　受診日: ${tv || '未入力'}\n`;
+      txt += `${'─'.repeat(40)}\n`;
+      rxItems.forEach(r => {
+        const parts = r.partNames.length ? r.partNames.join('、') : '部位未設定';
+        const bStr  = r.prescribeB ? `（${r.prescribeB}本）` : '';
+        txt += `${r.name}　${parts}　${r.prescribeG}g${bStr}\n`;
+      });
+      document.getElementById('text-output').value = txt;
+      document.getElementById('elapsed-label').textContent = '';
+    }
+
     function selectMixedPlan(drugIdx, planIdx) {
       drugs[drugIdx].mixedPlanIdx = planIdx;
       calc();
@@ -1686,13 +1829,43 @@
       document.getElementById('nextDate').value = '';
     }
     function renderPatientCard() {
-      const nv = document.getElementById('nextDate').value;
-      const nextDays = dateDiff(document.getElementById('todayDate').value, nv);
-      const ageKey = document.getElementById('globalAge').value;
       const el = document.getElementById('patient-card');
       if (!drugs.length) { el.innerHTML = '<p style="font-size:13px;color:var(--text2);">薬剤を入力してください。</p>'; return; }
       const pid = document.getElementById('patientId').value;
-      const tv = document.getElementById('todayDate').value;
+      const tv  = document.getElementById('todayDate').value;
+
+      // 直接入力モード用シンプルカード
+      if (calcMode === 'direct') {
+        const metaStr = [pid ? `ID: ${pid}` : '', tv ? `受診日: ${tv}` : ''].filter(Boolean).join('　');
+        let html = `<div class="pt-card">
+      <div class="pt-header">
+        <h2>軟膏の使い方　はまこどもクリニック</h2>
+        <p>${metaStr}</p>
+      </div>`;
+        drugs.forEach(d => {
+          const name = getDrugName(d);
+          const checkedParts = getAllParts().filter(p => d.parts[p.key]?.checked);
+          const partNames = checkedParts.map(p => {
+            const s = p.bilateral ? (d.parts[p.key].sides === 2 ? '両側' : '片側') : '';
+            return p.label + (s ? `(${s})` : '');
+          });
+          const bNote = d.tubeg > 0 ? `（${(d.directG / d.tubeg).toFixed(1)}本）` : '';
+          html += `<div class="pt-drug-section">
+        <div class="pt-drug-name">${name}</div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+          <div style="font-size:22px;font-weight:700;color:#0f6e56;">${d.directG}g${bNote ? `<span style="font-size:13px;color:#6b6760;font-weight:400;margin-left:4px;">${bNote}</span>` : ''}</div>
+        </div>
+        ${partNames.length ? `<div style="margin-top:6px;font-size:13px;color:#3a3832;">塗布部位：${partNames.join('、')}</div>` : ''}
+      </div>`;
+        });
+        html += '</div>';
+        el.innerHTML = html;
+        return;
+      }
+
+      const nv = document.getElementById('nextDate').value;
+      const nextDays = dateDiff(tv, nv);
+      const ageKey = document.getElementById('globalAge').value;
       const nextStr = nv ? `次回受診: ${nv}${nextDays > 0 ? '（' + nextDays + '日後）' : ''}` : '';
       const metaStr = [pid ? `ID: ${pid}` : '', tv ? `受診日: ${tv}` : ''].filter(Boolean).join('　');
       let html = `<div class="pt-card">
@@ -4484,15 +4657,29 @@
       if (!patientNo) { showToast('患者IDを入力してください'); return; }
       if (!visitDate)  { showToast('受診日を入力してください'); return; }
 
-      const drugsJson = rxItems.map(r => ({
-        name: r.name,
-        partLabel: r.partNames.join('・'),
-        freqLabel: r.taperPhases
-          ? `${r.taperPhases.phase1.freqLabel}→${r.taperPhases.phase2.freqLabel}`
-          : r.freq,
-        scheduleText: buildScheduleText(r, visitDate, nextVisitDate)
-      }));
-      const rxSummaryText = rxItems.map(r => buildScheduleText(r, visitDate, nextVisitDate)).join('\n');
+      let drugsJson, rxSummaryText;
+      if (calcMode === 'direct') {
+        drugsJson = rxItems.map(r => ({
+          name: r.name,
+          partLabel: r.partNames.join('・'),
+          freqLabel: '（安定期・直接入力）',
+          prescribedG: r.prescribeG
+        }));
+        rxSummaryText = rxItems.map(r => {
+          const parts = r.partNames.length ? r.partNames.join('・') : '部位未設定';
+          return `${r.name}（${parts}）${r.prescribeG}g`;
+        }).join('\n');
+      } else {
+        drugsJson = rxItems.map(r => ({
+          name: r.name,
+          partLabel: r.partNames.join('・'),
+          freqLabel: r.taperPhases
+            ? `${r.taperPhases.phase1.freqLabel}→${r.taperPhases.phase2.freqLabel}`
+            : r.freq,
+          scheduleText: buildScheduleText(r, visitDate, nextVisitDate)
+        }));
+        rxSummaryText = rxItems.map(r => buildScheduleText(r, visitDate, nextVisitDate)).join('\n');
+      }
 
       showToast('保存中...');
       try {
