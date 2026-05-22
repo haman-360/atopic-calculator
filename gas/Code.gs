@@ -45,6 +45,25 @@ function doGet(e) {
       .setMimeType(MimeType.JSON);
   }
 
+  if (page === 'getAssessment') {
+    const id = (e && e.parameter && e.parameter.id) || '';
+    const result = getAssessment_(id);
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(MimeType.JSON);
+  }
+
+  if (page === 'getAssessmentByVisit') {
+    const p = (e && e.parameter && e.parameter.p) || '';
+    const d = (e && e.parameter && e.parameter.d) || '';
+    const result = getAssessmentByVisit_(p, d);
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(MimeType.JSON);
+  }
+
+  if (page === 'getAssessmentList') {
+    const p = (e && e.parameter && e.parameter.p) || '';
+    const result = getAssessmentList_(p);
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(MimeType.JSON);
+  }
+
   return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">ページが見つかりません</p>');
 }
 
@@ -56,9 +75,14 @@ function doPost(e) {
       registerToken_(data.patientNo, data.token, data.salt, data.expires, data.birthdate || '');
     } else if (data.action === 'saveVisit') {
       saveVisit_(data.patientNo, data.visitDate, data.nextVisitDate, data.drugsJson, data.rxSummaryText);
+    } else if (data.action === 'saveAssessment') {
+      const result = saveAssessment_(data);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
     }
   } catch (err) {
-    // fire-and-forget なのでエラーは握り潰す
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, reason: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
   }
   return ContentService.createTextOutput('ok').setMimeType(ContentService.MimeType.TEXT);
 }
@@ -290,6 +314,22 @@ function getDashboardData() {
     } catch(e) {}
   }
 
+  // ClinicalAssessments から最新評価をマップ化
+  const assessmentMap = {};
+  try {
+    const caSheet = getSheet_('ClinicalAssessments');
+    if (caSheet) {
+      const caData = caSheet.getDataRange().getValues();
+      for (let i = 1; i < caData.length; i++) {
+        const pno = String(caData[i][1]);
+        const assessedAt = caData[i][3] ? String(caData[i][3]) : '';
+        if (!assessmentMap[pno] || assessedAt > assessmentMap[pno].assessedAt) {
+          assessmentMap[pno] = assessmentRowToObj_(caData[i]);
+        }
+      }
+    }
+  } catch(e) {}
+
   const pending = [], reviewed = [];
   for (let i = 1; i < prData.length; i++) {
     try {
@@ -323,6 +363,7 @@ function getDashboardData() {
         triggerNote: row[14] || '',                              // O
         topicalUse: topicalUse,                                  // P
         lastRx: lastRxMap[pno] || null,
+        lastAssessment: assessmentMap[pno] || null,
         rowIndex: i + 1
       };
       if (entry.status === 'pending') pending.push(entry);
@@ -486,7 +527,8 @@ function setupSheets() {
     'PatientRegistry': ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'],
     'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText'],
     'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status', 'triggersJson', 'triggerNote', 'topicalUseJson'],
-    'AuditLog':        ['timestamp', 'patientNo', 'action']
+    'AuditLog':              ['timestamp', 'patientNo', 'action'],
+    'ClinicalAssessments':   ['assessmentId', 'patientNo', 'visitDate', 'assessedAt', 'easiHead', 'easiTrunk', 'easiUpperLimb', 'easiLowerLimb', 'easiTotal', 'easiSeverity', 'iga', 'lesionMapJson', 'notes', 'easiRawJson']
   };
 
   for (const [name, headers] of Object.entries(sheets)) {
@@ -500,7 +542,7 @@ function setupSheets() {
     // PatientRegistry・VisitHistory: A列, PatientReports・AuditLog: B列
     if (['PatientRegistry', 'VisitHistory'].includes(name)) {
       sheet.getRange('A:A').setNumberFormat('@');
-    } else if (['PatientReports', 'AuditLog'].includes(name)) {
+    } else if (['PatientReports', 'AuditLog', 'ClinicalAssessments'].includes(name)) {
       sheet.getRange('B:B').setNumberFormat('@');
     }
   }
@@ -530,6 +572,211 @@ function addTopicalUseColumn() {
     sheet.getRange(1, headers.length + 1).setValue('topicalUseJson');
   }
   Logger.log('topicalUseJson 列を追加しました');
+}
+
+// ===== ClinicalAssessments: シート取得/作成 =====
+function getOrCreateClinicalAssessmentsSheet_() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('ClinicalAssessments');
+  if (!sheet) {
+    sheet = ss.insertSheet('ClinicalAssessments');
+    const headers = ['assessmentId', 'patientNo', 'visitDate', 'assessedAt', 'easiHead', 'easiTrunk', 'easiUpperLimb', 'easiLowerLimb', 'easiTotal', 'easiSeverity', 'iga', 'lesionMapJson', 'notes', 'easiRawJson'];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e8f5e9');
+    sheet.getRange('B:B').setNumberFormat('@');
+  }
+  return sheet;
+}
+
+// ===== ClinicalAssessments: 既存スプレッドシートへの1回限り追加（移行用） =====
+function addClinicalAssessmentsSheet() {
+  const sheet = getOrCreateClinicalAssessmentsSheet_();
+  Logger.log('ClinicalAssessments シートを確認/作成しました: 行数=' + sheet.getLastRow());
+}
+
+// ===== EASI計算 =====
+const EASI_WEIGHT_ = { head: 0.1, trunk: 0.3, upperLimb: 0.2, lowerLimb: 0.4 };
+
+function calcEasiPart_(part) {
+  const signs = (part.E || 0) + (part.I || 0) + (part.Ex || 0) + (part.L || 0);
+  return signs * (part.A || 0);
+}
+
+function calcEasi_(easi) {
+  const head      = calcEasiPart_(easi.head      || {}) * EASI_WEIGHT_.head;
+  const trunk     = calcEasiPart_(easi.trunk     || {}) * EASI_WEIGHT_.trunk;
+  const upperLimb = calcEasiPart_(easi.upperLimb || {}) * EASI_WEIGHT_.upperLimb;
+  const lowerLimb = calcEasiPart_(easi.lowerLimb || {}) * EASI_WEIGHT_.lowerLimb;
+  const total = Math.round((head + trunk + upperLimb + lowerLimb) * 10) / 10;
+  return { head, trunk, upperLimb, lowerLimb, total };
+}
+
+function getEasiSeverity_(total) {
+  if (total === 0)   return 'clear';
+  if (total <= 6)    return 'mild';
+  if (total <= 21)   return 'moderate';
+  if (total <= 50)   return 'severe';
+  return 'very_severe';
+}
+
+// ===== ClinicalAssessments: 保存 =====
+function saveAssessment_(data) {
+  if (!data.patientNo || !data.visitDate) {
+    return { ok: false, reason: 'patientNo and visitDate are required' };
+  }
+
+  const easi = calcEasi_(data.easi || {});
+  const severity = getEasiSeverity_(easi.total);
+  const assessmentId = Utilities.getUuid();
+  const assessedAt = new Date().toISOString();
+
+  const sheet = getOrCreateClinicalAssessmentsSheet_();
+  sheet.appendRow([
+    assessmentId,                        // [0]  assessmentId
+    String(data.patientNo),              // [1]  patientNo
+    String(data.visitDate),              // [2]  visitDate
+    assessedAt,                          // [3]  assessedAt
+    easi.head,                           // [4]  easiHead
+    easi.trunk,                          // [5]  easiTrunk
+    easi.upperLimb,                      // [6]  easiUpperLimb
+    easi.lowerLimb,                      // [7]  easiLowerLimb
+    easi.total,                          // [8]  easiTotal
+    severity,                            // [9]  easiSeverity
+    data.iga !== undefined ? data.iga : '', // [10] iga
+    '',                                  // [11] lesionMapJson（将来用）
+    data.notes || '',                    // [12] notes
+    JSON.stringify(data.easi || {})      // [13] easiRawJson（入力元データ）
+  ]);
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 2).setNumberFormat('@');
+  sheet.getRange(newRow, 2).setValue(String(data.patientNo));
+
+  // reportId が渡された場合、対応するPatientReportのstatusを'assessed'に更新
+  if (data.reportId) {
+    const prSheet = getSheet_('PatientReports');
+    const prData = prSheet.getDataRange().getValues();
+    for (let i = 1; i < prData.length; i++) {
+      if (String(prData[i][0]).trim() === String(data.reportId).trim()) {
+        prSheet.getRange(i + 1, 13).setValue('assessed');
+        break;
+      }
+    }
+  }
+
+  return { ok: true, assessmentId, easiTotal: easi.total, easiSeverity: severity };
+}
+
+// ===== ClinicalAssessments: 行→オブジェクト変換ヘルパー =====
+function assessmentRowToObj_(row) {
+  return {
+    assessmentId:   String(row[0]),
+    patientNo:      String(row[1]),
+    visitDate:      String(row[2]),
+    assessedAt:     String(row[3]),
+    easiHead:       row[4],
+    easiTrunk:      row[5],
+    easiUpperLimb:  row[6],
+    easiLowerLimb:  row[7],
+    easiTotal:      row[8],
+    easiSeverity:   String(row[9]),
+    iga:            row[10] !== '' ? row[10] : null,
+    lesionMapJson:  String(row[11]),
+    notes:          String(row[12]),
+    easiRawJson:    row[13] ? (function(v){ try { return JSON.parse(v); } catch(e) { return null; } })(row[13]) : null
+  };
+}
+
+// ===== ClinicalAssessments: assessmentId指定で取得 =====
+function getAssessment_(assessmentId) {
+  if (!assessmentId) return { ok: false, reason: 'assessmentId is required' };
+  const sheet = getSheet_('ClinicalAssessments');
+  if (!sheet) return { ok: false, reason: 'no_data' };
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(assessmentId).trim()) {
+      return { ok: true, assessment: assessmentRowToObj_(data[i]) };
+    }
+  }
+  return { ok: false, reason: 'not_found' };
+}
+
+// ===== ClinicalAssessments: patientNo + visitDate指定で取得 =====
+function getAssessmentByVisit_(patientNo, visitDate) {
+  if (!patientNo || !visitDate) return { ok: false, reason: 'patientNo and visitDate are required' };
+  const sheet = getSheet_('ClinicalAssessments');
+  if (!sheet) return { ok: true, assessments: [] };
+  const data = sheet.getDataRange().getValues();
+  const results = [];
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][1]) === String(patientNo) && String(data[i][2]) === String(visitDate)) {
+      results.push(assessmentRowToObj_(data[i]));
+    }
+  }
+  return { ok: true, assessments: results };
+}
+
+// ===== ClinicalAssessments: patientNo指定で全履歴取得（assessedAt降順） =====
+function getAssessmentList_(patientNo) {
+  if (!patientNo) return { ok: false, reason: 'patientNo is required' };
+  const sheet = getSheet_('ClinicalAssessments');
+  if (!sheet) return { ok: true, assessments: [] };
+  const data = sheet.getDataRange().getValues();
+  const results = [];
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][1]) === String(patientNo)) {
+      results.push(assessmentRowToObj_(data[i]));
+    }
+  }
+  results.sort((a, b) => new Date(b.assessedAt) - new Date(a.assessedAt));
+  return { ok: true, assessments: results };
+}
+
+// ===== ClinicalAssessments: easiRawJson 列追加（既存シート用・1回のみ実行） =====
+function addEasiRawJsonColumn() {
+  const sheet = getSheet_('ClinicalAssessments');
+  if (!sheet) { Logger.log('ClinicalAssessments シートが存在しません'); return; }
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (!headers.includes('easiRawJson')) {
+    sheet.getRange(1, headers.length + 1).setValue('easiRawJson');
+    Logger.log('easiRawJson 列を追加しました');
+  } else {
+    Logger.log('easiRawJson 列はすでに存在します');
+  }
+}
+
+// ===== テスト用: saveAssessment_ 動作確認（GASエディタから実行） =====
+function testSaveAssessment() {
+  const data = {
+    patientNo: '99999',
+    visitDate: '2026-05-22',
+    easi: {
+      head:      { E: 2, I: 1, Ex: 1, L: 0, A: 3 },
+      trunk:     { E: 1, I: 1, Ex: 0, L: 0, A: 2 },
+      upperLimb: { E: 2, I: 2, Ex: 1, L: 1, A: 4 },
+      lowerLimb: { E: 1, I: 1, Ex: 1, L: 0, A: 2 }
+    },
+    iga: 3,
+    notes: 'テスト用データ'
+  };
+  try {
+    const result = saveAssessment_(data);
+    Logger.log('saveAssessment_ 結果: ' + JSON.stringify(result));
+  } catch(e) {
+    Logger.log('例外: ' + e.message + '\n' + e.stack);
+  }
+}
+
+// ===== テスト用: getAssessmentList_ 動作確認（testSaveAssessment後に実行） =====
+function testGetAssessmentList() {
+  try {
+    const result = getAssessmentList_('99999');
+    Logger.log('getAssessmentList_ 件数: ' + result.assessments.length);
+    if (result.assessments.length > 0) {
+      Logger.log('最新: ' + JSON.stringify(result.assessments[0]));
+    }
+  } catch(e) {
+    Logger.log('例外: ' + e.message + '\n' + e.stack);
+  }
 }
 
 // ===== PatientRegistry スキーマ移行（旧8列→新7列） =====

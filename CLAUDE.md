@@ -93,7 +93,7 @@ atopic-calculator/
 | doctorComment | 医師コメント |
 | nextAppointment | 次回受診日（医師入力） |
 | commentAt | コメント保存日時 |
-| status | 'pending' or 'reviewed' |
+| status | 'pending' / 'reviewed' / 'assessed' |
 
 ### AuditLog（認証ログ）
 | 列 | 内容 |
@@ -102,15 +102,37 @@ atopic-calculator/
 | patientNo | 患者番号 |
 | action | 操作内容 |
 
+### ClinicalAssessments（医師による重症度評価）
+| 列 | 内容 |
+|---|---|
+| assessmentId | UUID |
+| patientNo | 患者番号 |
+| visitDate | 受診日（YYYY-MM-DD） |
+| assessedAt | 評価日時（ISO8601） |
+| easiHead | EASI頭頸部スコア |
+| easiTrunk | EASI体幹スコア |
+| easiUpperLimb | EASI上肢スコア |
+| easiLowerLimb | EASI下肢スコア |
+| easiTotal | EASI合計（GAS側で自動計算） |
+| easiSeverity | 重症度ラベル（clear/mild/moderate/severe/very_severe） |
+| iga | IGAスコア（0〜4） |
+| lesionMapJson | 部位別皮疹JSON（将来用） |
+| notes | 所見メモ |
+| easiRawJson | EASI入力元データJSON（{head,trunk,upperLimb,lowerLimb} × {E,I,Ex,L,A}） |
+
 ---
 
 ## 4. GAS API 一覧（Code.gs）
 
-### doGet — ページ配信
+### doGet — ページ配信・JSONデータ取得
 | パラメータ | 説明 |
 |---|---|
 | `?page=form&p={patientNo}&t={token}` | 患者フォームを表示 |
 | `?page=dashboard&secret={CLINIC_SECRET}` | 医師ダッシュボードを表示 |
+| `?page=patientContext&p={patientNo}&t={token}` | 患者コンテキストをJSON返却 |
+| `?page=getAssessment&id={assessmentId}` | 評価1件をJSON返却 |
+| `?page=getAssessmentByVisit&p={patientNo}&d={visitDate}` | 指定受診日の評価一覧をJSON返却 |
+| `?page=getAssessmentList&p={patientNo}` | 患者の評価全履歴をJSON返却（降順） |
 
 ### doPost — データ操作
 | action | 呼び出し元 | 処理 |
@@ -121,6 +143,7 @@ atopic-calculator/
 | `submitPatientReport` | patient_form.html | アンケート回答をPatientReportsに保存 |
 | `getDashboardData` | doctor_dashboard.html | 未確認・確認済みレポート取得 |
 | `saveComment` | doctor_dashboard.html | 医師コメント保存・status='reviewed' |
+| `saveAssessment` | doctor_dashboard.html | EASI/IGA評価をClinicalAssessmentsに保存・JSONで返却 |
 
 ---
 
@@ -335,6 +358,8 @@ clasp push
 | 2026-05-21 | 悪化因子実装・動作確認済み |
 | 2026-05-21 | 患者連携・年齢自動設定実装 |
 | 2026-05-21 | QR認証フロー動作確認済み |
+| 2026-05-22 | ClinicalAssessmentsシート追加・EASI/IGA評価API実装（saveAssessment/getAssessment/getAssessmentByVisit/getAssessmentList） |
+| 2026-05-22 | ダッシュボードにEASI/IGA入力セクション追加（リアルタイム計算・保存・既存評価読み込み・EASI済みバッジ） |
 
 ---
 
