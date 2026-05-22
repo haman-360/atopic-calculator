@@ -601,6 +601,7 @@ function buildReportCard(r, type) {
             症状：${esc(SYMPTOM_LABELS[r.symptomScore] || '—')}
           </span>
           ${r.nrsScore !== null && r.nrsScore !== undefined ? `<span class="symptom-score-chip" style="background:#e8f5f0;color:#085041;">かゆみ NRS：${esc(String(r.nrsScore))} / 10</span>` : ''}
+          <span class="symptom-score-chip" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">POEM：${poemTotal} 点</span>
           ${r.lastAssessment ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）</span>` : ''}
           ${r.lastAssessment && r.lastAssessment.iga != null && r.lastAssessment.iga !== ''
             ? `<span class="assessed-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9;">IGA ${r.lastAssessment.iga}</span>`
