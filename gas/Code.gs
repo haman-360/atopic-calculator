@@ -395,6 +395,99 @@ function saveComment(reportId, comment, nextAppointment) {
   return { ok: false, reason: 'not_found', count: data.length - 1, firstId: String(data[1] ? data[1][0] : '') };
 }
 
+// ===== Claude相談用：患者包括データ取得 =====
+function getPatientConsultData(patientNo) {
+  if (!patientNo) return { ok: false, reason: 'patientNo is required' };
+  const pno = String(patientNo).trim();
+
+  // 1. PatientRegistry
+  const regSheet = getSheet_('PatientRegistry');
+  const regData  = regSheet.getDataRange().getValues();
+  let birthdate = '', notes = '';
+  for (let i = 1; i < regData.length; i++) {
+    if (String(regData[i][0]).trim() === pno) {
+      birthdate = regData[i][1] ? dateToStr_(regData[i][1]) : '';
+      notes     = String(regData[i][2] || '');
+      break;
+    }
+  }
+
+  // 2. VisitHistory: 該当患者の全件（visitDate 降順）
+  const vhSheet = getSheet_('VisitHistory');
+  const vhData  = vhSheet.getDataRange().getValues();
+  const visits  = [];
+  for (let i = 1; i < vhData.length; i++) {
+    if (String(vhData[i][0]).trim() !== pno) continue;
+    let drugsJson = [];
+    try { drugsJson = vhData[i][3] ? JSON.parse(vhData[i][3]) : []; } catch(e) {}
+    visits.push({
+      visitDate:     dateToStr_(vhData[i][1]),
+      nextVisitDate: dateToStr_(vhData[i][2]),
+      drugsJson:     drugsJson,
+      rxSummaryText: String(vhData[i][4] || '')
+    });
+  }
+  visits.sort(function(a, b) { return b.visitDate.localeCompare(a.visitDate); });
+
+  // 3. PatientReports: 直近5件（submittedAt 降順）、全フィールド
+  const prSheet   = getSheet_('PatientReports');
+  const prData    = prSheet.getDataRange().getValues();
+  const allReports = [];
+  for (let i = 1; i < prData.length; i++) {
+    const row = prData[i];
+    if (String(row[1]).trim() !== pno) continue;
+    let infectionSigns = [], poemScores = {}, medicationRemain = [], triggers = [], topicalUse = [];
+    try { infectionSigns   = row[5]  ? JSON.parse(row[5])  : []; } catch(e) {}
+    try { poemScores       = row[7]  ? JSON.parse(row[7])  : {}; } catch(e) {}
+    try { medicationRemain = row[8]  ? JSON.parse(row[8])  : []; } catch(e) {}
+    try { triggers         = row[13] ? JSON.parse(row[13]) : []; } catch(e) {}
+    try { topicalUse       = row[15] ? JSON.parse(row[15]) : []; } catch(e) {}
+    allReports.push({
+      reportId:        String(row[0]),
+      submittedAt:     row[2] ? new Date(row[2]).toISOString() : '',
+      symptomScore:    row[3],
+      nrsScore:        row[4] !== '' && row[4] !== null ? row[4] : null,
+      infectionSigns:  infectionSigns,
+      symptomNotes:    String(row[6] || ''),
+      poemScores:      poemScores,
+      medicationRemain:medicationRemain,
+      doctorComment:   String(row[9]  || ''),
+      nextAppointment: dateToStr_(row[10]),
+      status:          String(row[12] || 'pending'),
+      triggers:        triggers,
+      triggerNote:     String(row[14] || ''),
+      topicalUse:      topicalUse
+    });
+  }
+  allReports.sort(function(a, b) { return b.submittedAt.localeCompare(a.submittedAt); });
+  const reports = allReports.slice(0, 5);
+
+  // 4. ClinicalAssessments: 全件（visitDate 降順）
+  const assessments = [];
+  try {
+    const caSheet = getOrCreateClinicalAssessmentsSheet_();
+    if (caSheet) {
+      const caData = caSheet.getDataRange().getValues();
+      for (let i = 1; i < caData.length; i++) {
+        if (String(caData[i][1]).trim() !== pno) continue;
+        assessments.push(assessmentRowToObj_(caData[i]));
+      }
+      assessments.sort(function(a, b) { return b.visitDate.localeCompare(a.visitDate); });
+    }
+  } catch(e) {}
+
+  return {
+    ok:          true,
+    patientNo:   pno,
+    birthdate:   birthdate,
+    ageLabel:    calcAgeLabel_(birthdate),
+    notes:       notes,
+    visits:      visits,
+    reports:     reports,
+    assessments: assessments
+  };
+}
+
 // ===== 年齢計算ユーティリティ =====
 function calcAgeLabel_(birthdate) {
   if (!birthdate) return '';
@@ -675,7 +768,7 @@ function assessmentRowToObj_(row) {
   return {
     assessmentId:   String(row[0]),
     patientNo:      String(row[1]),
-    visitDate:      String(row[2]),
+    visitDate:      dateToStr_(row[2]),
     assessedAt:     String(row[3]),
     easiHead:       row[4],
     easiTrunk:      row[5],

@@ -196,7 +196,7 @@ body { max-width: none; }
   margin-bottom: 8px;
 }
 .easi-table th, .easi-table td {
-  padding: 5px 4px;
+  padding: 4px 3px;
   text-align: left;
   vertical-align: middle;
   border-bottom: 1px solid var(--border);
@@ -204,25 +204,25 @@ body { max-width: none; }
 .easi-table th {
   color: var(--text2);
   font-weight: 700;
-  font-size: 11px;
+  font-size: 10px;
   white-space: nowrap;
   background: var(--surface2);
 }
 .easi-table .easi-part-label {
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
-  min-width: 52px;
+  min-width: 44px;
 }
 .easi-btn-group { display: flex; gap: 3px; flex-wrap: nowrap; }
 .easi-btn {
-  min-width: 28px;
-  padding: 5px 4px;
+  min-width: 24px;
+  padding: 4px 3px;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--surface2);
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
   font-family: inherit;
   font-weight: 600;
   color: var(--text2);
@@ -264,7 +264,7 @@ body { max-width: none; }
   border-radius: 4px;
   background: var(--surface2);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   font-family: inherit;
   font-weight: 700;
   color: var(--text2);
@@ -347,7 +347,10 @@ body { max-width: none; }
     <h1>🌿 カルテダッシュボード</h1>
     <div style="font-size:11px;color:var(--text2);margin-top:2px;">はまこどもクリニック</div>
   </div>
-  <button class="refresh-btn" onclick="loadData()">🔄 更新</button>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button class="refresh-btn" onclick="loadData()">🔄 更新</button>
+    <button class="refresh-btn" onclick="openClaudeModal(null)" style="background:var(--teal);color:white;">🤖 Claude相談</button>
+  </div>
 </div>
 
 <div class="main">
@@ -564,23 +567,23 @@ function buildReportCard(r, type) {
   `;
   }
 
-  // 医師コメント欄 or 保存済みコメント
-  const commentHtml = type === 'pending' ? `
+  // 医師コメント欄（統一・常時編集可能）
+  const commentAt = r.commentAt ? new Date(r.commentAt) : null;
+  const commentAtStr = commentAt ? commentAt.toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
+  const commentHtml = `
     <div class="comment-area">
-      <label>🖊 医師コメント（処方・次回受診など）</label>
-      <textarea class="comment-input" id="comment-${esc(r.reportId)}" placeholder="例：ロコイドを減量して週3回に。次回2週間後。">${esc(r.doctorComment || '')}</textarea>
-      <div class="next-appt-row">
-        <label>次回受診日</label>
-        <input type="date" id="appt-${esc(r.reportId)}" value="${esc(r.nextAppointment || '')}">
+      <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:6px;">🖊 医師コメント（処方・次回受診など）</label>
+      <textarea class="comment-input" id="comment-${esc(r.reportId)}"
+        placeholder="例：ロコイドを減量して週3回に。次回2週間後。"
+        style="min-height:80px;">${esc(r.doctorComment || '')}</textarea>
+      <div class="next-appt-row" style="display:flex;align-items:center;gap:10px;margin-top:8px;margin-bottom:8px;">
+        <label style="font-size:12px;font-weight:700;color:var(--text2);white-space:nowrap;margin:0;">次回受診日</label>
+        <input type="date" id="appt-${esc(r.reportId)}" value="${esc(r.nextAppointment || '')}" style="flex:1;">
       </div>
-      <button class="save-btn" onclick="saveComment('${esc(r.reportId)}')">保存して確認済みにする</button>
-    </div>
-  ` : `
-    <div class="comment-area">
-      <div class="section-title">医師コメント</div>
-      ${r.doctorComment ? `<div class="saved-comment">${esc(r.doctorComment)}<div class="c-meta">${r.nextAppointment ? '次回：' + esc(r.nextAppointment) + '　' : ''}${esc(r.commentAt ? new Date(r.commentAt).toLocaleString('ja-JP',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '')}</div></div>` : '<p style="font-size:12px;color:var(--text2);">コメントなし</p>'}
-    </div>
-  `;
+      ${commentAtStr ? `<div style="font-size:11px;color:var(--text3);margin-bottom:8px;">最終保存：${commentAtStr}</div>` : ''}
+      <button class="save-btn" id="unified-save-${esc(r.reportId)}"
+        onclick="unifiedSave('${esc(r.reportId)}','${esc(r.patientNo)}')">💾 保存</button>
+    </div>`;
 
   return `
     <div class="report-card${type === 'reviewed' ? ' reviewed' : ''}" id="card-${esc(r.reportId)}">
@@ -599,6 +602,12 @@ function buildReportCard(r, type) {
           </span>
           ${r.nrsScore !== null && r.nrsScore !== undefined ? `<span class="symptom-score-chip" style="background:#e8f5f0;color:#085041;">かゆみ NRS：${esc(String(r.nrsScore))} / 10</span>` : ''}
           ${r.lastAssessment ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）</span>` : ''}
+          ${r.lastAssessment && r.lastAssessment.iga != null && r.lastAssessment.iga !== ''
+            ? `<span class="assessed-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9;">IGA ${r.lastAssessment.iga}</span>`
+            : ''}
+          <button onclick="openClaudeModal('${esc(r.patientNo)}')"
+            title="Claude相談"
+            style="padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;line-height:1;">🤖</button>
         </div>
       </div>
 
@@ -628,7 +637,6 @@ function buildReportCard(r, type) {
       ${triggersHtml}
       ${rxHtml}
       ${buildEasiSection(r, type)}
-      ${buildClaudeSection(r, type)}
       ${commentHtml}
     </div>`;
 }
@@ -687,7 +695,7 @@ function buildEasiSection(r, type) {
         <tbody>${rows}</tbody>
       </table>
     </div>
-    <div class="easi-total-row">
+    <div class="easi-total-row" id="easi-total-wrapper-${rid}">
       <span style="font-size:14px;font-weight:700;">EASI合計：<span id="easi-total-${rid}" style="color:var(--teal);">0</span></span>
       <span class="easi-severity" id="easi-severity-${rid}" style="background:#f5f5f5;color:#9e9e9e;">Clear</span>
     </div>
@@ -700,8 +708,7 @@ function buildEasiSection(r, type) {
     <div style="margin-bottom:10px;">
       <div class="section-title" style="margin-top:0;">所見メモ（任意）</div>
       <textarea id="easi-notes-${rid}" class="comment-input" style="min-height:50px;" placeholder="所見を入力..."></textarea>
-    </div>
-    <button class="save-btn" id="easi-save-${rid}" onclick="saveAssessment('${rid}','${esc(r.patientNo)}')">評価を保存</button>`;
+    </div>`;
 }
 
 // ===== EASI状態初期化（DOM生成後に呼び出す） =====
@@ -774,6 +781,13 @@ function updateEasiDisplay(reportId) {
     sevEl.textContent = sev.label;
     sevEl.style.background = sev.bg;
     sevEl.style.color = sev.color;
+    const wrapEl = document.getElementById('easi-total-wrapper-' + reportId);
+    if (wrapEl) {
+      wrapEl.style.background = sev.bg;
+      wrapEl.style.borderRadius = '6px';
+      wrapEl.style.padding = '6px 10px';
+      wrapEl.style.transition = 'background 0.2s';
+    }
   }
 
   // IGAボタン選択状態
@@ -854,25 +868,29 @@ function renderChart(reportId, poemData, assessments) {
   const canvas      = document.getElementById('chart-' + reportId);
   if (!canvas) return;
 
-  // データ不足時（合計2点未満）
-  if (poemData.length + assessments.length <= 1) {
+  // 日付ラベル: 両データの和集合・昇順（visitDateをYYYY-MM-DDに正規化）
+  const dateSet = new Set();
+  poemData.forEach(function(d) { dateSet.add(d.date); });
+  assessments.forEach(function(a) {
+    const vd = a.visitDate ? String(a.visitDate).slice(0, 10) : null;
+    if (vd) dateSet.add(vd);
+  });
+  const labels = Array.from(dateSet).sort();
+
+  // データ不足時（ユニーク日付が1件以下）
+  if (labels.length <= 1) {
     if (placeholder) placeholder.textContent = 'データが蓄積されるとグラフが表示されます（2回目以降の受診から）';
     return;
   }
-
-  // 日付ラベル: 両データの和集合・昇順
-  const dateSet = new Set();
-  poemData.forEach(function(d) { dateSet.add(d.date); });
-  assessments.forEach(function(a) { if (a.visitDate) dateSet.add(a.visitDate); });
-  const labels = Array.from(dateSet).sort();
 
   // 日付→値のマップ
   const poemMap = {}, nrsMap = {}, easiMap = {}, igaMap = {};
   poemData.forEach(function(d) { poemMap[d.date] = d.poemTotal; nrsMap[d.date] = d.nrsScore; });
   assessments.forEach(function(a) {
-    if (a.visitDate) {
-      easiMap[a.visitDate] = a.easiTotal;
-      igaMap[a.visitDate]  = (a.iga !== null && a.iga !== undefined) ? a.iga : null;
+    const vd = a.visitDate ? String(a.visitDate).slice(0, 10) : null;
+    if (vd) {
+      easiMap[vd] = a.easiTotal;
+      igaMap[vd]  = (a.iga !== null && a.iga !== undefined) ? a.iga : null;
     }
   });
 
@@ -948,7 +966,7 @@ function renderChart(reportId, poemData, assessments) {
       },
       scales: {
         x: {
-          ticks: { font: { size: 10 }, maxRotation: 30 },
+          ticks: { font: { size: 10 }, maxRotation: 30, callback: function(value) { var lbl = this.getLabelForValue(value); if (!lbl) return lbl; var p = String(lbl).split('-'); return p.length === 3 ? parseInt(p[1]) + '/' + parseInt(p[2]) : lbl; } },
           grid: { display: false }
         },
         y: {
@@ -979,163 +997,75 @@ function findReport(reportId) {
   return null;
 }
 
-function buildClaudeSection(r, type) {
-  const rid = esc(r.reportId);
-  const hasAssessment = !!r.lastAssessment;
-  const warnStyle = hasAssessment ? 'display:none;' : '';
-  return `
-    <div class="claude-section">
-      <div class="section-title">🤖 Claude治療相談</div>
-      <div id="claude-warn-${rid}" class="claude-warn" style="${warnStyle}">⚠️ EASI/IGA評価を保存すると相談プロンプトが生成できます</div>
-      <textarea id="claude-q-${rid}" class="comment-input" style="min-height:60px;" placeholder="例：ステロイドのランクアップを検討しています。他に考慮すべき点はありますか？"></textarea>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <button class="save-btn" style="background:var(--teal);" onclick="generateClaudePrompt('${rid}')">Claudeに相談する</button>
-      </div>
-      <div id="claude-output-${rid}" style="display:none;margin-top:12px;">
-        <textarea id="claude-prompt-${rid}" class="claude-prompt-area" readonly></textarea>
-        <button id="copy-btn-${rid}" class="save-btn" style="margin-top:8px;" onclick="copyClaudePrompt('${rid}')">📋 クリップボードにコピー</button>
-      </div>
-    </div>`;
-}
 
-function generateClaudePrompt(reportId) {
-  const r = findReport(reportId);
-  if (!r) return;
-
-  if (!r.lastAssessment) {
-    const warnEl = document.getElementById('claude-warn-' + reportId);
-    if (warnEl) warnEl.style.display = 'block';
-    showToast('評価を先に保存してください');
-    return;
+function hasEasiInput(reportId) {
+  const s = easiState[reportId];
+  if (!s) return false;
+  for (const p of ['head', 'trunk', 'upperLimb', 'lowerLimb']) {
+    const pt = s[p] || {};
+    if ((pt.E || 0) + (pt.I || 0) + (pt.Ex || 0) + (pt.L || 0) + (pt.A || 0) > 0) return true;
   }
-
-  const q = (document.getElementById('claude-q-' + reportId) || {}).value || '';
-  const prompt = buildPromptText(r, q);
-
-  const promptEl = document.getElementById('claude-prompt-' + reportId);
-  const outputEl = document.getElementById('claude-output-' + reportId);
-  if (promptEl) promptEl.value = prompt;
-  if (outputEl) outputEl.style.display = 'block';
-  if (promptEl) promptEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  if ((s.iga || 0) > 0) return true;
+  const notesEl = document.getElementById('easi-notes-' + reportId);
+  if (notesEl && notesEl.value.trim()) return true;
+  return false;
 }
 
-function buildPromptText(r, question) {
-  const a = r.lastAssessment;
-  const AGE_GROUP_LABELS = {
-    infant: '0〜1歳未満', child1: '1〜3歳未満', child3: '3〜6歳未満',
-    child10: '6〜12歳未満', adult: '12歳以上'
-  };
-  const POEM_SEVERITY_TEXT = function(t) {
-    if (t <= 2)  return 'Clear';
-    if (t <= 7)  return 'Mild';
-    if (t <= 16) return 'Moderate';
-    if (t <= 24) return 'Severe';
-    return 'Very Severe';
-  };
-
-  const poemTotal = Object.values(r.poemScores || {}).reduce(function(s,v){ return s+(v||0); }, 0);
-  const poemDetails = Object.entries(POEM_LABELS)
-    .map(function(e){ return e[1] + ':' + ((r.poemScores||{})[e[0]] != null ? (r.poemScores||{})[e[0]] : '—'); })
-    .join(' / ');
-
-  const infectionText = (r.infectionSigns && r.infectionSigns.length)
-    ? r.infectionSigns.map(function(k){ return INFECTION_LABELS[k] || k; }).join('、')
-    : 'なし';
-
-  const triggerParts = (r.triggers || []).map(function(k){ return TRIGGER_LABELS[k] || k; });
-  if (r.triggerNote) triggerParts.push(r.triggerNote);
-  const triggersText = triggerParts.length ? triggerParts.join('、') : '特になし';
-
-  var drugsText = '情報なし';
-  if (r.lastRx) {
-    const drugs = r.lastRx.drugsJson || [];
-    const lines = drugs.map(function(d){
-      return d.scheduleText || (d.name + (d.partLabel ? '（' + d.partLabel + '）' : '') + (d.freqLabel ? '　' + d.freqLabel : ''));
-    });
-    drugsText = lines.length ? lines.join('\n') : (r.lastRx.rxSummaryText || '情報なし');
-  }
-
-  const medStatus = (r.medicationRemain || []).length
-    ? r.medicationRemain.map(function(m){ return m.drugName + ': ' + (REMAIN_LABELS[m.remainLevel] || '—'); }).join('\n')
-    : '情報なし';
-
-  const lines = [
-    '# アトピー性皮膚炎 治療方針相談',
-    '',
-    '## 患者基本情報',
-    '年齢グループ: ' + (AGE_GROUP_LABELS[r.ageGroup] || r.ageGroup || '不明') + '（' + (r.ageLabel || '') + '）',
-    '受診日: ' + (a.visitDate || new Date().toISOString().slice(0, 10)),
-    '',
-    '## 客観的評価（医師）',
-    'EASI合計: ' + a.easiTotal + '点（' + a.easiSeverity + '）',
-    '  頭頸部: ' + a.easiHead + ' / 体幹: ' + a.easiTrunk + ' / 上肢: ' + a.easiUpperLimb + ' / 下肢: ' + a.easiLowerLimb,
-    'IGA: ' + (a.iga !== null && a.iga !== undefined ? a.iga : '—') + ' / 4',
-    a.notes ? '所見メモ: ' + a.notes : null,
-    '',
-    '## 主観的評価（患者アンケート）',
-    'POEM合計: ' + poemTotal + ' / 28（' + POEM_SEVERITY_TEXT(poemTotal) + '）',
-    '  7項目詳細: ' + poemDetails,
-    (r.nrsScore !== null && r.nrsScore !== undefined) ? 'かゆみNRS: ' + r.nrsScore + ' / 10' : 'かゆみNRS: 情報なし',
-    '感染徴候: ' + infectionText,
-    '悪化因子: ' + triggersText,
-    '',
-    '## 現在の処方（前回）',
-    drugsText,
-    '',
-    '## 外用状況（患者申告）',
-    medStatus,
-    '',
-    '## 医師からの相談内容',
-    question || '（未記入）'
-  ];
-  return lines.filter(function(l){ return l !== null; }).join('\n');
-}
-
-function copyClaudePrompt(reportId) {
-  const el = document.getElementById('claude-prompt-' + reportId);
-  if (!el) return;
-  const btn = document.getElementById('copy-btn-' + reportId);
-  const reset = function() {
-    if (btn) setTimeout(function(){ btn.textContent = '📋 クリップボードにコピー'; }, 2000);
-  };
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(el.value).then(function() {
-      if (btn) btn.textContent = '✓ コピーしました';
-      reset();
-    }).catch(function() {
-      el.select(); document.execCommand('copy');
-      if (btn) btn.textContent = '✓ コピーしました';
-      reset();
-    });
-  } else {
-    el.select(); document.execCommand('copy');
-    if (btn) btn.textContent = '✓ コピーしました';
-    reset();
-  }
-}
-
-function saveComment(reportId) {
-  const comment = document.getElementById('comment-' + reportId).value.trim();
-  const nextAppt = document.getElementById('appt-' + reportId).value;
-
-  const btn = document.querySelector(`#card-${reportId} .save-btn`);
+function unifiedSave(reportId, patientNo) {
+  const btn = document.getElementById('unified-save-' + reportId);
   if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
 
-  google.script.run
-    .withSuccessHandler(res => {
-      if (btn) { btn.textContent = '保存して確認済みにする'; btn.disabled = false; }
-      if (res.ok) {
-        showToast('保存しました');
-        loadData();
-      } else {
-        showToast('保存失敗: ' + esc(res.reason || '') + (res.firstId ? '（ID不一致）' : ''));
-      }
-    })
-    .withFailureHandler(err => {
-      if (btn) { btn.textContent = '保存して確認済みにする'; btn.disabled = false; }
-      showToast('エラー: ' + esc(err.message || '不明なエラー'));
-    })
-    .saveComment(reportId, comment, nextAppt);
+  const comment  = (document.getElementById('comment-' + reportId) || {}).value || '';
+  const nextAppt = (document.getElementById('appt-'    + reportId) || {}).value || '';
+
+  function doSaveComment() {
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (btn) { btn.textContent = '💾 保存'; btn.disabled = false; }
+        if (res && res.ok) {
+          showToast('✅ 保存しました');
+          loadData();
+        } else {
+          showToast('保存失敗: ' + ((res && res.reason) || '不明'));
+        }
+      })
+      .withFailureHandler(function(err) {
+        if (btn) { btn.textContent = '💾 保存'; btn.disabled = false; }
+        showToast('エラー: ' + (err.message || '不明なエラー'));
+      })
+      .saveComment(reportId, comment, nextAppt);
+  }
+
+  if (hasEasiInput(reportId)) {
+    const s = easiState[reportId];
+    const visitDate = new Date().toISOString().slice(0, 10);
+    const notesEl = document.getElementById('easi-notes-' + reportId);
+    const payload = {
+      action: 'saveAssessment',
+      patientNo: patientNo,
+      visitDate: visitDate,
+      easi: { head: s.head || {}, trunk: s.trunk || {}, upperLimb: s.upperLimb || {}, lowerLimb: s.lowerLimb || {} },
+      iga: s.iga || 0,
+      reportId: reportId,
+      notes: notesEl ? notesEl.value : ''
+    };
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.ok) {
+          doSaveComment();
+        } else {
+          if (btn) { btn.textContent = '💾 保存'; btn.disabled = false; }
+          showToast('評価保存失敗: ' + ((res && res.reason) || '不明'));
+        }
+      })
+      .withFailureHandler(function(err) {
+        if (btn) { btn.textContent = '💾 保存'; btn.disabled = false; }
+        showToast('エラー: ' + (err.message || '不明なエラー'));
+      })
+      .saveAssessment(payload);
+  } else {
+    doSaveComment();
+  }
 }
 
 function switchTab(tab) {
@@ -1167,8 +1097,179 @@ function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+// ===== Claude相談モーダル =====
+function openClaudeModal(patientNo) {
+  document.getElementById('modal-patient-id').value = patientNo || '';
+  document.getElementById('modal-status').textContent = '';
+  document.getElementById('modal-prompt-area').style.display = 'none';
+  document.getElementById('modal-question').value = '';
+  document.getElementById('claude-modal').style.display = 'block';
+}
+function closeClaudeModal() {
+  document.getElementById('claude-modal').style.display = 'none';
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeClaudeModal();
+});
+
+function fetchConsultData() {
+  const patientNo = document.getElementById('modal-patient-id').value.trim();
+  if (!patientNo) { showToast('診察券番号を入力してください'); return; }
+  const statusEl = document.getElementById('modal-status');
+  statusEl.textContent = 'データ取得中...';
+  document.getElementById('modal-prompt-area').style.display = 'none';
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (!res || !res.ok) {
+        statusEl.textContent = '取得失敗: ' + ((res && res.reason) || '不明なエラー');
+        return;
+      }
+      const question = document.getElementById('modal-question').value || '';
+      const prompt = buildConsultPrompt(res, question);
+      document.getElementById('modal-prompt-text').value = prompt;
+      document.getElementById('modal-prompt-area').style.display = 'block';
+      statusEl.textContent = '✓ 取得完了（訪問 ' + res.visits.length + '件 / レポート ' + res.reports.length + '件 / 評価 ' + res.assessments.length + '件）';
+    })
+    .withFailureHandler(function(err) {
+      statusEl.textContent = 'エラー: ' + (err.message || '不明なエラー');
+    })
+    .getPatientConsultData(patientNo);
+}
+
+function copyModalPrompt() {
+  const el  = document.getElementById('modal-prompt-text');
+  const btn = document.getElementById('modal-copy-btn');
+  if (!el) return;
+  const done = function() {
+    if (btn) { btn.textContent = '✓ コピーしました'; setTimeout(function(){ btn.textContent = '📋 クリップボードにコピー'; }, 2000); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(el.value).then(done).catch(function(){ el.select(); document.execCommand('copy'); done(); });
+  } else { el.select(); document.execCommand('copy'); done(); }
+}
+
+function buildConsultPrompt(data, question) {
+  const SYMPTOM_LBL = ['症状なし','軽度','中等度','高度','最重度'];
+  const POEM_LBL = {itch:'かゆみ',sleep:'睡眠',bleed:'出血',weep:'浸出液',crack:'ひび割れ',flake:'皮膚のむけ',dry:'乾燥'};
+  const INFECT_LBL = {purulent:'膿性分泌物',crust:'黄色痂皮',oozing:'浸出液増加',pain:'痛み・熱感'};
+  const TRIGGER_LBL = {sweat:'汗',dry_skin:'乾燥',pollen:'花粉',pool:'プール',clothing:'衣類',stress:'ストレス',food:'食物',dust:'ハウスダスト',pet:'ペット',uv:'紫外線'};
+  const REMAIN_LBL  = {0:'残なし',1:'ほとんどない',2:'少し残ってる',3:'たくさん残ってる'};
+  const EASI_SEV = {clear:'Clear',mild:'Mild',moderate:'Moderate',severe:'Severe',very_severe:'Very Severe'};
+
+  function poemSev(t) { return t===0?'Clear':t<=2?'Almost Clear':t<=7?'Mild':t<=16?'Moderate':t<=24?'Severe':'Very Severe'; }
+
+  const lines = [];
+  lines.push('# アトピー性皮膚炎 治療相談');
+  lines.push('');
+  lines.push('## 患者基本情報');
+  lines.push('- 診察券番号: ' + data.patientNo);
+  lines.push('- 生年月日: ' + (data.birthdate || '不明'));
+  lines.push('- 年齢: ' + (data.ageLabel || '不明'));
+  if (data.notes) lines.push('- 特記事項: ' + data.notes);
+  lines.push('');
+
+  lines.push('## 直近' + data.reports.length + '件のPRO（患者報告アウトカム）');
+  data.reports.forEach(function(r, i) {
+    const poemTotal = Object.values(r.poemScores || {}).reduce(function(s,v){ return s + (Number(v)||0); }, 0);
+    lines.push('');
+    lines.push('### レポート' + (i+1) + '（' + (r.submittedAt ? r.submittedAt.slice(0,10) : '不明') + '）  status: ' + r.status);
+    lines.push('- 全体症状: ' + (SYMPTOM_LBL[r.symptomScore] || r.symptomScore));
+    lines.push('- かゆみNRS: ' + (r.nrsScore != null ? r.nrsScore + '/10' : '未回答'));
+    lines.push('- POEM合計: ' + poemTotal + '/28（' + poemSev(poemTotal) + '）');
+    const poemDetails = Object.entries(POEM_LBL).map(function(e) {
+      return (POEM_LBL[e[0]] || e[0]) + ':' + ((r.poemScores && r.poemScores[e[0]] != null) ? r.poemScores[e[0]] : '—');
+    });
+    lines.push('  ' + poemDetails.join(' / '));
+    if (r.infectionSigns && r.infectionSigns.length) {
+      lines.push('- 感染徴候: ' + r.infectionSigns.map(function(k){ return INFECT_LBL[k]||k; }).join('、'));
+    }
+    const triggers = (r.triggers||[]).map(function(k){ return TRIGGER_LBL[k]||k; });
+    if (r.triggerNote) triggers.push(r.triggerNote);
+    if (triggers.length) lines.push('- 悪化因子: ' + triggers.join('、'));
+    if (r.medicationRemain && r.medicationRemain.length) {
+      const rem = r.medicationRemain.map(function(m){ return m.drugName + ':' + (REMAIN_LBL[m.remainLevel]||'—'); }).join(' / ');
+      lines.push('- 薬残量: ' + rem);
+    }
+    if (r.symptomNotes) lines.push('- 自由記述: ' + r.symptomNotes);
+    if (r.doctorComment) lines.push('- 医師コメント: ' + r.doctorComment);
+  });
+  lines.push('');
+
+  lines.push('## 全訪問・処方履歴（' + data.visits.length + '件）');
+  if (data.visits.length === 0) {
+    lines.push('（記録なし）');
+  } else {
+    data.visits.forEach(function(v) {
+      const nv = v.nextVisitDate ? '（次回: ' + v.nextVisitDate + '）' : '';
+      lines.push('- ' + v.visitDate + nv);
+      if (v.rxSummaryText) {
+        v.rxSummaryText.split('\n').forEach(function(l){ if(l.trim()) lines.push('  ' + l); });
+      } else if (v.drugsJson && v.drugsJson.length) {
+        v.drugsJson.forEach(function(d){ lines.push('  ' + d.name + (d.partLabel?'（'+d.partLabel+'）':'') + (d.freqLabel?' '+d.freqLabel:'') + (d.prescribedG?' '+d.prescribedG+'g':'')); });
+      }
+    });
+  }
+  lines.push('');
+
+  lines.push('## EASI/IGA評価履歴（' + data.assessments.length + '件）');
+  if (data.assessments.length === 0) {
+    lines.push('（評価記録なし）');
+  } else {
+    data.assessments.forEach(function(a) {
+      const date = a.visitDate || (a.assessedAt ? a.assessedAt.slice(0,10) : '不明');
+      const sev  = EASI_SEV[a.easiSeverity] || a.easiSeverity || '';
+      lines.push('- ' + date + '  EASI: ' + a.easiTotal + '（' + sev + '）  IGA: ' + (a.iga != null ? a.iga : '—'));
+      if (a.notes) lines.push('  所見: ' + a.notes);
+    });
+  }
+  lines.push('');
+
+  lines.push('## 医師からの相談内容');
+  lines.push(question || '（未記入）');
+
+  return lines.join('\n');
+}
+
 // 起動
 window.addEventListener('load', loadData);
 </script>
+
+<!-- Claude相談モーダル -->
+<div id="claude-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:300;overflow-y:auto;padding:20px 0;" onclick="if(event.target===this)closeClaudeModal()">
+  <div style="background:var(--surface);border-radius:var(--radius);max-width:660px;margin:0 auto;padding:24px;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+    <button onclick="closeClaudeModal()"
+      style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:var(--text2);line-height:1;">✕</button>
+    <h2 style="font-size:16px;font-weight:700;margin-bottom:16px;color:var(--text);">🤖 Claude相談</h2>
+
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input type="text" id="modal-patient-id" placeholder="診察券番号（例：01631）" inputmode="numeric"
+        style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:15px;font-family:inherit;">
+      <button onclick="fetchConsultData()"
+        style="padding:9px 18px;background:var(--teal);color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-family:inherit;font-weight:700;cursor:pointer;white-space:nowrap;">
+        データ取得
+      </button>
+    </div>
+
+    <div id="modal-status" style="font-size:12px;color:var(--text2);min-height:16px;margin-bottom:10px;"></div>
+
+    <div style="margin-bottom:10px;">
+      <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px;">相談したいこと（任意）</label>
+      <textarea id="modal-question"
+        style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:13px;font-family:inherit;min-height:60px;resize:vertical;box-sizing:border-box;"
+        placeholder="例：デュピクセントの適応を検討しています。現在の重症度から判断をお願いします。"></textarea>
+    </div>
+
+    <div id="modal-prompt-area" style="display:none;">
+      <label style="font-size:12px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px;">プロンプト（コピーしてClaude.aiに貼り付けてください）</label>
+      <textarea id="modal-prompt-text" readonly
+        style="width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;font-family:monospace;min-height:240px;resize:vertical;box-sizing:border-box;background:var(--bg);color:var(--text);"></textarea>
+      <button id="modal-copy-btn" onclick="copyModalPrompt()"
+        style="margin-top:10px;padding:9px 22px;background:var(--teal);color:white;border:none;border-radius:var(--radius-sm);font-size:14px;font-family:inherit;font-weight:700;cursor:pointer;">
+        📋 クリップボードにコピー
+      </button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
