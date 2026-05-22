@@ -289,6 +289,34 @@ body { max-width: none; }
   background: #e8f5e9;
   color: #2e7d32;
 }
+/* ===== Claude相談 ===== */
+.claude-section {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 14px;
+}
+.claude-prompt-area {
+  width: 100%;
+  min-height: 240px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-family: monospace;
+  line-height: 1.6;
+  resize: vertical;
+  background: var(--surface2);
+  color: var(--text);
+  box-sizing: border-box;
+}
+.claude-warn {
+  background: var(--amber-bg);
+  color: var(--amber-text);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
 </style>
 </head>
 <body>
@@ -562,6 +590,7 @@ function buildReportCard(r, type) {
       ${triggersHtml}
       ${rxHtml}
       ${buildEasiSection(r, type)}
+      ${buildClaudeSection(r, type)}
       ${commentHtml}
     </div>`;
 }
@@ -764,6 +793,149 @@ function saveAssessment(reportId, patientNo) {
       showToast('エラー: ' + esc(err.message || '不明なエラー'));
     })
     .saveAssessment_(payload);
+}
+
+// ===== Claude相談プロンプト生成 =====
+
+function findReport(reportId) {
+  for (const r of (dashboardData.pending  || [])) if (r.reportId === reportId) return r;
+  for (const r of (dashboardData.reviewed || [])) if (r.reportId === reportId) return r;
+  return null;
+}
+
+function buildClaudeSection(r, type) {
+  const rid = esc(r.reportId);
+  const hasAssessment = !!r.lastAssessment;
+  const warnStyle = hasAssessment ? 'display:none;' : '';
+  return `
+    <div class="claude-section">
+      <div class="section-title">🤖 Claude治療相談</div>
+      <div id="claude-warn-${rid}" class="claude-warn" style="${warnStyle}">⚠️ EASI/IGA評価を保存すると相談プロンプトが生成できます</div>
+      <textarea id="claude-q-${rid}" class="comment-input" style="min-height:60px;" placeholder="例：ステロイドのランクアップを検討しています。他に考慮すべき点はありますか？"></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="save-btn" style="background:var(--teal);" onclick="generateClaudePrompt('${rid}')">Claudeに相談する</button>
+      </div>
+      <div id="claude-output-${rid}" style="display:none;margin-top:12px;">
+        <textarea id="claude-prompt-${rid}" class="claude-prompt-area" readonly></textarea>
+        <button id="copy-btn-${rid}" class="save-btn" style="margin-top:8px;" onclick="copyClaudePrompt('${rid}')">📋 クリップボードにコピー</button>
+      </div>
+    </div>`;
+}
+
+function generateClaudePrompt(reportId) {
+  const r = findReport(reportId);
+  if (!r) return;
+
+  if (!r.lastAssessment) {
+    const warnEl = document.getElementById('claude-warn-' + reportId);
+    if (warnEl) warnEl.style.display = 'block';
+    showToast('評価を先に保存してください');
+    return;
+  }
+
+  const q = (document.getElementById('claude-q-' + reportId) || {}).value || '';
+  const prompt = buildPromptText(r, q);
+
+  const promptEl = document.getElementById('claude-prompt-' + reportId);
+  const outputEl = document.getElementById('claude-output-' + reportId);
+  if (promptEl) promptEl.value = prompt;
+  if (outputEl) outputEl.style.display = 'block';
+  if (promptEl) promptEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function buildPromptText(r, question) {
+  const a = r.lastAssessment;
+  const AGE_GROUP_LABELS = {
+    infant: '0〜1歳未満', child1: '1〜3歳未満', child3: '3〜6歳未満',
+    child10: '6〜12歳未満', adult: '12歳以上'
+  };
+  const POEM_SEVERITY_TEXT = function(t) {
+    if (t <= 2)  return 'Clear';
+    if (t <= 7)  return 'Mild';
+    if (t <= 16) return 'Moderate';
+    if (t <= 24) return 'Severe';
+    return 'Very Severe';
+  };
+
+  const poemTotal = Object.values(r.poemScores || {}).reduce(function(s,v){ return s+(v||0); }, 0);
+  const poemDetails = Object.entries(POEM_LABELS)
+    .map(function(e){ return e[1] + ':' + ((r.poemScores||{})[e[0]] != null ? (r.poemScores||{})[e[0]] : '—'); })
+    .join(' / ');
+
+  const infectionText = (r.infectionSigns && r.infectionSigns.length)
+    ? r.infectionSigns.map(function(k){ return INFECTION_LABELS[k] || k; }).join('、')
+    : 'なし';
+
+  const triggerParts = (r.triggers || []).map(function(k){ return TRIGGER_LABELS[k] || k; });
+  if (r.triggerNote) triggerParts.push(r.triggerNote);
+  const triggersText = triggerParts.length ? triggerParts.join('、') : '特になし';
+
+  var drugsText = '情報なし';
+  if (r.lastRx) {
+    const drugs = r.lastRx.drugsJson || [];
+    const lines = drugs.map(function(d){
+      return d.scheduleText || (d.name + (d.partLabel ? '（' + d.partLabel + '）' : '') + (d.freqLabel ? '　' + d.freqLabel : ''));
+    });
+    drugsText = lines.length ? lines.join('\n') : (r.lastRx.rxSummaryText || '情報なし');
+  }
+
+  const medStatus = (r.medicationRemain || []).length
+    ? r.medicationRemain.map(function(m){ return m.drugName + ': ' + (REMAIN_LABELS[m.remainLevel] || '—'); }).join('\n')
+    : '情報なし';
+
+  const lines = [
+    '# アトピー性皮膚炎 治療方針相談',
+    '',
+    '## 患者基本情報',
+    '年齢グループ: ' + (AGE_GROUP_LABELS[r.ageGroup] || r.ageGroup || '不明') + '（' + (r.ageLabel || '') + '）',
+    '受診日: ' + (a.visitDate || new Date().toISOString().slice(0, 10)),
+    '',
+    '## 客観的評価（医師）',
+    'EASI合計: ' + a.easiTotal + '点（' + a.easiSeverity + '）',
+    '  頭頸部: ' + a.easiHead + ' / 体幹: ' + a.easiTrunk + ' / 上肢: ' + a.easiUpperLimb + ' / 下肢: ' + a.easiLowerLimb,
+    'IGA: ' + (a.iga !== null && a.iga !== undefined ? a.iga : '—') + ' / 4',
+    a.notes ? '所見メモ: ' + a.notes : null,
+    '',
+    '## 主観的評価（患者アンケート）',
+    'POEM合計: ' + poemTotal + ' / 28（' + POEM_SEVERITY_TEXT(poemTotal) + '）',
+    '  7項目詳細: ' + poemDetails,
+    (r.nrsScore !== null && r.nrsScore !== undefined) ? 'かゆみNRS: ' + r.nrsScore + ' / 10' : 'かゆみNRS: 情報なし',
+    '感染徴候: ' + infectionText,
+    '悪化因子: ' + triggersText,
+    '',
+    '## 現在の処方（前回）',
+    drugsText,
+    '',
+    '## 外用状況（患者申告）',
+    medStatus,
+    '',
+    '## 医師からの相談内容',
+    question || '（未記入）'
+  ];
+  return lines.filter(function(l){ return l !== null; }).join('\n');
+}
+
+function copyClaudePrompt(reportId) {
+  const el = document.getElementById('claude-prompt-' + reportId);
+  if (!el) return;
+  const btn = document.getElementById('copy-btn-' + reportId);
+  const reset = function() {
+    if (btn) setTimeout(function(){ btn.textContent = '📋 クリップボードにコピー'; }, 2000);
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(el.value).then(function() {
+      if (btn) btn.textContent = '✓ コピーしました';
+      reset();
+    }).catch(function() {
+      el.select(); document.execCommand('copy');
+      if (btn) btn.textContent = '✓ コピーしました';
+      reset();
+    });
+  } else {
+    el.select(); document.execCommand('copy');
+    if (btn) btn.textContent = '✓ コピーしました';
+    reset();
+  }
 }
 
 function saveComment(reportId) {

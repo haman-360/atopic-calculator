@@ -360,6 +360,7 @@ clasp push
 | 2026-05-21 | QR認証フロー動作確認済み |
 | 2026-05-22 | ClinicalAssessmentsシート追加・EASI/IGA評価API実装（saveAssessment/getAssessment/getAssessmentByVisit/getAssessmentList） |
 | 2026-05-22 | ダッシュボードにEASI/IGA入力セクション追加（リアルタイム計算・保存・既存評価読み込み・EASI済みバッジ） |
+| 2026-05-22 | ダッシュボードにClaude治療相談プロンプト生成機能追加（全データ自動組み立て・クリップボードコピー） |
 
 ---
 
