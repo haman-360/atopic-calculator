@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>カルテダッシュボード</title>
 <?!= include('shared_styles'); ?>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 body { max-width: none; }
 .dashboard-header {
@@ -289,6 +290,26 @@ body { max-width: none; }
   background: #e8f5e9;
   color: #2e7d32;
 }
+/* ===== スコア推移グラフ ===== */
+.chart-container {
+  position: relative;
+  height: 200px;
+  margin-bottom: 14px;
+  background: var(--surface2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.chart-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  color: var(--text2);
+  text-align: center;
+  padding: 12px;
+}
 /* ===== Claude相談 ===== */
 .claude-section {
   margin-top: 14px;
@@ -385,7 +406,8 @@ const EASI_SEVERITY_MAP = [
   { max: 50, label: 'Severe',      bg: '#fff3e0',   color: '#e65100' },
   { max: Infinity, label: 'Very Severe', bg: '#ffebee', color: '#c62828' }
 ];
-const easiState = {};  // { [reportId]: { head:{E,I,Ex,L,A}, trunk:..., upperLimb:..., lowerLimb:..., iga:0 } }
+const easiState    = {};  // { [reportId]: { head:{E,I,Ex,L,A}, trunk:..., upperLimb:..., lowerLimb:..., iga:0 } }
+const chartInstances = {}; // { [reportId]: Chart }
 
 let currentTab = 'pending';
 let dashboardData = { pending: [], reviewed: [] };
@@ -448,10 +470,22 @@ function renderList(type, reports) {
       cards.push(`<div class="report-card" style="border-color:var(--red);"><p style="color:var(--red);font-size:12px;">カード生成エラー (${esc(r.reportId||'')}): ${esc(e.message)}</p></div>`);
     }
   }
+  // 既存Chartインスタンスを破棄
+  reports.forEach(r => {
+    if (chartInstances[r.reportId]) {
+      try { chartInstances[r.reportId].destroy(); } catch(e) {}
+      delete chartInstances[r.reportId];
+    }
+  });
+
   container.innerHTML = cards.join('');
+
   if (type === 'pending') {
     reports.forEach(r => { try { initEasiState(r.reportId, r.lastAssessment || null); } catch(e) {} });
   }
+
+  // グラフ非同期読み込み（全カード）
+  reports.forEach(r => { try { loadPatientChart(r.reportId, r.patientNo); } catch(e) {} });
 }
 
 function buildReportCard(r, type) {
@@ -568,6 +602,12 @@ function buildReportCard(r, type) {
           ${r.nrsScore !== null && r.nrsScore !== undefined ? `<span class="symptom-score-chip" style="background:#e8f5f0;color:#085041;">かゆみ NRS：${esc(String(r.nrsScore))} / 10</span>` : ''}
           ${r.lastAssessment ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）</span>` : ''}
         </div>
+      </div>
+
+      <div class="section-title">📊 スコア推移</div>
+      <div class="chart-container" id="chart-container-${esc(r.reportId)}">
+        <div class="chart-placeholder" id="chart-placeholder-${esc(r.reportId)}">読み込み中...</div>
+        <canvas id="chart-${esc(r.reportId)}" style="display:none;"></canvas>
       </div>
 
       ${r.symptomNotes ? `<div style="font-size:13px;color:var(--text2);background:var(--surface2);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:12px;">${esc(r.symptomNotes)}</div>` : ''}
@@ -793,6 +833,158 @@ function saveAssessment(reportId, patientNo) {
       showToast('エラー: ' + esc(err.message || '不明なエラー'));
     })
     .saveAssessment_(payload);
+}
+
+// ===== スコア推移グラフ =====
+
+function loadPatientChart(reportId, patientNo) {
+  // POEM/NRS: dashboardData からメモリ内で取得
+  const allReports = (dashboardData.pending || []).concat(dashboardData.reviewed || []);
+  const poemData = allReports
+    .filter(function(r) { return r.patientNo === patientNo && r.submittedAt; })
+    .map(function(r) {
+      return {
+        date: r.submittedAt.slice(0, 10),
+        poemTotal: Object.values(r.poemScores || {}).reduce(function(s,v){ return s+(v||0); }, 0),
+        nrsScore: (r.nrsScore !== null && r.nrsScore !== undefined) ? r.nrsScore : null
+      };
+    })
+    .sort(function(a, b) { return a.date.localeCompare(b.date); });
+
+  // EASI/IGA: google.script.run で非同期取得
+  google.script.run
+    .withSuccessHandler(function(res) {
+      const assessments = (res && res.assessments ? res.assessments : [])
+        .slice()
+        .sort(function(a, b) { return (a.visitDate||'').localeCompare(b.visitDate||''); });
+      renderChart(reportId, poemData, assessments);
+    })
+    .withFailureHandler(function() {
+      renderChart(reportId, poemData, []);
+    })
+    .getAssessmentList_(patientNo);
+}
+
+function renderChart(reportId, poemData, assessments) {
+  const placeholder = document.getElementById('chart-placeholder-' + reportId);
+  const canvas      = document.getElementById('chart-' + reportId);
+  if (!canvas) return;
+
+  // データ不足時（合計2点未満）
+  if (poemData.length + assessments.length <= 1) {
+    if (placeholder) placeholder.textContent = 'データが蓄積されるとグラフが表示されます（2回目以降の受診から）';
+    return;
+  }
+
+  // 日付ラベル: 両データの和集合・昇順
+  const dateSet = new Set();
+  poemData.forEach(function(d) { dateSet.add(d.date); });
+  assessments.forEach(function(a) { if (a.visitDate) dateSet.add(a.visitDate); });
+  const labels = Array.from(dateSet).sort();
+
+  // 日付→値のマップ
+  const poemMap = {}, nrsMap = {}, easiMap = {}, igaMap = {};
+  poemData.forEach(function(d) { poemMap[d.date] = d.poemTotal; nrsMap[d.date] = d.nrsScore; });
+  assessments.forEach(function(a) {
+    if (a.visitDate) {
+      easiMap[a.visitDate] = a.easiTotal;
+      igaMap[a.visitDate]  = (a.iga !== null && a.iga !== undefined) ? a.iga : null;
+    }
+  });
+
+  const poemVals = labels.map(function(d) { return d in poemMap ? poemMap[d] : null; });
+  const nrsVals  = labels.map(function(d) { return d in nrsMap  ? nrsMap[d]  : null; });
+  const easiVals = labels.map(function(d) { return d in easiMap ? easiMap[d] : null; });
+  const igaVals  = labels.map(function(d) { return d in igaMap  ? igaMap[d]  : null; });
+
+  // 既存インスタンス破棄
+  if (chartInstances[reportId]) { try { chartInstances[reportId].destroy(); } catch(e) {} }
+
+  if (placeholder) placeholder.style.display = 'none';
+  canvas.style.display = 'block';
+
+  chartInstances[reportId] = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        {
+          label: 'POEM',
+          data: poemVals,
+          borderColor: '#4e79a7',
+          backgroundColor: '#4e79a720',
+          yAxisID: 'y',
+          tension: 0.3,
+          spanGaps: true,
+          pointRadius: 4,
+          borderWidth: 2
+        },
+        {
+          label: 'かゆみNRS',
+          data: nrsVals,
+          borderColor: '#f28e2b',
+          backgroundColor: '#f28e2b20',
+          yAxisID: 'y',
+          tension: 0.3,
+          spanGaps: true,
+          pointRadius: 4,
+          borderWidth: 2
+        },
+        {
+          label: 'EASI',
+          data: easiVals,
+          borderColor: '#e15759',
+          backgroundColor: '#e1575920',
+          yAxisID: 'y1',
+          tension: 0.3,
+          spanGaps: true,
+          pointRadius: 4,
+          borderWidth: 2
+        },
+        {
+          label: 'IGA',
+          data: igaVals,
+          borderColor: '#76b7b2',
+          backgroundColor: '#76b7b220',
+          borderDash: [5, 5],
+          yAxisID: 'y',
+          tension: 0.3,
+          spanGaps: true,
+          pointRadius: 4,
+          borderWidth: 2
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12, padding: 8 } }
+      },
+      scales: {
+        x: {
+          ticks: { font: { size: 10 }, maxRotation: 30 },
+          grid: { display: false }
+        },
+        y: {
+          min: 0,
+          max: 30,
+          position: 'left',
+          ticks: { font: { size: 10 }, stepSize: 5 },
+          title: { display: true, text: 'POEM / NRS / IGA', font: { size: 10 } }
+        },
+        y1: {
+          min: 0,
+          max: 72,
+          position: 'right',
+          grid: { drawOnChartArea: false },
+          ticks: { font: { size: 10 }, stepSize: 10 },
+          title: { display: true, text: 'EASI', font: { size: 10 } }
+        }
+      }
+    }
+  });
 }
 
 // ===== Claude相談プロンプト生成 =====
