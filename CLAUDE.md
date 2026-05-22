@@ -28,9 +28,9 @@ atopic-calculator/
 
 ```
 ① 受付 (reception.html)
-   受付スタッフが患者IDと生年月日を入力
+   受付スタッフが診察券番号と受診日を入力（生年月日の入力欄なし）
    → 4桁トークン生成
-   → GAS POST: registerToken（PatientRegistryに保存）
+   → GAS POST: registerToken（PatientRegistryのD〜G列を更新。新規患者の場合は行を追加するが birthdate は空）
    → QRコード表示
 
 ② 患者アンケート (patient_form.html via QRスキャン)
@@ -64,12 +64,20 @@ atopic-calculator/
 | 列 | 内容 |
 |---|---|
 | patientNo | 患者番号（テキスト、先頭0保持） |
-| birthdate | 生年月日 |
+| birthdate | 生年月日（YYYY-MM-DD）|
 | notes | メモ |
 | tokenHash | SHA256(salt + token) |
 | tokenSalt | ランダムソルト |
 | tokenExpiresAt | 有効期限（7日間） |
 | isActive | 有効フラグ |
+
+**患者マスタ登録の運用：**
+- `patientNo`（A列）と `birthdate`（B列）は**スプレッドシートに直接入力**するのが正しい運用
+  - A列はテキスト書式に設定してから入力（先頭0が消えないように）
+  - B列は `2020-04-01` 形式（テキスト書式推奨）
+- `reception.html` は birthdate を扱わないため、初診登録時は必ずスプレッドシートへ直接入力する
+- QR発行（`reception.html`）はトークン列（D〜G）のみ更新する
+- birthdate は `getPatientContext` で年齢計算（ageLabel・ageGroup）に使用されるため、空だと患者フォームの年齢表示が機能しない
 
 ### VisitHistory（処方履歴）
 | 列 | 内容 |
@@ -137,7 +145,7 @@ atopic-calculator/
 ### doPost — データ操作
 | action | 呼び出し元 | 処理 |
 |---|---|---|
-| `registerToken` | reception.html | トークン生成・PatientRegistry更新 |
+| `registerToken` | reception.html | トークン生成・PatientRegistryのトークン列（D〜G）を更新。birthdate は送らない（空文字）。新規患者行を作る場合も birthdate 空 |
 | `saveVisit` | atopic_calculator.html | 処方内容をVisitHistoryに保存 |
 | `getPatientContext` | patient_form.html | トークン検証・前回処方取得 |
 | `submitPatientReport` | patient_form.html | アンケート回答をPatientReportsに保存 |
@@ -362,6 +370,7 @@ clasp push
 | 2026-05-22 | ダッシュボードにEASI/IGA入力セクション追加（リアルタイム計算・保存・既存評価読み込み・EASI済みバッジ） |
 | 2026-05-22 | ダッシュボードにClaude治療相談プロンプト生成機能追加（全データ自動組み立て・クリップボードコピー） |
 | 2026-05-22 | ダッシュボードにスコア時系列グラフ追加（Chart.js、POEM/NRS/EASI/IGA、2軸、患者カード上部） |
+| 2026-05-22 | reception.html の入力欄を「診察券番号 + 受診日」のみに整理（生年月日入力欄を削除済み）。患者マスタ（birthdate）はスプレッドシート直接入力で管理 |
 
 ---
 
