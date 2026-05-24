@@ -923,6 +923,7 @@
           <span style="font-size:12px;color:var(--text2);">処方モード：</span>
           <button id="mode-btn-ftu" class="btn btn-sm mode-btn-on" onclick="setCalcMode('ftu')">📐 計算</button>
           <button id="mode-btn-direct" class="btn btn-ghost btn-sm" onclick="setCalcMode('direct')">✏️ 直接入力</button>
+          <button class="btn btn-sm" style="background:#5DCAA5;color:white;margin-left:4px;" onclick="openVoiceModal()">🎤 音声入力</button>
         </div>
       </div>
       <div id="direct-mode-note" style="display:none;font-size:12px;color:var(--text2);background:var(--bg);border-radius:6px;padding:8px 12px;margin-bottom:10px;">
@@ -4852,9 +4853,366 @@
       setTimeout(() => URL.revokeObjectURL(url), 3000);
     }
 
+    // ===== 音声入力 =====
+    let _voiceRecognition = null;
+    let _voiceRecording = false;
+    let _voiceParsedData = null;
+
+    function openVoiceModal() {
+      document.getElementById('voice-modal').style.display = 'block';
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeVoiceModal() {
+      stopVoiceRecording();
+      document.getElementById('voice-modal').style.display = 'none';
+      document.body.style.overflow = '';
+    }
+
+    function toggleVoiceRecording() {
+      if (_voiceRecording) stopVoiceRecording();
+      else startVoiceRecording();
+    }
+
+    function startVoiceRecording() {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) {
+        alert('このブラウザは音声入力に対応していません。\nChrome または Safari をお使いください。');
+        return;
+      }
+      _voiceRecognition = new SR();
+      _voiceRecognition.lang = 'ja-JP';
+      _voiceRecognition.continuous = true;
+      _voiceRecognition.interimResults = true;
+
+      const textarea = document.getElementById('voice-transcript');
+      const status = document.getElementById('voice-rec-status');
+      const btn = document.getElementById('voice-rec-btn');
+      let finalText = textarea.value;
+
+      _voiceRecognition.onstart = () => {
+        _voiceRecording = true;
+        btn.style.background = '#e74c3c';
+        btn.textContent = '■ 録音停止';
+        status.textContent = '● 録音中... 話しかけてください';
+        status.style.color = '#e74c3c';
+      };
+
+      _voiceRecognition.onresult = (e) => {
+        let interim = '';
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) {
+            finalText += e.results[i][0].transcript;
+          } else {
+            interim += e.results[i][0].transcript;
+          }
+        }
+        textarea.value = finalText + interim;
+      };
+
+      _voiceRecognition.onerror = (e) => {
+        status.textContent = `エラー: ${e.error}`;
+        status.style.color = '#e74c3c';
+        stopVoiceRecording();
+      };
+
+      _voiceRecognition.onend = () => {
+        if (_voiceRecording) {
+          try { _voiceRecognition.start(); } catch(err) { stopVoiceRecording(); }
+        }
+      };
+
+      _voiceRecognition.start();
+    }
+
+    function stopVoiceRecording() {
+      _voiceRecording = false;
+      if (_voiceRecognition) {
+        try { _voiceRecognition.stop(); } catch(e) {}
+        _voiceRecognition = null;
+      }
+      const btn = document.getElementById('voice-rec-btn');
+      const status = document.getElementById('voice-rec-status');
+      if (btn) { btn.style.background = '#5DCAA5'; btn.textContent = '● 録音開始'; }
+      if (status) { status.textContent = ''; }
+    }
+
+    // ルールベース解析テーブル
+    const VOICE_DRUG_MAP = [
+      { pattern: /ロコイド.{0,5}混合|混合.{0,5}ロコイド/,  idx: 9 },
+      { pattern: /ベタメタゾン.{0,5}混合|混合.{0,5}ベタメタゾン/, idx: 10 },
+      { pattern: /モイゼルト/,  idx: 0 },
+      { pattern: /コレクチム/,  idx: 1 },
+      { pattern: /プロトピック/, idx: 2 },
+      { pattern: /ロコイド/,    idx: 3 },
+      { pattern: /リンデロン.{0,3}[Vｖ].{0,3}クリーム/, idx: 5 },
+      { pattern: /リンデロン/,  idx: 4 },
+      { pattern: /アンテベート/, idx: 6 },
+      { pattern: /ベタメタゾン.{0,5}クリーム|クリーム.{0,5}ベタメタゾン/, idx: 8 },
+      { pattern: /ベタメタゾン/, idx: 7 },
+      { pattern: /ヒルドイドソフト/, idx: 12 },
+      { pattern: /ヒルドイドクリーム/, idx: 11 },
+      { pattern: /ヒルドイド/,  idx: 11 },
+      { pattern: /ブイタマー|VTM|ビタマー/, idx: 13 },
+    ];
+
+    const VOICE_FREQ_MAP = [
+      { pattern: /1日\s*2回|一日\s*2回|1日\s*二回|一日\s*二回|2回.日|day.*2|2x/, idx: 0 },
+      { pattern: /1日\s*1回|一日\s*1回|1日\s*一回|一日\s*一回|毎日\s*1回|1回.日/, idx: 1 },
+      { pattern: /隔日|一日おき|2日に1回|2日に一回/, idx: 2 },
+      { pattern: /週\s*2回|週に\s*2回|週\s*二回/, idx: 3 },
+      { pattern: /週\s*1回|週に\s*1回|週\s*一回|週一/, idx: 4 },
+      { pattern: /月\s*2回|月に\s*2回|月\s*二回/, idx: 5 },
+    ];
+
+    const VOICE_PART_MAP = [
+      { pattern: /全身/,           parts: [{key:'face',sides:1},{key:'trunk_f',sides:1},{key:'trunk_b',sides:1},{key:'arm',sides:2},{key:'leg',sides:2}] },
+      { pattern: /顔.{0,2}首|首.{0,2}顔|顔・首|顔首/, parts: [{key:'face',sides:1}] },
+      { pattern: /顔|首/,          parts: [{key:'face',sides:1}] },
+      { pattern: /お腹|腹部|前胸|体幹前|腹(?!側)/, parts: [{key:'trunk_f',sides:1}] },
+      { pattern: /背中|背部|体幹後|背面/,  parts: [{key:'trunk_b',sides:1}] },
+      { pattern: /体幹/,           parts: [{key:'trunk_f',sides:1},{key:'trunk_b',sides:1}] },
+      { pattern: /片腕|右腕|左腕/,  parts: [{key:'arm',sides:1}] },
+      { pattern: /両腕|両手|両上肢|腕|手足/,  parts: [{key:'arm',sides:2}] },
+      { pattern: /片足|右足|左足|片脚|右脚|左脚/, parts: [{key:'leg',sides:1}] },
+      { pattern: /両足|両脚|両下肢|足(?!首)|脚/, parts: [{key:'leg',sides:2}] },
+    ];
+
+    function _voiceExtractDate(text) {
+      let m;
+      m = text.match(/(\d+)\s*週間?後/);
+      if (m) return parseInt(m[1]) * 7;
+      m = text.match(/(\d+)\s*日後/);
+      if (m) return parseInt(m[1]);
+      m = text.match(/(\d+)\s*[かヶカ]月後/);
+      if (m) return parseInt(m[1]) * 30;
+      return null;
+    }
+
+    function _voiceExtractDrugIdx(text) {
+      for (const d of VOICE_DRUG_MAP) {
+        if (d.pattern.test(text)) return d.idx;
+      }
+      return null;
+    }
+
+    function _voiceExtractFreqIdx(text) {
+      for (const f of VOICE_FREQ_MAP) {
+        if (f.pattern.test(text)) return f.idx;
+      }
+      return null;
+    }
+
+    function _voiceExtractParts(text) {
+      for (const p of VOICE_PART_MAP) {
+        if (p.pattern.test(text)) return p.parts;
+      }
+      return [];
+    }
+
+    function _voiceExtractG(text) {
+      const m = text.match(/([0-9０-９]+(?:[.．][0-9０-９]+)?)\s*[gｇ]/);
+      if (!m) return null;
+      const g = parseFloat(m[1].replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0)));
+      return isNaN(g) ? null : g;
+    }
+
+    function parseVoiceTranscript(rawText) {
+      let text = rawText
+        .replace(/軟骨/g, '軟膏')
+        .replace(/得量|塗り量|ひと塗り量/g, 'g量')
+        .trim();
+
+      const result = { nextDateOffset: null, drugs: [], warnings: [] };
+      const sentences = text.split(/[。、\n]+/).map(s => s.trim()).filter(Boolean);
+
+      let cur = null;
+
+      const commit = () => {
+        if (cur && (cur.presetIdx !== null || cur.parts.length > 0)) result.drugs.push(cur);
+        cur = null;
+      };
+
+      for (const s of sentences) {
+        const dateOff = _voiceExtractDate(s);
+        if (dateOff !== null) result.nextDateOffset = dateOff;
+
+        const drugIdx = _voiceExtractDrugIdx(s);
+        if (drugIdx !== null) {
+          commit();
+          cur = { presetIdx: drugIdx, parts: [], freqIdx: 1, manualG: null };
+        }
+
+        const parts = _voiceExtractParts(s);
+        if (parts.length > 0) {
+          if (!cur) {
+            const prev = result.drugs[result.drugs.length - 1];
+            if (prev) {
+              cur = { presetIdx: prev.presetIdx, parts: [], freqIdx: prev.freqIdx, manualG: null };
+            } else {
+              cur = { presetIdx: 0, parts: [], freqIdx: 1, manualG: null };
+              result.warnings.push(`薬剤名が見つかりません: "${s}"`);
+            }
+          }
+          for (const p of parts) {
+            if (!cur.parts.some(cp => cp.key === p.key)) cur.parts.push({ ...p });
+          }
+        }
+
+        const freqIdx = _voiceExtractFreqIdx(s);
+        if (freqIdx !== null && cur) cur.freqIdx = freqIdx;
+
+        const manualG = _voiceExtractG(s);
+        if (manualG !== null && cur) cur.manualG = manualG;
+      }
+
+      commit();
+      return result;
+    }
+
+    function runVoiceParse() {
+      const text = document.getElementById('voice-transcript').value.trim();
+      if (!text) { alert('テキストを入力してください。'); return; }
+      _voiceParsedData = parseVoiceTranscript(text);
+      _voiceShowPreview(_voiceParsedData);
+    }
+
+    function _voiceShowPreview(parsed) {
+      const preview = document.getElementById('voice-preview');
+      const content = document.getElementById('voice-preview-content');
+      const applyArea = document.getElementById('voice-apply-area');
+      let html = '';
+
+      if (parsed.nextDateOffset !== null) {
+        const d = new Date();
+        d.setDate(d.getDate() + parsed.nextDateOffset);
+        const ds = d.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' });
+        html += `<div style="margin-bottom:8px;">📅 <b>再診日:</b> ${parsed.nextDateOffset}日後（${ds}）</div>`;
+      } else {
+        html += `<div style="margin-bottom:8px;color:#888;">📅 再診日: 検出されませんでした</div>`;
+      }
+
+      if (parsed.drugs.length === 0) {
+        html += `<div style="color:#c0392b;">⚠ 薬剤情報が検出されませんでした。テキストを確認してください。</div>`;
+      } else {
+        parsed.drugs.forEach((d, i) => {
+          const dn = PRESETS[d.presetIdx]?.name || '不明';
+          const fr = FREQS[d.freqIdx]?.label || '不明';
+          const pl = d.parts.map(p => {
+            const pi = PARTS.find(pt => pt.key === p.key);
+            const lb = pi?.label || p.key;
+            return pi?.bilateral ? `${lb}(${p.sides === 2 ? '両側' : '片側'})` : lb;
+          }).join('・') || '（部位未設定）';
+          const gn = d.manualG != null ? ` ／ 1回${d.manualG}g` : '';
+          html += `<div style="padding:6px 0;border-top:1px solid #c5e8df;">
+            <b>💊 薬剤${i+1}:</b> ${dn}<br>
+            <span style="color:#555;padding-left:14px;">部位: ${pl} ／ 頻度: ${fr}${gn}</span>
+          </div>`;
+        });
+      }
+
+      if (parsed.warnings.length > 0) {
+        html += `<div style="margin-top:8px;color:#b96b00;font-size:12px;">⚠ ${parsed.warnings.join('<br>⚠ ')}</div>`;
+      }
+
+      content.innerHTML = html;
+      preview.style.display = 'block';
+      applyArea.style.display = parsed.drugs.length > 0 ? 'flex' : 'none';
+    }
+
+    function applyVoiceInput() {
+      if (!_voiceParsedData || _voiceParsedData.drugs.length === 0) return;
+      const parsed = _voiceParsedData;
+
+      if (parsed.nextDateOffset !== null) {
+        const d = new Date();
+        d.setDate(d.getDate() + parsed.nextDateOffset);
+        document.getElementById('nextDate').value = d.toISOString().slice(0, 10);
+      }
+
+      drugs.splice(0, drugs.length);
+      for (const pd of parsed.drugs) {
+        const drug = newDrug(pd.presetIdx);
+        for (const p of pd.parts) {
+          if (drug.parts[p.key]) {
+            drug.parts[p.key].checked = true;
+            drug.parts[p.key].sides = p.sides;
+          }
+        }
+        drug.freqIdx = pd.freqIdx;
+        if (pd.manualG != null) drug.directG = pd.manualG;
+        drugs.push(drug);
+      }
+
+      renderDrugs();
+      calc();
+      closeVoiceModal();
+    }
+
     initDates(); renderCustomPartsUI(); renderDrugs(); calc();
     loadPatientContext();
   </script>
+
+  <!-- 音声入力モーダル -->
+  <div id="voice-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9999;overflow-y:auto;" onclick="if(event.target===this)closeVoiceModal()">
+    <div style="background:#fff;max-width:560px;margin:32px auto 60px;border-radius:14px;padding:24px;position:relative;box-shadow:0 8px 32px rgba(0,0,0,0.18);">
+      <button onclick="closeVoiceModal()" style="position:absolute;top:12px;right:14px;background:none;border:none;font-size:22px;cursor:pointer;color:#aaa;line-height:1;">✕</button>
+      <h2 style="margin:0 0 18px;font-size:18px;color:#085041;font-weight:700;">🎤 音声入力</h2>
+
+      <!-- 録音 -->
+      <div style="margin-bottom:14px;">
+        <button id="voice-rec-btn" onclick="toggleVoiceRecording()"
+          style="display:inline-flex;align-items:center;gap:8px;padding:10px 22px;background:#5DCAA5;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:600;">
+          ● 録音開始
+        </button>
+        <div id="voice-rec-status" style="font-size:12px;color:#888;margin-top:6px;min-height:16px;"></div>
+      </div>
+
+      <!-- テキストエリア -->
+      <div style="margin-bottom:12px;">
+        <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">認識テキスト（修正可）</label>
+        <textarea id="voice-transcript" rows="5"
+          style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;line-height:1.7;resize:vertical;"
+          placeholder="録音するか、ここにテキストを直接入力・貼り付けしてください。&#10;例: 再診は2週間後。両腕にリンデロンV軟膏を1日1回。両足にも1日1回。"></textarea>
+      </div>
+
+      <!-- ヒント -->
+      <details style="margin-bottom:14px;font-size:12px;color:#555;background:#f5fdfb;border:1px solid #c5e8df;border-radius:8px;padding:8px 12px;">
+        <summary style="cursor:pointer;font-weight:600;color:#085041;user-select:none;">入力例・対応表現</summary>
+        <div style="margin-top:10px;line-height:2.1;">
+          <b>再診日:</b> 「再診は<u>2週間後</u>」「再診は<u>14日後</u>」<br>
+          <b>部位:</b> 顔・首 ／ 両腕・片腕 ／ 体幹前（お腹） ／ 体幹後（背中） ／ 両足・片足 ／ 全身<br>
+          <b>頻度:</b> 1日1回 ／ 1日2回 ／ 隔日 ／ 週2回 ／ 週1回<br>
+          <b>例文:</b>「両腕にリンデロンV軟膏を1日1回。両足にも1日1回。」<br>
+          「顔にモイゼルト軟膏を1日1回。背中にロコイド軟膏を1日2回。」
+        </div>
+      </details>
+
+      <!-- 解析ボタン -->
+      <button onclick="runVoiceParse()"
+        style="width:100%;padding:12px;background:#3b8f7a;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:600;margin-bottom:14px;">
+        🔍 処方情報を解析
+      </button>
+
+      <!-- プレビュー -->
+      <div id="voice-preview" style="display:none;border:1px solid #b2ddd4;border-radius:8px;padding:14px;background:#f0faf7;margin-bottom:14px;">
+        <div style="font-size:12px;font-weight:700;color:#085041;margin-bottom:6px;">解析結果</div>
+        <div id="voice-preview-content" style="font-size:13px;line-height:1.8;"></div>
+      </div>
+
+      <!-- 適用ボタン -->
+      <div id="voice-apply-area" style="display:none;gap:10px;">
+        <button onclick="applyVoiceInput()"
+          style="flex:1;padding:13px;background:#5DCAA5;color:white;border:none;border-radius:8px;font-size:15px;cursor:pointer;font-weight:700;">
+          ✅ フォームに適用する
+        </button>
+        <button onclick="closeVoiceModal()"
+          style="padding:13px 20px;background:#eee;color:#555;border:none;border-radius:8px;font-size:14px;cursor:pointer;">
+          キャンセル
+        </button>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>
