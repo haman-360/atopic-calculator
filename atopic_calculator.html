@@ -1514,12 +1514,19 @@
       else { nb.className = 'next-badge'; nb.textContent = '次回日を選択'; }
 
       const el = document.getElementById('elapsed-label');
-      if (!days || days <= 0 || !nextDays || nextDays <= 0) {
-        el.innerHTML = (!days || days <= 0) && lv && tv ? '<span style="color:var(--red)">日付を確認してください</span>' : '受診日と次回受診日を入力してください';
-        area.innerHTML = '<p style="font-size:13px;color:var(--text2);">受診日・次回受診日を入力してください。</p>';
+      if (!nextDays || nextDays <= 0) {
+        el.innerHTML = nv ? '<span style="color:var(--red)">日付を確認してください</span>' : '次回受診日を入力してください';
+        area.innerHTML = '<p style="font-size:13px;color:var(--text2);">次回受診日を入力してください。</p>';
         return;
       }
-      el.innerHTML = `経過: <strong>${days}日間</strong> ／ 次回まで: <strong>${nextDays}日</strong>`;
+      if (lv && tv && (days === null || days <= 0)) {
+        el.innerHTML = '<span style="color:var(--red)">前回受診日を確認してください</span>';
+        area.innerHTML = '<p style="font-size:13px;color:var(--text2);">日付を確認してください。</p>';
+        return;
+      }
+      el.innerHTML = days > 0
+        ? `経過: <strong>${days}日間</strong> ／ 次回まで: <strong>${nextDays}日</strong>`
+        : `次回まで: <strong>${nextDays}日</strong>`;
 
       const rxItems = [];
       currentRxSnapshot = { patientNo: document.getElementById('patientId').value.trim(), visitDate: tv, nextVisitDate: nv, rxItems };
@@ -1530,10 +1537,14 @@
         const pname = getDrugName(d);
         const consumedG = d.givenG - d.remainG;
         if (consumedG < 0) { tbl += `<tr><td><strong>${pname}</strong></td><td colspan="5"><span class="badge badge-warn">残量が処方量を超えています</span></td></tr>`; return; }
-        const perDayG = consumedG / days;
+        const perDayG = days ? consumedG / days : null;
         const ftuG = calcFTU(d, ak, nextDays, tv, nv);
         const hasFTU = getAllParts().some(p => d.parts[p.key]?.checked);
         const taperPhases = calcTaperPhases(d, ak, tv, nv);
+        if (!hasFTU && perDayG === null) {
+          tbl += `<tr><td><strong>${pname}</strong></td><td colspan="5"><span class="badge badge-warn">前回受診日がないため、塗布部位を設定してください</span></td></tr>`;
+          return;
+        }
         const neededG = hasFTU ? ftuG : perDayG * nextDays;
         const netG = Math.max(0, neededG - d.remainG);
         const ru = roundUpTube(netG, d.tubeg);
@@ -1617,7 +1628,7 @@
 
         tbl += `<tr>
       <td style="font-weight:600;font-size:12px;">${pname}</td>
-      <td>${perDayG.toFixed(2)}g/日</td>
+      <td>${perDayG !== null ? perDayG.toFixed(2) + 'g/日' : '—'}</td>
       <td>${ftuCell}${mixedPlanHtml}</td>
       <td>${neededG.toFixed(1)}g<br><span style="font-size:11px;color:var(--text3);">${d.tubeg > 0 ? (neededG / d.tubeg).toFixed(1) + '本' : ''}</span></td>
       <td>${d.remainG.toFixed(1)}g<br><span style="font-size:11px;color:var(--text3);">${d.tubeg > 0 ? (d.remainG / d.tubeg).toFixed(1) + '本' : ''}</span></td>
@@ -1674,11 +1685,13 @@
       // text output
       const pid = document.getElementById('patientId').value || '未入力';
       let txt = `【アトピー性皮膚炎 軟膏処方記録】\n`;
-      txt += `患者ID: ${pid}　受診日: ${tv}　経過: ${days}日間　次回受診: ${nv}（${nextDays}日後）\n`;
+      txt += `患者ID: ${pid}　受診日: ${tv}　${days ? `経過: ${days}日間　` : ''}次回受診: ${nv}（${nextDays}日後）\n`;
       txt += `${'─'.repeat(40)}\n`;
       rxItems.forEach(r => {
         txt += `\n【${r.name}】\n`;
-        txt += `前回${r.givenG.toFixed(0)}g処方し、残量${r.remainG.toFixed(1)}g（消費: ${(r.givenG - r.remainG).toFixed(1)}g/${days}日 = ${r.perDayG.toFixed(1)}g/日）。\n`;
+        if (r.perDayG !== null) {
+          txt += `前回${r.givenG.toFixed(0)}g処方し、残量${r.remainG.toFixed(1)}g（消費: ${(r.givenG - r.remainG).toFixed(1)}g/${days}日 = ${r.perDayG.toFixed(1)}g/日）。\n`;
+        }
         if (r.hasFTU) {
           txt += `塗布部位: ${r.partNames.join('、')}。\n`;
           if (r.taperPhases) {
