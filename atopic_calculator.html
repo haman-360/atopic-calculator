@@ -5089,6 +5089,7 @@
       const sentences = text.split(/[。、\n]+/).map(s => s.trim()).filter(Boolean);
 
       let cur = null;
+      let pendingParts = []; // 部位のみの文を次の薬剤に引き渡すバッファ
 
       const commit = () => {
         if (cur && (cur.presetIdx !== null || cur.parts.length > 0)) result.drugs.push(cur);
@@ -5100,31 +5101,31 @@
         if (dateOff !== null) result.nextDateOffset = dateOff;
 
         const drugIdx = _voiceExtractDrugIdx(s);
+        const parts = _voiceExtractParts(s);
+        const freqIdx = _voiceExtractFreqIdx(s);
+        const manualG = _voiceExtractG(s);
+
         if (drugIdx !== null) {
           commit();
-          cur = { presetIdx: drugIdx, parts: [], freqIdx: 1, manualG: null };
+          // 保留中の部位を新しい薬剤に引き渡す
+          cur = { presetIdx: drugIdx, parts: [...pendingParts], freqIdx: 1, manualG: null };
+          pendingParts = [];
         }
 
-        const parts = _voiceExtractParts(s);
         if (parts.length > 0) {
-          if (!cur) {
-            const prev = result.drugs[result.drugs.length - 1];
-            if (prev) {
-              cur = { presetIdx: prev.presetIdx, parts: [], freqIdx: prev.freqIdx, manualG: null };
-            } else {
-              cur = { presetIdx: 0, parts: [], freqIdx: 1, manualG: null };
-              result.warnings.push(`薬剤名が見つかりません: "${s}"`);
+          // 部位のみの文（薬剤名・頻度・g量・日付なし）→ 次の薬剤のために保留
+          if (drugIdx === null && freqIdx === null && manualG === null && dateOff === null) {
+            for (const p of parts) {
+              if (!pendingParts.some(pp => pp.key === p.key)) pendingParts.push({ ...p });
+            }
+          } else if (cur) {
+            for (const p of parts) {
+              if (!cur.parts.some(cp => cp.key === p.key)) cur.parts.push({ ...p });
             }
           }
-          for (const p of parts) {
-            if (!cur.parts.some(cp => cp.key === p.key)) cur.parts.push({ ...p });
-          }
         }
 
-        const freqIdx = _voiceExtractFreqIdx(s);
         if (freqIdx !== null && cur) cur.freqIdx = freqIdx;
-
-        const manualG = _voiceExtractG(s);
         if (manualG !== null && cur) cur.manualG = manualG;
       }
 
