@@ -5200,6 +5200,7 @@
       drugs.splice(0, drugs.length);
       for (const pd of parsed.drugs) {
         const drug = newDrug(pd.presetIdx);
+        drug.givenG = 0; // 音声入力では前回処方量不明のため0
         for (const p of pd.parts) {
           if (drug.parts[p.key]) {
             drug.parts[p.key].checked = true;
