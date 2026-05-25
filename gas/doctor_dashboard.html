@@ -514,7 +514,8 @@ function buildReportCard(r, type) {
   const calcUrl = 'https://haman-360.github.io/atopic-calculator/atopic_calculator.html'
     + '?p=' + encodeURIComponent(r.patientNo)
     + '&ageGroup=' + encodeURIComponent(r.ageGroup || 'child3')
-    + '&ageLabel=' + encodeURIComponent(r.ageLabel || '');
+    + '&ageLabel=' + encodeURIComponent(r.ageLabel || '')
+    + (r.nextAppointment ? '&nextVisit=' + encodeURIComponent(r.nextAppointment) : '');
 
   // POEM グリッド
   const poemGrid = Object.entries(POEM_LABELS).map(([key, label]) => {

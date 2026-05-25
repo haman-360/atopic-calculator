@@ -4716,6 +4716,7 @@
       const t = params.get('t');
       const ageGroupParam = params.get('ageGroup');
       const ageLabelParam = params.get('ageLabel');
+      const nextVisitParam = params.get('nextVisit');
 
       if (!p) return;
 
@@ -4726,6 +4727,11 @@
 
         const pidEl = document.getElementById('patientId');
         if (pidEl && !pidEl.value) pidEl.value = p;
+
+        if (nextVisitParam) {
+          const ndEl = document.getElementById('nextDate');
+          if (ndEl && !ndEl.value) { ndEl.value = nextVisitParam; calc(); }
+        }
 
         document.getElementById('patient-banner-text').textContent =
           `患者番号: ${p} / ${ageLabelParam || ageGroupParam}`;
