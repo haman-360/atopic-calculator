@@ -5038,9 +5038,13 @@
 
     function parseVoiceTranscript(rawText) {
       let text = rawText
-        .replace(/軟骨/g, '軟膏')
+        .replace(/軟骨|軟腔|軟高/g, '軟膏')
+        .replace(/リンテロン/g, 'リンデロン')
         .replace(/得量|塗り量|ひと塗り量/g, 'g量')
         .trim();
+
+      // スペース区切りで連続する処方フレーズを文に分割（部位名・薬剤名の前に区切りを挿入）
+      text = text.replace(/[ 　]+(?=[腕足顔首背腹体全]|モイゼルト|コレクチム|プロトピック|ロコイド|リンデロン|アンテベート|ベタメタゾン|ヒルドイド|ブイタマー)/g, '。');
 
       const result = { nextDateOffset: null, drugs: [], warnings: [] };
       const sentences = text.split(/[。、\n]+/).map(s => s.trim()).filter(Boolean);
@@ -5108,7 +5112,12 @@
         const ds = d.toLocaleDateString('ja-JP', { month: 'long', day: 'numeric' });
         html += `<div style="margin-bottom:8px;">📅 <b>再診日:</b> ${parsed.nextDateOffset}日後（${ds}）</div>`;
       } else {
-        html += `<div style="margin-bottom:8px;color:#888;">📅 再診日: 検出されませんでした</div>`;
+        const existingNextDate = document.getElementById('nextDate')?.value;
+        if (existingNextDate) {
+          html += `<div style="margin-bottom:8px;">📅 <b>再診日:</b> ${existingNextDate}（フォームに入力済み）</div>`;
+        } else {
+          html += `<div style="margin-bottom:8px;color:#888;">📅 再診日: 検出されませんでした</div>`;
+        }
       }
 
       if (parsed.drugs.length === 0) {
