@@ -957,7 +957,8 @@
       </div>
       <div id="panel-schedule" style="display:none;">
         <div style="display:flex;gap:10px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
-          <button id="schedule-share-btn" onclick="shareSchedule()" style="padding:9px 18px;border-radius:8px;border:none;background:var(--green);color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">📤 画像として共有</button>
+          <button id="schedule-share-btn" onclick="shareScheduleOnly()" style="padding:9px 18px;border-radius:8px;border:none;background:var(--green);color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">📤 画像として共有</button>
+          <button id="schedule-save-btn" onclick="saveScheduleImage()" style="padding:9px 18px;border-radius:8px;border:none;background:#4a7c6f;color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">💾 画像として保存</button>
           <span id="schedule-share-notice" style="font-size:12px;color:var(--teal);display:none;"></span>
         </div>
         <div id="schedule-area">
@@ -4821,46 +4822,84 @@
       _toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
     }
 
-    // ===== 画像共有 =====
-    async function shareSchedule() {
+    // ===== 画像共有・保存 =====
+    async function _captureSchedule() {
+      const area = document.getElementById('schedule-area');
+      const canvas = await html2canvas(area, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+      });
+      return new Promise((resolve) => {
+        canvas.toBlob(resolve, 'image/png');
+      });
+    }
+
+    function _scheduleFilename() {
+      const today = document.getElementById('todayDate')?.value || '';
+      return `塗布スケジュール_${today}.png`;
+    }
+
+    async function shareScheduleOnly() {
       const btn = document.getElementById('schedule-share-btn');
       const notice = document.getElementById('schedule-share-notice');
       btn.disabled = true;
       btn.textContent = '⏳ 生成中…';
       notice.style.display = 'none';
       try {
-        const area = document.getElementById('schedule-area');
-        const canvas = await html2canvas(area, {
-          scale: 2,
-          backgroundColor: '#ffffff',
-          useCORS: true,
-          logging: false,
-        });
-        canvas.toBlob(async (blob) => {
-          const today = document.getElementById('todayDate')?.value || '';
-          const filename = `塗布スケジュール_${today}.png`;
-          const file = new File([blob], filename, { type: 'image/png' });
-          if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-              await navigator.share({ files: [file], title: '軟膏 塗布スケジュール', text: '塗布スケジュールです。' });
-            } catch (e) {
-              if (e.name !== 'AbortError') fallbackDownload(blob, filename);
+        const blob = await _captureSchedule();
+        const filename = _scheduleFilename();
+        const file = new File([blob], filename, { type: 'image/png' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: '軟膏 塗布スケジュール', text: '塗布スケジュールです。' });
+          } catch (e) {
+            if (e.name !== 'AbortError') {
+              notice.textContent = '⚠ 共有がキャンセルされました';
+              notice.style.display = 'inline';
+              setTimeout(() => notice.style.display = 'none', 3000);
             }
-          } else {
-            fallbackDownload(blob, filename);
-            notice.textContent = '画像を保存しました';
-            notice.style.display = 'inline';
-            setTimeout(() => notice.style.display = 'none', 3000);
           }
-          btn.disabled = false;
-          btn.textContent = '📤 画像として共有';
-        }, 'image/png');
+        } else {
+          notice.textContent = '⚠ このブラウザは共有未対応です。「画像として保存」をお使いください。';
+          notice.style.display = 'inline';
+          setTimeout(() => notice.style.display = 'none', 5000);
+        }
       } catch (err) {
-        btn.disabled = false;
-        btn.textContent = '📤 画像として共有';
         notice.textContent = '⚠ 生成に失敗しました';
         notice.style.display = 'inline';
         console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '📤 画像として共有';
+      }
+    }
+
+    async function saveScheduleImage() {
+      const btn = document.getElementById('schedule-save-btn');
+      const notice = document.getElementById('schedule-share-notice');
+      btn.disabled = true;
+      btn.textContent = '⏳ 生成中…';
+      notice.style.display = 'none';
+      try {
+        const blob = await _captureSchedule();
+        const filename = _scheduleFilename();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+        notice.textContent = '💾 画像を保存しました';
+        notice.style.display = 'inline';
+        setTimeout(() => notice.style.display = 'none', 3000);
+      } catch (err) {
+        notice.textContent = '⚠ 生成に失敗しました';
+        notice.style.display = 'inline';
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '💾 画像として保存';
       }
     }
 
