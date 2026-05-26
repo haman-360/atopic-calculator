@@ -345,6 +345,7 @@ function getDashboardData() {
       const entry = {
         reportId: row[0],
         patientNo: pno,
+        birthdate: String(reg.birthdate || ''),
         ageLabel: calcAgeLabel_(reg.birthdate),
         ageGroup: calcAgeGroup_(reg.birthdate),
         patientNotes: reg.notes || '',
@@ -692,18 +693,32 @@ function addClinicalAssessmentsSheet() {
 }
 
 // ===== EASI計算 =====
-const EASI_WEIGHT_ = { head: 0.1, trunk: 0.3, upperLimb: 0.2, lowerLimb: 0.4 };
+const EASI_WEIGHT_ADULT_ = { head: 0.1, trunk: 0.3, upperLimb: 0.2, lowerLimb: 0.4 };
+const EASI_WEIGHT_CHILD_ = { head: 0.2, trunk: 0.3, upperLimb: 0.2, lowerLimb: 0.3 };
+
+// birthdate と評価日から年齢を計算し、適切な重みを返す（8歳未満=小児、8歳以上=成人）
+function getEasiWeight_(birthdate, refDate) {
+  if (!birthdate) return EASI_WEIGHT_ADULT_;
+  const bd = new Date(String(birthdate));
+  if (isNaN(bd.getTime())) return EASI_WEIGHT_ADULT_;
+  const ref = refDate ? new Date(String(refDate)) : new Date();
+  let age = ref.getFullYear() - bd.getFullYear();
+  const m = ref.getMonth() - bd.getMonth();
+  if (m < 0 || (m === 0 && ref.getDate() < bd.getDate())) age--;
+  return age < 8 ? EASI_WEIGHT_CHILD_ : EASI_WEIGHT_ADULT_;
+}
 
 function calcEasiPart_(part) {
   const signs = (part.E || 0) + (part.I || 0) + (part.Ex || 0) + (part.L || 0);
   return signs * (part.A || 0);
 }
 
-function calcEasi_(easi) {
-  const head      = calcEasiPart_(easi.head      || {}) * EASI_WEIGHT_.head;
-  const trunk     = calcEasiPart_(easi.trunk     || {}) * EASI_WEIGHT_.trunk;
-  const upperLimb = calcEasiPart_(easi.upperLimb || {}) * EASI_WEIGHT_.upperLimb;
-  const lowerLimb = calcEasiPart_(easi.lowerLimb || {}) * EASI_WEIGHT_.lowerLimb;
+function calcEasi_(easi, birthdate, visitDate) {
+  const w = getEasiWeight_(birthdate, visitDate);
+  const head      = calcEasiPart_(easi.head      || {}) * w.head;
+  const trunk     = calcEasiPart_(easi.trunk     || {}) * w.trunk;
+  const upperLimb = calcEasiPart_(easi.upperLimb || {}) * w.upperLimb;
+  const lowerLimb = calcEasiPart_(easi.lowerLimb || {}) * w.lowerLimb;
   const total = Math.round((head + trunk + upperLimb + lowerLimb) * 10) / 10;
   return { head, trunk, upperLimb, lowerLimb, total };
 }
@@ -722,7 +737,17 @@ function saveAssessment_(data) {
     return { ok: false, reason: 'patientNo and visitDate are required' };
   }
 
-  const easi = calcEasi_(data.easi || {});
+  // PatientRegistry から birthdate を取得して年齢適切な重みで計算
+  const regSheet = getSheet_('PatientRegistry');
+  const regData = regSheet.getDataRange().getValues();
+  let birthdate = '';
+  for (let i = 1; i < regData.length; i++) {
+    if (String(regData[i][0]).trim() === String(data.patientNo).trim()) {
+      birthdate = regData[i][1] ? String(regData[i][1]) : '';
+      break;
+    }
+  }
+  const easi = calcEasi_(data.easi || {}, birthdate, data.visitDate);
   const severity = getEasiSeverity_(easi.total);
   const assessmentId = Utilities.getUuid();
   const assessedAt = new Date().toISOString();
@@ -874,6 +899,58 @@ function testGetAssessmentList() {
   } catch(e) {
     Logger.log('例外: ' + e.message + '\n' + e.stack);
   }
+}
+
+// ===== 既存EASIデータを年齢適切な重みで一括再計算（GASエディタから手動実行） =====
+// 実行前に必ずスプレッドシートをバックアップしてください
+function recalcEasiWithAgeWeights() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const caSheet = ss.getSheetByName('ClinicalAssessments');
+  if (!caSheet) { Logger.log('ClinicalAssessments シートが見つかりません'); return; }
+
+  // PatientRegistry から birthdate マップを作成
+  const regSheet = ss.getSheetByName('PatientRegistry');
+  const regData = regSheet.getDataRange().getValues();
+  const birthdateMap = {};
+  for (let i = 1; i < regData.length; i++) {
+    birthdateMap[String(regData[i][0]).trim()] = regData[i][1] ? String(regData[i][1]) : '';
+  }
+
+  const data = caSheet.getDataRange().getValues();
+  let updated = 0, skipped = 0;
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    const patientNo  = String(row[1]).trim();
+    const visitDate  = dateToStr_(row[2]);
+    const rawJson    = row[13];
+
+    if (!rawJson) { skipped++; continue; } // easiRawJson がない行はスキップ
+
+    let easiRaw;
+    try { easiRaw = JSON.parse(rawJson); } catch(e) { skipped++; continue; }
+
+    const birthdate = birthdateMap[patientNo] || birthdateMap[patientNo.replace(/^0+/, '')] || '';
+    const easi = calcEasi_(easiRaw, birthdate, visitDate);
+    const severity = getEasiSeverity_(easi.total);
+
+    const oldTotal = row[8];
+    if (oldTotal === easi.total) { skipped++; continue; } // 変化なし
+
+    // easiHead(E列=5), easiTrunk(F=6), easiUpperLimb(G=7), easiLowerLimb(H=8),
+    // easiTotal(I=9), easiSeverity(J=10) を更新（列番号は1始まり）
+    caSheet.getRange(i + 1, 5, 1, 6).setValues([[
+      easi.head, easi.trunk, easi.upperLimb, easi.lowerLimb, easi.total, severity
+    ]]);
+
+    const w = getEasiWeight_(birthdate, visitDate);
+    const mode = (w === EASI_WEIGHT_CHILD_) ? '小児' : '成人';
+    Logger.log('更新: 行' + (i+1) + ' 患者' + patientNo + ' visitDate=' + visitDate
+      + ' 重み=' + mode + ' ' + oldTotal + ' → ' + easi.total + ' (' + severity + ')');
+    updated++;
+  }
+
+  Logger.log('完了: ' + updated + '件更新, ' + skipped + '件スキップ');
 }
 
 // ===== PatientRegistry スキーマ移行（旧8列→新7列） =====
