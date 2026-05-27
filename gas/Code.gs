@@ -770,6 +770,47 @@ function addDailyPinSheet() {
   }
 }
 
+// ===== DailyPIN: 当日分のPINを自動生成（毎朝トリガーから呼ばれる） =====
+function generateDailyPin() {
+  const sheet = getSheet_('DailyPIN');
+  if (!sheet) return;
+  const today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+
+  // 当日行が既にあればスキップ
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim().substring(0, 10) === today) {
+      Logger.log('DailyPIN: 当日行が既に存在します ' + today);
+      return;
+    }
+  }
+
+  // 4桁ランダムPIN（0000〜9999）
+  const pin = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
+  sheet.appendRow([today, pin, true]);
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 1).setNumberFormat('@');
+  sheet.getRange(newRow, 1).setValue(today);
+  Logger.log('DailyPIN生成: ' + today + ' / ' + pin);
+}
+
+// ===== DailyPIN: 毎朝8時の自動生成トリガーを設定（1回のみ実行） =====
+function setupDailyPinTrigger() {
+  // 既存のトリガーを削除して重複を防ぐ
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'generateDailyPin') {
+      ScriptApp.deleteTrigger(t);
+    }
+  });
+  ScriptApp.newTrigger('generateDailyPin')
+    .timeBased()
+    .atHour(8)
+    .everyDays(1)
+    .inTimezone('Asia/Tokyo')
+    .create();
+  Logger.log('DailyPIN自動生成トリガーを設定しました（毎朝8時 JST）');
+}
+
 // ===== PatientReports: triggersJson / triggerNote 列追加（既存シート用・1回のみ実行） =====
 function addTriggersColumns() {
   const sheet = getSheet_('PatientReports');
