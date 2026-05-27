@@ -264,6 +264,144 @@ function submitPatientReport(reportData) {
   return { ok: true, reportId: reportId };
 }
 
+// ===== 固定QR認証（新フロー）: 診察券番号 + PINのみで認証。初診は別途birthdate入力 =====
+function validateFixedAuthNew(patientNo, pin) {
+  // 1. DailyPIN チェック
+  const pinSheet = getSheet_('DailyPIN');
+  if (!pinSheet) {
+    auditLog_(getSheet_('AuditLog'), patientNo || 'unknown', 'fixed_auth_fail');
+    return { valid: false };
+  }
+  const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const pinData = pinSheet.getDataRange().getValues();
+  let pinValid = false;
+  for (let i = 1; i < pinData.length; i++) {
+    if (String(pinData[i][0]).trim().substring(0, 10) === todayStr &&
+        pinData[i][2] === true &&
+        String(pinData[i][1]).trim() === String(pin).trim()) {
+      pinValid = true;
+      break;
+    }
+  }
+  if (!pinValid) {
+    auditLog_(getSheet_('AuditLog'), patientNo || 'unknown', 'fixed_auth_fail');
+    return { valid: false };
+  }
+
+  // 2. PatientRegistry: patientNo 存在確認
+  const regSheet = getSheet_('PatientRegistry');
+  const regData = regSheet.getDataRange().getValues();
+  for (let i = 1; i < regData.length; i++) {
+    if (String(regData[i][0]) !== String(patientNo)) continue;
+    if (!regData[i][6]) { // isActive false
+      auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_fail');
+      return { valid: false };
+    }
+    const rawBd = regData[i][1];
+    const bdStr = (rawBd instanceof Date)
+      ? Utilities.formatDate(rawBd, 'Asia/Tokyo', 'yyyy-MM-dd')
+      : String(rawBd || '').trim();
+    if (bdStr) {
+      // 既存患者（birthdate あり）: そのままコンテキスト返却
+      auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_ok');
+      return Object.assign({ status: 'existing' }, buildPatientContextPayload_(String(patientNo), bdStr, regData[i][2] || ''));
+    } else {
+      // 初診患者（birthdate なし）: birthdate 入力が必要
+      auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_new_patient');
+      return { valid: true, status: 'new' };
+    }
+  }
+  auditLog_(getSheet_('AuditLog'), patientNo || 'unknown', 'fixed_auth_fail');
+  return { valid: false };
+}
+
+// ===== 初診患者: 生年月日を登録してコンテキストを返す =====
+function registerBirthdateAndGetContext(patientNo, pin, birthdate) {
+  // PIN 再検証
+  const pinSheet = getSheet_('DailyPIN');
+  if (!pinSheet) return { valid: false };
+  const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const pinData = pinSheet.getDataRange().getValues();
+  let pinValid = false;
+  for (let i = 1; i < pinData.length; i++) {
+    if (String(pinData[i][0]).trim().substring(0, 10) === todayStr &&
+        pinData[i][2] === true &&
+        String(pinData[i][1]).trim() === String(pin).trim()) {
+      pinValid = true;
+      break;
+    }
+  }
+  if (!pinValid) return { valid: false };
+
+  // PatientRegistry: 患者行を見つけて birthdate を保存
+  const regSheet = getSheet_('PatientRegistry');
+  const regData = regSheet.getDataRange().getValues();
+  for (let i = 1; i < regData.length; i++) {
+    if (String(regData[i][0]) !== String(patientNo)) continue;
+    if (!regData[i][6]) return { valid: false }; // isActive false
+    regSheet.getRange(i + 1, 2).setValue(birthdate);
+    auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_birthdate_registered');
+    return buildPatientContextPayload_(String(patientNo), birthdate, regData[i][2] || '');
+  }
+  return { valid: false };
+}
+
+// ===== 固定QRルート: アンケート送信（PIN + 患者番号のみで再検証） =====
+function submitPatientReportFixed2(patientNo, pin, reportData) {
+  // PIN 再検証
+  const pinSheet = getSheet_('DailyPIN');
+  if (!pinSheet) return { ok: false, reason: 'auth' };
+  const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const pinData = pinSheet.getDataRange().getValues();
+  let pinValid = false;
+  for (let i = 1; i < pinData.length; i++) {
+    if (String(pinData[i][0]).trim().substring(0, 10) === todayStr &&
+        pinData[i][2] === true &&
+        String(pinData[i][1]).trim() === String(pin).trim()) {
+      pinValid = true;
+      break;
+    }
+  }
+  if (!pinValid) return { ok: false, reason: 'auth' };
+
+  // 患者存在確認
+  const regSheet = getSheet_('PatientRegistry');
+  const regData = regSheet.getDataRange().getValues();
+  let patientValid = false;
+  for (let i = 1; i < regData.length; i++) {
+    if (String(regData[i][0]) === String(patientNo) && regData[i][6]) {
+      patientValid = true;
+      break;
+    }
+  }
+  if (!patientValid) return { ok: false, reason: 'auth' };
+
+  // PatientReports に保存
+  const sheet = getSheet_('PatientReports');
+  const reportId = Utilities.getUuid();
+  sheet.appendRow([
+    reportId,
+    String(patientNo),
+    new Date().toISOString(),
+    reportData.symptomScore,
+    reportData.nrsScore !== undefined ? reportData.nrsScore : '',
+    JSON.stringify(reportData.infectionSigns || []),
+    reportData.symptomNotes || '',
+    JSON.stringify(reportData.poemScores || {}),
+    JSON.stringify(reportData.medicationRemain || []),
+    '', '', '',
+    'pending',
+    JSON.stringify(reportData.triggers || []),
+    reportData.triggerNote || '',
+    JSON.stringify(reportData.topicalUse || [])
+  ]);
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 2).setNumberFormat('@');
+  sheet.getRange(newRow, 2).setValue(String(patientNo));
+  auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_submit_ok');
+  return { ok: true, reportId: reportId };
+}
+
 // ===== 固定QR認証: DailyPINと患者情報を検証し、患者コンテキストを返す =====
 function validateFixedAuth(patientNo, birthdate, pin) {
   // 1. DailyPIN チェック（JST当日 + enabled=true）

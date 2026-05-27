@@ -31,35 +31,57 @@
     <div class="sub">来院前アンケート</div>
   </div>
 
-  <!-- フェーズ0: 固定QR本人確認 -->
+  <!-- フェーズ0: 固定QR本人確認（診察券番号 + 確認コードのみ） -->
   <div id="phase-auth" style="display:none;">
     <div class="container" style="max-width:440px;margin:0 auto;padding-top:24px;">
       <div class="card">
-        <div class="card-title" style="margin-bottom:20px;">本人確認</div>
+        <div class="card-title" style="margin-bottom:20px;">受付確認</div>
         <div style="margin-bottom:14px;">
           <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">診察券番号</label>
           <input type="text" id="auth-patientno" inputmode="numeric" autocomplete="off"
             placeholder="例：01631"
             style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;box-sizing:border-box;font-family:inherit;">
         </div>
-        <div style="margin-bottom:14px;">
+        <div style="margin-bottom:20px;">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">本日の確認コード</label>
+          <input type="text" id="auth-pin" inputmode="numeric" autocomplete="off"
+            placeholder="受付にてご確認ください"
+            style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;box-sizing:border-box;font-family:inherit;">
+        </div>
+        <div id="auth-error" style="display:none;color:#c0392b;font-size:13px;margin-bottom:14px;padding:10px 12px;background:#fdf2f2;border-radius:var(--radius-sm);">
+          入力内容に誤りがあります。もう一度ご確認ください。
+        </div>
+        <button id="auth-btn" class="btn btn-green btn-full" onclick="submitAuth()" style="padding:14px;">
+          確認する
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- フェーズ0b: 生年月日登録（初診患者のみ） -->
+  <div id="phase-birthdate" style="display:none;">
+    <div class="container" style="max-width:440px;margin:0 auto;padding-top:24px;">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:8px;">生年月日の登録</div>
+        <p style="font-size:13px;color:#555;margin-bottom:20px;">初めてご利用いただきます。生年月日を入力してください。</p>
+        <div style="margin-bottom:20px;">
           <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">生年月日</label>
           <div style="display:flex;gap:6px;">
-            <select id="auth-bd-year" style="flex:2;padding:12px 6px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:#fff;color:#333;-webkit-appearance:none;appearance:none;text-align:center;">
+            <select id="reg-bd-year" style="flex:2;padding:12px 6px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:#fff;color:#333;-webkit-appearance:none;appearance:none;text-align:center;">
               <option value="">年</option>
             </select>
-            <select id="auth-bd-month" style="flex:1;padding:12px 4px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:#fff;color:#333;-webkit-appearance:none;appearance:none;text-align:center;">
+            <select id="reg-bd-month" style="flex:1;padding:12px 4px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:#fff;color:#333;-webkit-appearance:none;appearance:none;text-align:center;">
               <option value="">月</option>
             </select>
-            <select id="auth-bd-day" style="flex:1;padding:12px 4px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:#fff;color:#333;-webkit-appearance:none;appearance:none;text-align:center;">
+            <select id="reg-bd-day" style="flex:1;padding:12px 4px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:#fff;color:#333;-webkit-appearance:none;appearance:none;text-align:center;">
               <option value="">日</option>
             </select>
           </div>
           <script>
             (function() {
-              const y = document.getElementById('auth-bd-year');
-              const m = document.getElementById('auth-bd-month');
-              const d = document.getElementById('auth-bd-day');
+              const y = document.getElementById('reg-bd-year');
+              const m = document.getElementById('reg-bd-month');
+              const d = document.getElementById('reg-bd-day');
               const curY = new Date().getFullYear();
               for (let i = curY; i >= 1920; i--) {
                 const o = document.createElement('option'); o.value = String(i); o.textContent = i + '年'; y.appendChild(o);
@@ -73,17 +95,11 @@
             })();
           </script>
         </div>
-        <div style="margin-bottom:20px;">
-          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">本日の確認コード</label>
-          <input type="text" id="auth-pin" inputmode="numeric" autocomplete="off"
-            placeholder="受付にてご確認ください"
-            style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;box-sizing:border-box;font-family:inherit;">
+        <div id="reg-error" style="display:none;color:#c0392b;font-size:13px;margin-bottom:14px;padding:10px 12px;background:#fdf2f2;border-radius:var(--radius-sm);">
+          生年月日を正しく選択してください。
         </div>
-        <div id="auth-error" style="display:none;color:#c0392b;font-size:13px;margin-bottom:14px;padding:10px 12px;background:#fdf2f2;border-radius:var(--radius-sm);">
-          入力内容に誤りがあります。もう一度ご確認ください。
-        </div>
-        <button id="auth-btn" class="btn btn-green btn-full" onclick="submitAuth()" style="padding:14px;">
-          確認する
+        <button id="reg-btn" class="btn btn-green btn-full" onclick="submitBirthdate()" style="padding:14px;">
+          登録してアンケートへ
         </button>
       </div>
     </div>
@@ -337,15 +353,11 @@
 
     function submitAuth() {
       const pno    = document.getElementById('auth-patientno').value.trim();
-      const bdY    = document.getElementById('auth-bd-year').value;
-      const bdM    = document.getElementById('auth-bd-month').value;
-      const bdD    = document.getElementById('auth-bd-day').value;
-      const bd     = (bdY && bdM && bdD) ? bdY + '-' + bdM + '-' + bdD : '';
       const pin    = document.getElementById('auth-pin').value.trim();
       const errDiv = document.getElementById('auth-error');
       const btn    = document.getElementById('auth-btn');
 
-      if (!pno || !bd || !pin) {
+      if (!pno || !pin) {
         errDiv.style.display = 'block';
         return;
       }
@@ -355,19 +367,24 @@
       showPhase('loading');
 
       google.script.run
-        .withSuccessHandler(ctx => {
+        .withSuccessHandler(res => {
           btn.disabled = false;
           btn.textContent = '確認する';
-          if (!ctx || !ctx.valid) {
+          if (!res || !res.valid) {
             showPhase('auth');
             errDiv.style.display = 'block';
             return;
           }
           _fixedPatientNo = pno;
-          _fixedBirthdate = bd;
           _fixedPin       = pin;
-          document.getElementById('disp-patientno').textContent = pno;
-          onContextLoaded(ctx);
+          if (res.status === 'new') {
+            // 初診患者: 生年月日入力画面へ
+            showPhase('birthdate');
+          } else {
+            // 既存患者: そのままアンケートへ
+            document.getElementById('disp-patientno').textContent = pno;
+            onContextLoaded(res);
+          }
         })
         .withFailureHandler(err => {
           btn.disabled = false;
@@ -376,7 +393,48 @@
           errDiv.textContent = 'サーバーとの通信に失敗しました。もう一度お試しください。';
           errDiv.style.display = 'block';
         })
-        .validateFixedAuth(pno, bd, pin);
+        .validateFixedAuthNew(pno, pin);
+    }
+
+    function submitBirthdate() {
+      const bdY    = document.getElementById('reg-bd-year').value;
+      const bdM    = document.getElementById('reg-bd-month').value;
+      const bdD    = document.getElementById('reg-bd-day').value;
+      const bd     = (bdY && bdM && bdD) ? bdY + '-' + bdM + '-' + bdD : '';
+      const errDiv = document.getElementById('reg-error');
+      const btn    = document.getElementById('reg-btn');
+
+      if (!bd) {
+        errDiv.style.display = 'block';
+        return;
+      }
+      errDiv.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = '登録中...';
+      showPhase('loading');
+
+      google.script.run
+        .withSuccessHandler(ctx => {
+          btn.disabled = false;
+          btn.textContent = '登録してアンケートへ';
+          if (!ctx || !ctx.valid) {
+            showPhase('birthdate');
+            errDiv.textContent = '登録に失敗しました。受付にお声がけください。';
+            errDiv.style.display = 'block';
+            return;
+          }
+          _fixedBirthdate = bd;
+          document.getElementById('disp-patientno').textContent = _fixedPatientNo;
+          onContextLoaded(ctx);
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = '登録してアンケートへ';
+          showPhase('birthdate');
+          errDiv.textContent = 'サーバーとの通信に失敗しました。もう一度お試しください。';
+          errDiv.style.display = 'block';
+        })
+        .registerBirthdateAndGetContext(_fixedPatientNo, _fixedPin, bd);
     }
 
     function onContextLoaded(ctx) {
@@ -625,7 +683,7 @@
             }
           })
           .withFailureHandler(err => showError('送信中にエラーが発生しました: ' + err.message))
-          .submitPatientReportFixed(_fixedPatientNo, _fixedBirthdate, _fixedPin, reportData);
+          .submitPatientReportFixed2(_fixedPatientNo, _fixedPin, reportData);
       } else {
         google.script.run
           .withSuccessHandler(res => {
@@ -642,7 +700,7 @@
 
     // フェーズ切り替え
     function showPhase(name) {
-      ['auth', 'loading', 'form', 'submitting', 'done', 'error'].forEach(p => {
+      ['auth', 'birthdate', 'loading', 'form', 'submitting', 'done', 'error'].forEach(p => {
         document.getElementById('phase-' + p).style.display = p === name ? '' : 'none';
       });
     }
