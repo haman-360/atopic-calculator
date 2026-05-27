@@ -298,7 +298,10 @@ function validateFixedAuth(patientNo, birthdate, pin) {
       auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_fail');
       return { valid: false };
     }
-    const storedBd = String(regData[i][1]).trim().substring(0, 10);
+    const rawBd    = regData[i][1];
+    const storedBd = (rawBd instanceof Date)
+      ? Utilities.formatDate(rawBd, 'Asia/Tokyo', 'yyyy-MM-dd')
+      : String(rawBd).trim().substring(0, 10);
     const inputBd  = String(birthdate).trim().substring(0, 10);
     if (storedBd !== inputBd) {
       auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_fail');
@@ -337,7 +340,10 @@ function submitPatientReportFixed(patientNo, birthdate, pin, reportData) {
   for (let i = 1; i < regData.length; i++) {
     if (String(regData[i][0]) !== String(patientNo)) continue;
     if (!regData[i][6]) break;
-    const storedBd = String(regData[i][1]).trim().substring(0, 10);
+    const rawBd2   = regData[i][1];
+    const storedBd = (rawBd2 instanceof Date)
+      ? Utilities.formatDate(rawBd2, 'Asia/Tokyo', 'yyyy-MM-dd')
+      : String(rawBd2).trim().substring(0, 10);
     const inputBd  = String(birthdate).trim().substring(0, 10);
     if (storedBd === inputBd) patientValid = true;
     break;
