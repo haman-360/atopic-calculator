@@ -556,22 +556,24 @@ function getDashboardData() {
     };
   }
 
-  // VisitHistory を最新処方マップ化
-  const lastRxMap = {};
+  // VisitHistory を患者ごとに整理（visitDate 降順）
+  const vhByPatient = {};
   for (let i = 1; i < vhData.length; i++) {
     try {
       const pno = String(vhData[i][0]);
-      if (!lastRxMap[pno] || vhData[i][1] > lastRxMap[pno].visitDate) {
-        let drugsJson = [];
-        try { drugsJson = vhData[i][3] ? JSON.parse(vhData[i][3]) : []; } catch(e) {}
-        lastRxMap[pno] = {
-          visitDate: dateToStr_(vhData[i][1]),
-          nextVisitDate: dateToStr_(vhData[i][2]),
-          drugsJson: drugsJson,
-          rxSummaryText: vhData[i][4] || ''
-        };
-      }
+      if (!vhByPatient[pno]) vhByPatient[pno] = [];
+      let drugsJson = [];
+      try { drugsJson = vhData[i][3] ? JSON.parse(vhData[i][3]) : []; } catch(e) {}
+      vhByPatient[pno].push({
+        visitDate: dateToStr_(vhData[i][1]),
+        nextVisitDate: dateToStr_(vhData[i][2]),
+        drugsJson: drugsJson,
+        rxSummaryText: vhData[i][4] || ''
+      });
     } catch(e) {}
+  }
+  for (const pno in vhByPatient) {
+    vhByPatient[pno].sort(function(a, b) { return b.visitDate.localeCompare(a.visitDate); });
   }
 
   // ClinicalAssessments から最新評価をマップ化
@@ -623,7 +625,15 @@ function getDashboardData() {
         triggers: triggers,                                      // N
         triggerNote: row[14] || '',                              // O
         topicalUse: topicalUse,                                  // P
-        lastRx: lastRxMap[pno] || null,
+        lastRx: (function() {
+          // レポート送信日（JST）より前の訪問のみを「前回処方」として返す
+          var reportDateStr = row[2] ? Utilities.formatDate(new Date(row[2]), 'Asia/Tokyo', 'yyyy-MM-dd') : '';
+          var visits = vhByPatient[pno] || [];
+          for (var vi = 0; vi < visits.length; vi++) {
+            if (!reportDateStr || visits[vi].visitDate < reportDateStr) return visits[vi];
+          }
+          return null;
+        })(),
         lastAssessment: assessmentMap[pno] || null,
         rowIndex: i + 1
       };
