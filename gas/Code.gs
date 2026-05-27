@@ -14,12 +14,28 @@ const CLINIC_SECRET = PROPS.getProperty('CLINIC_SECRET');
 function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) || 'form';
 
+  // 疾患固定QRルート: ?mode=fixed&form=xxx
+  if (e && e.parameter && e.parameter.mode === 'fixed') {
+    const formType = (e.parameter.form) || 'atopic_dermatitis';
+    const tmpl = HtmlService.createTemplateFromFile('patient_form');
+    tmpl.patientNo = '';
+    tmpl.token     = '';
+    tmpl.fixedMode = true;
+    tmpl.formType  = formType;
+    return tmpl.evaluate()
+      .setTitle('症状報告フォーム — はまこどもクリニック')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+  }
+
   if (page === 'form') {
     const patientNo = (e && e.parameter && e.parameter.p) || '';
     const token     = (e && e.parameter && e.parameter.t) || '';
     const tmpl = HtmlService.createTemplateFromFile('patient_form');
     tmpl.patientNo = patientNo;
     tmpl.token     = token;
+    tmpl.fixedMode = false;
+    tmpl.formType  = '';
     return tmpl.evaluate()
       .setTitle('症状報告フォーム — はまこどもクリニック')
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
@@ -171,30 +187,28 @@ function getPatientContext(patientNo, token) {
   Logger.log('[getPatientContext] validateToken_ 結果=' + JSON.stringify(validation));
   if (!validation.valid) return validation;
 
-  // VisitHistory から最新処方を取得
-  Logger.log('[getPatientContext] VisitHistory 取得開始');
+  const result = buildPatientContextPayload_(patientNo, validation.birthdate, validation.notes);
+  Logger.log('[getPatientContext] 返却完了');
+  return result;
+}
+
+// ===== 患者コンテキスト組み立て（トークン検証済みの場合に呼ぶ共通処理） =====
+function buildPatientContextPayload_(patientNo, birthdate, notes) {
   const vhSheet = getSheet_('VisitHistory');
-  Logger.log('[getPatientContext] VisitHistory シート取得完了');
   const vhData = vhSheet.getDataRange().getValues();
-  Logger.log('[getPatientContext] VisitHistory 行数=' + vhData.length);
   let lastVisit = null;
   for (let i = 1; i < vhData.length; i++) {
     const row = vhData[i];
     if (String(row[0]) !== String(patientNo)) continue;
-    Logger.log('[getPatientContext] 処方履歴発見 row=' + i + ' visitDate=' + row[1] + ' drugsJsonLen=' + (row[3] ? String(row[3]).length : 0));
     if (!lastVisit || row[1] > lastVisit.visitDate) {
-      Logger.log('[getPatientContext] drugsJson パース開始');
       let parsedDrugs = [];
       if (row[3]) {
         try {
           const raw = JSON.parse(row[3]);
-          Logger.log('[getPatientContext] drugsJson パース成功 件数=' + raw.length);
           parsedDrugs = raw.map(function(d) {
             return { name: d.name || '', partLabel: d.partLabel || '', freqLabel: d.freqLabel || '' };
           });
-        } catch (e) {
-          Logger.log('[getPatientContext] drugsJson パースエラー: ' + e.message);
-        }
+        } catch (e) {}
       }
       const fmtDate = function(v) {
         if (!v) return '';
@@ -207,26 +221,15 @@ function getPatientContext(patientNo, token) {
         drugsJson: parsedDrugs,
         rxSummaryText: row[4] || ''
       };
-      Logger.log('[getPatientContext] lastVisit 更新完了');
     }
   }
-  Logger.log('[getPatientContext] VisitHistory ループ完了 lastVisit=' + (lastVisit ? 'あり' : 'なし'));
-
-  Logger.log('[getPatientContext] ageLabel計算開始');
-  const ageLabel = calcAgeLabel_(validation.birthdate);
-  Logger.log('[getPatientContext] ageGroup計算開始');
-  const ageGroup = calcAgeGroup_(validation.birthdate);
-  Logger.log('[getPatientContext] age計算完了 ageLabel=' + ageLabel + ' ageGroup=' + ageGroup);
-
-  const result = {
+  return {
     valid: true,
-    ageLabel: ageLabel,
-    ageGroup: ageGroup,
-    notes: validation.notes,
+    ageLabel: calcAgeLabel_(birthdate),
+    ageGroup: calcAgeGroup_(birthdate),
+    notes: notes || '',
     lastVisit: lastVisit
   };
-  Logger.log('[getPatientContext] 返却完了');
-  return result;
 }
 
 // ===== 患者フォーム送信 =====
@@ -258,6 +261,112 @@ function submitPatientReport(reportData) {
   const newRow = sheet.getLastRow();
   sheet.getRange(newRow, 2).setNumberFormat('@');
   sheet.getRange(newRow, 2).setValue(String(reportData.patientNo));
+  return { ok: true, reportId: reportId };
+}
+
+// ===== 固定QR認証: DailyPINと患者情報を検証し、患者コンテキストを返す =====
+function validateFixedAuth(patientNo, birthdate, pin) {
+  // 1. DailyPIN チェック（JST当日 + enabled=true）
+  const pinSheet = getSheet_('DailyPIN');
+  if (!pinSheet) {
+    auditLog_(getSheet_('AuditLog'), patientNo || 'unknown', 'fixed_auth_fail');
+    return { valid: false };
+  }
+  const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const pinData = pinSheet.getDataRange().getValues();
+  let pinValid = false;
+  for (let i = 1; i < pinData.length; i++) {
+    const rowDate    = String(pinData[i][0]).trim().substring(0, 10);
+    const rowPin     = String(pinData[i][1]).trim();
+    const rowEnabled = pinData[i][2];
+    if (rowDate === todayStr && rowEnabled === true && rowPin === String(pin).trim()) {
+      pinValid = true;
+      break;
+    }
+  }
+  if (!pinValid) {
+    auditLog_(getSheet_('AuditLog'), patientNo || 'unknown', 'fixed_auth_fail');
+    return { valid: false };
+  }
+
+  // 2. PatientRegistry: patientNo + isActive + birthdate 一致チェック
+  const regSheet = getSheet_('PatientRegistry');
+  const regData = regSheet.getDataRange().getValues();
+  for (let i = 1; i < regData.length; i++) {
+    if (String(regData[i][0]) !== String(patientNo)) continue;
+    if (!regData[i][6]) { // isActive
+      auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_fail');
+      return { valid: false };
+    }
+    const storedBd = String(regData[i][1]).trim().substring(0, 10);
+    const inputBd  = String(birthdate).trim().substring(0, 10);
+    if (storedBd !== inputBd) {
+      auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_fail');
+      return { valid: false };
+    }
+    // 認証成功
+    auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_ok');
+    return buildPatientContextPayload_(String(patientNo), regData[i][1] || '', regData[i][2] || '');
+  }
+  auditLog_(getSheet_('AuditLog'), patientNo || 'unknown', 'fixed_auth_fail');
+  return { valid: false };
+}
+
+// ===== 固定QRルート: アンケート送信（再認証してから保存） =====
+function submitPatientReportFixed(patientNo, birthdate, pin, reportData) {
+  // 送信時に再検証
+  const pinSheet = getSheet_('DailyPIN');
+  if (!pinSheet) return { ok: false, reason: 'auth' };
+  const todayStr = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const pinData = pinSheet.getDataRange().getValues();
+  let pinValid = false;
+  for (let i = 1; i < pinData.length; i++) {
+    const rowDate    = String(pinData[i][0]).trim().substring(0, 10);
+    const rowPin     = String(pinData[i][1]).trim();
+    const rowEnabled = pinData[i][2];
+    if (rowDate === todayStr && rowEnabled === true && rowPin === String(pin).trim()) {
+      pinValid = true;
+      break;
+    }
+  }
+  if (!pinValid) return { ok: false, reason: 'auth' };
+
+  const regSheet = getSheet_('PatientRegistry');
+  const regData = regSheet.getDataRange().getValues();
+  let patientValid = false;
+  for (let i = 1; i < regData.length; i++) {
+    if (String(regData[i][0]) !== String(patientNo)) continue;
+    if (!regData[i][6]) break;
+    const storedBd = String(regData[i][1]).trim().substring(0, 10);
+    const inputBd  = String(birthdate).trim().substring(0, 10);
+    if (storedBd === inputBd) patientValid = true;
+    break;
+  }
+  if (!patientValid) return { ok: false, reason: 'auth' };
+
+  // 検証通過 → PatientReports に保存
+  const sheet = getSheet_('PatientReports');
+  const reportId = Utilities.getUuid();
+  sheet.appendRow([
+    reportId,
+    String(patientNo),
+    new Date().toISOString(),
+    reportData.symptomScore,
+    reportData.nrsScore !== undefined ? reportData.nrsScore : '',
+    JSON.stringify(reportData.infectionSigns || []),
+    reportData.symptomNotes || '',
+    JSON.stringify(reportData.poemScores || {}),
+    JSON.stringify(reportData.medicationRemain || []),
+    '', '', '',
+    'pending',
+    JSON.stringify(reportData.triggers || []),
+    reportData.triggerNote || '',
+    JSON.stringify(reportData.topicalUse || [])
+  ]);
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 2).setNumberFormat('@');
+  sheet.getRange(newRow, 2).setValue(String(patientNo));
+  auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_submit_ok');
   return { ok: true, reportId: reportId };
 }
 
@@ -622,7 +731,8 @@ function setupSheets() {
     'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText'],
     'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status', 'triggersJson', 'triggerNote', 'topicalUseJson'],
     'AuditLog':              ['timestamp', 'patientNo', 'action'],
-    'ClinicalAssessments':   ['assessmentId', 'patientNo', 'visitDate', 'assessedAt', 'easiHead', 'easiTrunk', 'easiUpperLimb', 'easiLowerLimb', 'easiTotal', 'easiSeverity', 'iga', 'lesionMapJson', 'notes', 'easiRawJson']
+    'ClinicalAssessments':   ['assessmentId', 'patientNo', 'visitDate', 'assessedAt', 'easiHead', 'easiTrunk', 'easiUpperLimb', 'easiLowerLimb', 'easiTotal', 'easiSeverity', 'iga', 'lesionMapJson', 'notes', 'easiRawJson'],
+    'DailyPIN':              ['date', 'pin', 'enabled']
   };
 
   for (const [name, headers] of Object.entries(sheets)) {
@@ -634,7 +744,7 @@ function setupSheets() {
     }
     // patientNo列をテキスト書式に設定（先頭0を保持するため）
     // PatientRegistry・VisitHistory: A列, PatientReports・AuditLog: B列
-    if (['PatientRegistry', 'VisitHistory'].includes(name)) {
+    if (['PatientRegistry', 'VisitHistory', 'DailyPIN'].includes(name)) {
       sheet.getRange('A:A').setNumberFormat('@');
     } else if (['PatientReports', 'AuditLog', 'ClinicalAssessments'].includes(name)) {
       sheet.getRange('B:B').setNumberFormat('@');
@@ -642,6 +752,22 @@ function setupSheets() {
   }
 
   Logger.log('シート初期設定が完了しました');
+}
+
+// ===== DailyPIN シート追加（既存デプロイ用・1回のみ実行） =====
+function addDailyPinSheet() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('DailyPIN');
+  if (!sheet) {
+    sheet = ss.insertSheet('DailyPIN');
+    const headers = ['date', 'pin', 'enabled'];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e8f5e9');
+    sheet.getRange('A:A').setNumberFormat('@');
+    Logger.log('DailyPIN シートを作成しました');
+  } else {
+    Logger.log('DailyPIN シートはすでに存在します');
+  }
 }
 
 // ===== PatientReports: triggersJson / triggerNote 列追加（既存シート用・1回のみ実行） =====

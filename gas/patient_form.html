@@ -31,6 +31,38 @@
     <div class="sub">来院前アンケート</div>
   </div>
 
+  <!-- フェーズ0: 固定QR本人確認 -->
+  <div id="phase-auth" style="display:none;">
+    <div class="container" style="max-width:440px;margin:0 auto;padding-top:24px;">
+      <div class="card">
+        <div class="card-title" style="margin-bottom:20px;">本人確認</div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">診察券番号</label>
+          <input type="text" id="auth-patientno" inputmode="numeric" autocomplete="off"
+            placeholder="例：01631"
+            style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;box-sizing:border-box;font-family:inherit;">
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">生年月日</label>
+          <input type="date" id="auth-birthdate" autocomplete="off"
+            style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;box-sizing:border-box;font-family:inherit;">
+        </div>
+        <div style="margin-bottom:20px;">
+          <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">本日の確認コード</label>
+          <input type="text" id="auth-pin" inputmode="numeric" autocomplete="off"
+            placeholder="受付にてご確認ください"
+            style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;box-sizing:border-box;font-family:inherit;">
+        </div>
+        <div id="auth-error" style="display:none;color:#c0392b;font-size:13px;margin-bottom:14px;padding:10px 12px;background:#fdf2f2;border-radius:var(--radius-sm);">
+          入力内容に誤りがあります。もう一度ご確認ください。
+        </div>
+        <button id="auth-btn" class="btn btn-green btn-full" onclick="submitAuth()" style="padding:14px;">
+          確認する
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- フェーズ1: 認証中 -->
   <div id="phase-loading" class="phase">
     <div class="spinner"></div>
@@ -251,11 +283,22 @@
     const topicalUseMap = {}; // topicalUseMap[drugName][part] = freq
     let patientContext = null;
 
-    const patientNo = '<?= patientNo ?>';
-    const token     = '<?= token ?>';
+    const patientNo  = '<?= patientNo ?>';
+    const token      = '<?= token ?>';
+    const FIXED_MODE = <?= fixedMode ? 'true' : 'false' ?>;
+    const FORM_TYPE  = '<?= formType ?>';
+
+    // 固定QRルート用: 認証後に保持する情報
+    let _fixedPatientNo = '';
+    let _fixedBirthdate = '';
+    let _fixedPin       = '';
 
     // 起動時に認証
     window.addEventListener('load', () => {
+      if (FIXED_MODE) {
+        showPhase('auth');
+        return;
+      }
       if (!patientNo || !token) {
         showError('QRコードが正しく読み取れませんでした。もう一度お試しください。');
         return;
@@ -265,6 +308,47 @@
         .withFailureHandler(err => showError('サーバーとの通信に失敗しました: ' + err.message))
         .getPatientContext(patientNo, token);
     });
+
+    function submitAuth() {
+      const pno    = document.getElementById('auth-patientno').value.trim();
+      const bd     = document.getElementById('auth-birthdate').value.trim();
+      const pin    = document.getElementById('auth-pin').value.trim();
+      const errDiv = document.getElementById('auth-error');
+      const btn    = document.getElementById('auth-btn');
+
+      if (!pno || !bd || !pin) {
+        errDiv.style.display = 'block';
+        return;
+      }
+      errDiv.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = '確認中...';
+      showPhase('loading');
+
+      google.script.run
+        .withSuccessHandler(ctx => {
+          btn.disabled = false;
+          btn.textContent = '確認する';
+          if (!ctx || !ctx.valid) {
+            showPhase('auth');
+            errDiv.style.display = 'block';
+            return;
+          }
+          _fixedPatientNo = pno;
+          _fixedBirthdate = bd;
+          _fixedPin       = pin;
+          document.getElementById('disp-patientno').textContent = pno;
+          onContextLoaded(ctx);
+        })
+        .withFailureHandler(err => {
+          btn.disabled = false;
+          btn.textContent = '確認する';
+          showPhase('auth');
+          errDiv.textContent = 'サーバーとの通信に失敗しました。もう一度お試しください。';
+          errDiv.style.display = 'block';
+        })
+        .validateFixedAuth(pno, bd, pin);
+    }
 
     function onContextLoaded(ctx) {
       try {
@@ -489,8 +573,8 @@
       }
 
       const reportData = {
-        patientNo: patientNo,
-        token: token,
+        patientNo: FIXED_MODE ? _fixedPatientNo : patientNo,
+        token: FIXED_MODE ? '' : token,
         symptomScore: symptomScore,
         nrsScore: nrsScore,
         symptomNotes: document.getElementById('symptom-notes').value.trim(),
@@ -502,21 +586,34 @@
         topicalUse: topicalUse
       };
 
-      google.script.run
-        .withSuccessHandler(res => {
-          if (res.ok) {
-            showPhase('done');
-          } else {
-            showError('送信に失敗しました: ' + (res.reason || ''));
-          }
-        })
-        .withFailureHandler(err => showError('送信中にエラーが発生しました: ' + err.message))
-        .submitPatientReport(reportData);
+      if (FIXED_MODE) {
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res.ok) {
+              showPhase('done');
+            } else {
+              showError('送信に失敗しました。もう一度お試しください。');
+            }
+          })
+          .withFailureHandler(err => showError('送信中にエラーが発生しました: ' + err.message))
+          .submitPatientReportFixed(_fixedPatientNo, _fixedBirthdate, _fixedPin, reportData);
+      } else {
+        google.script.run
+          .withSuccessHandler(res => {
+            if (res.ok) {
+              showPhase('done');
+            } else {
+              showError('送信に失敗しました: ' + (res.reason || ''));
+            }
+          })
+          .withFailureHandler(err => showError('送信中にエラーが発生しました: ' + err.message))
+          .submitPatientReport(reportData);
+      }
     }
 
     // フェーズ切り替え
     function showPhase(name) {
-      ['loading', 'form', 'submitting', 'done', 'error'].forEach(p => {
+      ['auth', 'loading', 'form', 'submitting', 'done', 'error'].forEach(p => {
         document.getElementById('phase-' + p).style.display = p === name ? '' : 'none';
       });
     }
