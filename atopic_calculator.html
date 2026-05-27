@@ -1007,27 +1007,23 @@
 
   <script>
     const PRESETS = [
-      // 1FTU=0.35g: モイゼルト（大塚製薬資料より）
+      // 0: 1FTU=0.35g: モイゼルト（大塚製薬資料より）
       { name: "モイゼルト軟膏", tubeg: 28, gPerFTU: 0.35, custom: false },
-      // 1FTU=0.5g: コレクチム10g（鳥居薬品資料より）
+      // 1: 1FTU=0.5g: コレクチム10g（鳥居薬品資料より）
       { name: "コレクチム軟膏", tubeg: 10, gPerFTU: 0.5, custom: false },
-      // 1FTU=0.2g: プロトピック5g（細口チューブ実務換算）
-      { name: "プロトピック軟膏", tubeg: 5, gPerFTU: 0.2, custom: false },
-      // 1FTU=0.3g: ロコイド・リンデロンV 10g（実務換算）
+      // 2〜5: ステロイド（1FTU=0.3g）
       { name: "ロコイド軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
       { name: "リンデロンV軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
       { name: "リンデロンVクリーム", tubeg: 10, gPerFTU: 0.3, custom: false },
-      // ステロイド（標準10g・30g）
       { name: "アンテベート軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
-      { name: "ベタメタゾン軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
+      // 6: ステロイドクリーム（1FTU=0.5g）
       { name: "ベタメタゾンクリーム", tubeg: 30, gPerFTU: 0.5, custom: false },
-      // 混合軟膏
+      // 7〜8: 混合軟膏
       { name: "ロコイド/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
-      { name: "ベタメタゾン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
-      // 保湿剤（1FTU≒0.5g）
-      { name: "ヒルドイドクリーム", tubeg: 25, gPerFTU: 0.5, custom: false },
-      { name: "ヒルドイドソフト軟膏", tubeg: 25, gPerFTU: 0.5, custom: false },
+      { name: "リンデロン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
+      // 9: 保湿剤
       { name: "ブイタマークリーム", tubeg: 15, gPerFTU: 0.5, custom: false },
+      // 10: 手入力
       { name: "その他（手入力）", tubeg: 10, gPerFTU: 0.5, custom: true },
     ];
     const FREQS = [
@@ -4995,23 +4991,18 @@
       if (status) { status.textContent = ''; }
     }
 
-    // ルールベース解析テーブル
+    // ルールベース解析テーブル（PRESETS のインデックスに対応）
     const VOICE_DRUG_MAP = [
-      { pattern: /ロコイド.{0,5}混合|混合.{0,5}ロコイド/,  idx: 9 },
-      { pattern: /ベタメタゾン.{0,5}混合|混合.{0,5}ベタメタゾン/, idx: 10 },
+      { pattern: /ロコイド.{0,5}混合|混合.{0,5}ロコイド/,       idx: 7 },  // ロコイド/ヘパリン混合軟膏
+      { pattern: /リンデロン.{0,5}混合|混合.{0,5}リンデロン/,   idx: 8 },  // リンデロン/ヘパリン混合軟膏
       { pattern: /モイゼルト/,  idx: 0 },
       { pattern: /コレクチム/,  idx: 1 },
-      { pattern: /プロトピック/, idx: 2 },
-      { pattern: /ロコイド/,    idx: 3 },
-      { pattern: /リンデロン.{0,3}[Vｖ].{0,3}クリーム/, idx: 5 },
-      { pattern: /リンデロン/,  idx: 4 },
-      { pattern: /アンテベート/, idx: 6 },
-      { pattern: /ベタメタゾン.{0,5}クリーム|クリーム.{0,5}ベタメタゾン/, idx: 8 },
-      { pattern: /ベタメタゾン/, idx: 7 },
-      { pattern: /ヒルドイドソフト/, idx: 12 },
-      { pattern: /ヒルドイドクリーム/, idx: 11 },
-      { pattern: /ヒルドイド/,  idx: 11 },
-      { pattern: /ブイタマー|VTM|ビタマー/, idx: 13 },
+      { pattern: /ロコイド/,    idx: 2 },
+      { pattern: /リンデロン.{0,3}[Vｖ].{0,3}クリーム/, idx: 4 },  // リンデロンVクリーム
+      { pattern: /リンデロン/,  idx: 3 },  // リンデロンV軟膏
+      { pattern: /アンテベート/, idx: 5 },
+      { pattern: /ベタメタゾン.{0,5}クリーム|クリーム.{0,5}ベタメタゾン/, idx: 6 },  // ベタメタゾンクリーム
+      { pattern: /ブイタマー|VTM|ビタマー/, idx: 9 },
     ];
 
     const VOICE_FREQ_MAP = [
@@ -5083,7 +5074,7 @@
         .trim();
 
       // スペース区切りで連続する処方フレーズを文に分割（部位名・薬剤名の前に区切りを挿入）
-      text = text.replace(/[ 　]+(?=[腕足顔首背腹体全]|モイゼルト|コレクチム|プロトピック|ロコイド|リンデロン|アンテベート|ベタメタゾン|ヒルドイド|ブイタマー)/g, '。');
+      text = text.replace(/[ 　]+(?=[腕足顔首背腹体全]|モイゼルト|コレクチム|ロコイド|リンデロン|アンテベート|ベタメタゾン|ブイタマー)/g, '。');
 
       const result = { nextDateOffset: null, drugs: [], warnings: [] };
       const sentences = text.split(/[。、\n]+/).map(s => s.trim()).filter(Boolean);

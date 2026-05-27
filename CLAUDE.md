@@ -222,20 +222,23 @@ atopic-calculator/
 ### 薬剤データ（PRESETS）
 ```javascript
 [
+  // idx 0
   { name: "モイゼルト軟膏",              tubeg: 28, gPerFTU: 0.35, mixed: false },
+  // idx 1
   { name: "コレクチム軟膏",              tubeg: 10, gPerFTU: 0.5,  mixed: false },
-  { name: "プロトピック軟膏",            tubeg: 5,  gPerFTU: 0.2,  mixed: false },
+  // idx 2〜5: ステロイド
   { name: "ロコイド軟膏",                tubeg: 10, gPerFTU: 0.3,  mixed: false },
   { name: "リンデロンV軟膏",             tubeg: 10, gPerFTU: 0.3,  mixed: false },
   { name: "リンデロンVクリーム",         tubeg: 10, gPerFTU: 0.3,  mixed: false },
   { name: "アンテベート軟膏",            tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  { name: "ベタメタゾン軟膏",            tubeg: 10, gPerFTU: 0.3,  mixed: false },
+  // idx 6
   { name: "ベタメタゾンクリーム",        tubeg: 30, gPerFTU: 0.5,  mixed: false },
+  // idx 7〜8: 混合軟膏
   { name: "ロコイド/ヘパリン混合軟膏",   tubeg: 10, gPerFTU: 0.5,  mixed: true  },
-  { name: "ベタメタゾン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, mixed: true },
-  { name: "ヒルドイドクリーム",          tubeg: 25, gPerFTU: 0.5,  mixed: false },
-  { name: "ヒルドイドソフト軟膏",        tubeg: 25, gPerFTU: 0.5,  mixed: false },
+  { name: "リンデロン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5,  mixed: true  },
+  // idx 9: 保湿剤
   { name: "ブイタマークリーム",          tubeg: 15, gPerFTU: 0.5,  mixed: false },
+  // idx 10: 手入力
   { name: "その他（手入力）",             tubeg: 10, gPerFTU: 0.5,  custom: true },
 ]
 ```
