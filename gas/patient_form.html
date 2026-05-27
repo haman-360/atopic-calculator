@@ -44,8 +44,34 @@
         </div>
         <div style="margin-bottom:14px;">
           <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">生年月日</label>
-          <input type="date" id="auth-birthdate" autocomplete="off"
-            style="width:100%;padding:12px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;box-sizing:border-box;font-family:inherit;">
+          <div style="display:flex;gap:6px;">
+            <select id="auth-bd-year" style="flex:2;padding:12px 6px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:#fff;color:#333;-webkit-appearance:none;appearance:none;text-align:center;">
+              <option value="">年</option>
+            </select>
+            <select id="auth-bd-month" style="flex:1;padding:12px 4px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:#fff;color:#333;-webkit-appearance:none;appearance:none;text-align:center;">
+              <option value="">月</option>
+            </select>
+            <select id="auth-bd-day" style="flex:1;padding:12px 4px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:16px;background:#fff;color:#333;-webkit-appearance:none;appearance:none;text-align:center;">
+              <option value="">日</option>
+            </select>
+          </div>
+          <script>
+            (function() {
+              const y = document.getElementById('auth-bd-year');
+              const m = document.getElementById('auth-bd-month');
+              const d = document.getElementById('auth-bd-day');
+              const curY = new Date().getFullYear();
+              for (let i = curY; i >= 1920; i--) {
+                const o = document.createElement('option'); o.value = String(i); o.textContent = i + '年'; y.appendChild(o);
+              }
+              for (let i = 1; i <= 12; i++) {
+                const o = document.createElement('option'); o.value = String(i).padStart(2,'0'); o.textContent = i + '月'; m.appendChild(o);
+              }
+              for (let i = 1; i <= 31; i++) {
+                const o = document.createElement('option'); o.value = String(i).padStart(2,'0'); o.textContent = i + '日'; d.appendChild(o);
+              }
+            })();
+          </script>
         </div>
         <div style="margin-bottom:20px;">
           <label style="font-size:13px;font-weight:600;display:block;margin-bottom:6px;">本日の確認コード</label>
@@ -311,7 +337,10 @@
 
     function submitAuth() {
       const pno    = document.getElementById('auth-patientno').value.trim();
-      const bd     = document.getElementById('auth-birthdate').value.trim();
+      const bdY    = document.getElementById('auth-bd-year').value;
+      const bdM    = document.getElementById('auth-bd-month').value;
+      const bdD    = document.getElementById('auth-bd-day').value;
+      const bd     = (bdY && bdM && bdD) ? bdY + '-' + bdM + '-' + bdD : '';
       const pin    = document.getElementById('auth-pin').value.trim();
       const errDiv = document.getElementById('auth-error');
       const btn    = document.getElementById('auth-btn');
