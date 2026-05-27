@@ -311,8 +311,9 @@ function validateFixedAuthNew(patientNo, pin) {
       return { valid: true, status: 'new' };
     }
   }
-  auditLog_(getSheet_('AuditLog'), patientNo || 'unknown', 'fixed_auth_fail');
-  return { valid: false };
+  // PatientRegistryに存在しない患者も、PINが正しければ生年月日入力へ進む
+  auditLog_(getSheet_('AuditLog'), patientNo || 'unknown', 'fixed_auth_new_patient');
+  return { valid: true, status: 'new' };
 }
 
 // ===== 初診患者: 生年月日を登録してコンテキストを返す =====
@@ -343,7 +344,13 @@ function registerBirthdateAndGetContext(patientNo, pin, birthdate) {
     auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_birthdate_registered');
     return buildPatientContextPayload_(String(patientNo), birthdate, regData[i][2] || '');
   }
-  return { valid: false };
+  // PatientRegistryに存在しない新規患者: 新規行を作成して登録
+  regSheet.appendRow([String(patientNo), birthdate, '', '', '', '', true]);
+  const newRow = regSheet.getLastRow();
+  regSheet.getRange(newRow, 1).setNumberFormat('@');
+  regSheet.getRange(newRow, 1).setValue(String(patientNo));
+  auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_new_patient_registered');
+  return buildPatientContextPayload_(String(patientNo), birthdate, '');
 }
 
 // ===== 固定QRルート: アンケート送信（PIN + 患者番号のみで再検証） =====
