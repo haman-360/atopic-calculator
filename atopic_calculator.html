@@ -385,6 +385,66 @@
       font-size: 13px;
     }
 
+    /* ===== 薬剤・頻度 ボタンチップ ===== */
+    .drug-pick-btn {
+      padding: 6px 12px;
+      border: 1.5px solid var(--border2);
+      border-radius: 20px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .12s, border-color .12s, color .12s;
+    }
+    .drug-pick-btn.on {
+      background: var(--teal);
+      border-color: var(--teal);
+      color: white;
+      font-weight: 700;
+    }
+    .drug-pick-btn:active { opacity: .75; }
+
+    .freq-pill {
+      padding: 7px 13px;
+      border: 1.5px solid var(--border2);
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--text2);
+      font-size: 13px;
+      font-family: inherit;
+      cursor: pointer;
+      white-space: nowrap;
+      -webkit-tap-highlight-color: transparent;
+      transition: background .12s, border-color .12s, color .12s;
+    }
+    .freq-pill.on {
+      background: var(--green-bg);
+      border-color: var(--green);
+      color: var(--green-text);
+      font-weight: 600;
+    }
+    .freq-pill:active { opacity: .75; }
+
+    .quick-preset-btn {
+      padding: 12px 22px;
+      border: none;
+      border-radius: var(--radius-sm);
+      background: var(--teal);
+      color: white;
+      font-size: 16px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: center;
+      line-height: 1.4;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .quick-preset-btn:active { opacity: .8; }
+
     /* ===== QRフォームモーダル ===== */
     .modal-overlay {
       display: none;
@@ -931,7 +991,7 @@
       </div>
       <div id="drug-list"></div>
       <div id="custom-parts-ui" style="margin-top:8px;margin-bottom:4px;"></div>
-      <button class="btn btn-ghost btn-sm" onclick="addDrug()" style="margin-top:4px;">＋ 薬剤を追加</button>
+      <div id="drug-add-panel" style="border-top:1px solid var(--border);margin-top:10px;padding-top:12px;"></div>
     </div>
 
     <!-- 結果 -->
@@ -1008,23 +1068,23 @@
   <script>
     const PRESETS = [
       // 0: 1FTU=0.35g: モイゼルト（大塚製薬資料より）
-      { name: "モイゼルト軟膏", tubeg: 28, gPerFTU: 0.35, custom: false },
+      { name: "モイゼルト軟膏",              short: "モイゼルト",     tubeg: 28, gPerFTU: 0.35, custom: false },
       // 1: 1FTU=0.5g: コレクチム10g（鳥居薬品資料より）
-      { name: "コレクチム軟膏", tubeg: 10, gPerFTU: 0.5, custom: false },
+      { name: "コレクチム軟膏",              short: "コレクチム",     tubeg: 10, gPerFTU: 0.5,  custom: false },
       // 2〜5: ステロイド（1FTU=0.3g）
-      { name: "ロコイド軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
-      { name: "リンデロンV軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
-      { name: "リンデロンVクリーム", tubeg: 10, gPerFTU: 0.3, custom: false },
-      { name: "アンテベート軟膏", tubeg: 10, gPerFTU: 0.3, custom: false },
+      { name: "ロコイド軟膏",                short: "ロコイド",       tubeg: 10, gPerFTU: 0.3,  custom: false },
+      { name: "リンデロンV軟膏",             short: "リンデロンV",    tubeg: 10, gPerFTU: 0.3,  custom: false },
+      { name: "リンデロンVクリーム",         short: "リンデロンVCr",  tubeg: 10, gPerFTU: 0.3,  custom: false },
+      { name: "アンテベート軟膏",            short: "アンテベート",   tubeg: 10, gPerFTU: 0.3,  custom: false },
       // 6: ステロイドクリーム（1FTU=0.5g）
-      { name: "ベタメタゾンクリーム", tubeg: 30, gPerFTU: 0.5, custom: false },
+      { name: "ベタメタゾンクリーム",        short: "βCr",           tubeg: 30, gPerFTU: 0.5,  custom: false },
       // 7〜8: 混合軟膏
-      { name: "ロコイド/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
-      { name: "リンデロン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
+      { name: "ロコイド/ヘパリン混合軟膏",   short: "ロコ/ヘパ",     tubeg: 10, gPerFTU: 0.5,  custom: false, mixed: true },
+      { name: "リンデロン/ヘパリン混合軟膏", short: "リン/ヘパ",     tubeg: 10, gPerFTU: 0.5,  custom: false, mixed: true },
       // 9: 保湿剤
-      { name: "ブイタマークリーム", tubeg: 15, gPerFTU: 0.5, custom: false },
+      { name: "ブイタマークリーム",          short: "ブイタマー",     tubeg: 15, gPerFTU: 0.5,  custom: false },
       // 10: 手入力
-      { name: "その他（手入力）", tubeg: 10, gPerFTU: 0.5, custom: true },
+      { name: "その他（手入力）",             short: "手入力",         tubeg: 10, gPerFTU: 0.5,  custom: true },
     ];
     const FREQS = [
       { label: "1日2回", val: 2 }, { label: "1日1回", val: 1 },
@@ -1034,18 +1094,20 @@
     // FTU値: 大塚製薬モイゼルト資料（1FTU=0.35g）に準拠
     // arm = 片腕（腕＆手）統合、leg = 片足（大腿〜足）統合
     const FTU_AGE = {
-      adult: { face: 2.5, arm: 4.0, trunk_f: 7.0, trunk_b: 7.0, leg: 8.0 },
-      child10: { face: 2.0, arm: 2.5, trunk_f: 3.5, trunk_b: 5.0, leg: 4.5 },
-      child3: { face: 1.5, arm: 2.0, trunk_f: 3.0, trunk_b: 3.5, leg: 3.0 },
-      child1: { face: 1.5, arm: 1.5, trunk_f: 2.0, trunk_b: 3.0, leg: 2.0 },
-      infant: { face: 1.0, arm: 1.0, trunk_f: 1.0, trunk_b: 1.5, leg: 1.5 },
+      adult:   { face: 2.5, arm: 4.0, trunk_f: 7.0, trunk_b: 7.0, leg: 8.0, elbow: 0.5, knee: 0.5 },
+      child10: { face: 2.0, arm: 2.5, trunk_f: 3.5, trunk_b: 5.0, leg: 4.5, elbow: 0.5, knee: 0.5 },
+      child3:  { face: 1.5, arm: 2.0, trunk_f: 3.0, trunk_b: 3.5, leg: 3.0, elbow: 0.5, knee: 0.5 },
+      child1:  { face: 1.5, arm: 1.5, trunk_f: 2.0, trunk_b: 3.0, leg: 2.0, elbow: 0.5, knee: 0.5 },
+      infant:  { face: 1.0, arm: 1.0, trunk_f: 1.0, trunk_b: 1.5, leg: 1.5, elbow: 0.5, knee: 0.5 },
     };
     const PARTS = [
-      { key: "face", label: "顔・首", bilateral: false },
-      { key: "trunk_f", label: "体幹前面", bilateral: false },
-      { key: "trunk_b", label: "体幹後面", bilateral: false },
-      { key: "arm", label: "片腕（腕＆手）", bilateral: true },
-      { key: "leg", label: "片足（大腿〜足）", bilateral: true },
+      { key: "face",    label: "顔・首",          bilateral: false },
+      { key: "trunk_f", label: "体幹前面",         bilateral: false },
+      { key: "trunk_b", label: "体幹後面",         bilateral: false },
+      { key: "arm",     label: "片腕（腕＆手）",   bilateral: true  },
+      { key: "elbow",   label: "肘関節",           bilateral: true  },
+      { key: "leg",     label: "片足（大腿〜足）", bilateral: true  },
+      { key: "knee",    label: "膝関節",           bilateral: true  },
     ];
 
     // カスタム部位管理
@@ -1177,7 +1239,6 @@
       el.innerHTML = '';
       drugs.forEach((d, i) => {
         const pre = PRESETS[d.preset];
-        const opts = PRESETS.map((p, pi) => `<option value="${pi}"${pi === d.preset ? ' selected' : ''}>${p.name}</option>`).join('');
 
         // ===== 直接入力モード =====
         if (calcMode === 'direct') {
@@ -1197,12 +1258,18 @@
             <span style="flex:1">${pt.label}</span>${sh}${deleteBtn}
           </div></div>`;
           });
+          const drugChips = PRESETS.map((p, pi) =>
+            `<button class="drug-pick-btn${pi === d.preset ? ' on' : ''}" onclick="onPresetChange(${i},${pi})">${p.short || p.name}</button>`
+          ).join('');
           const tubeNote = d.tubeg > 0 ? `（${(d.directG / d.tubeg).toFixed(1)}本）` : '';
           el.innerHTML += `<div class="drug-block">
-        <div class="drug-block-header">
-          <div class="drug-num">${i + 1}</div>
-          <select onchange="onPresetChange(${i},this.value)">${opts}</select>
-          <button class="btn btn-danger" onclick="removeDrug(${i})">削除</button>
+        <div class="drug-block-header" style="flex-wrap:wrap;row-gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;width:100%;">
+            <div class="drug-num">${i + 1}</div>
+            <span style="font-size:14px;font-weight:700;flex:1;">${PRESETS[d.preset].short || getDrugName(d)}</span>
+            <button class="btn btn-danger" onclick="removeDrug(${i})">削除</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:5px;">${drugChips}</div>
         </div>
         ${pre.custom ? `<div style="margin-bottom:10px;"><label>薬剤名（手入力）</label>
           <input type="text" value="${d.customName}" placeholder="例: ○○軟膏 10g" oninput="drugs[${i}].customName=this.value;calc()"></div>` : ''}
@@ -1230,7 +1297,12 @@
       </div>`;
           return; // direct mode の薬剤ブロック描画完了
         }
-        const fOpts = FREQS.map((f, fi) => `<option value="${fi}"${fi === d.freqIdx ? ' selected' : ''}>${f.label}</option>`).join('');
+        const freqPills = FREQS.map((f, fi) =>
+          `<button class="freq-pill${fi === d.freqIdx ? ' on' : ''}" onclick="drugs[${i}].freqIdx=${fi};renderDrugs();calc()">${f.label}</button>`
+        ).join('');
+        const drugChips2 = PRESETS.map((p, pi) =>
+          `<button class="drug-pick-btn${pi === d.preset ? ' on' : ''}" onclick="onPresetChange(${i},${pi})">${p.short || p.name}</button>`
+        ).join('');
         const givenB = toB(d.givenG, d.tubeg);
         const remB = toB(d.remainG, d.tubeg);
         const consumed = Math.max(0, d.givenG - d.remainG).toFixed(1);
@@ -1266,10 +1338,13 @@
         </div>${ftuAdj}</div>`;
         });
         el.innerHTML += `<div class="drug-block">
-      <div class="drug-block-header">
-        <div class="drug-num">${i + 1}</div>
-        <select onchange="onPresetChange(${i},this.value)">${opts}</select>
-        <button class="btn btn-danger" onclick="removeDrug(${i})">削除</button>
+      <div class="drug-block-header" style="flex-wrap:wrap;row-gap:8px;">
+        <div style="display:flex;align-items:center;gap:8px;width:100%;">
+          <div class="drug-num">${i + 1}</div>
+          <span style="font-size:14px;font-weight:700;flex:1;">${PRESETS[d.preset].short || getDrugName(d)}</span>
+          <button class="btn btn-danger" onclick="removeDrug(${i})">削除</button>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;">${drugChips2}</div>
       </div>
       ${pre.custom ? `<div style="margin-bottom:10px;"><label>薬剤名（手入力）</label>
         <input type="text" value="${d.customName}" placeholder="例: ○○軟膏 10g" oninput="drugs[${i}].customName=this.value;calc()"></div>` : ''}
@@ -1320,9 +1395,9 @@
         </div>
       </div>
       <div class="part-grid">${partsHtml}</div>
-      <div class="freq-row">
-        <div><label>塗布頻度${d.taper ? '（前半）' : ''}</label>
-          <select onchange="drugs[${i}].freqIdx=parseInt(this.value);calc()">${fOpts}</select></div>
+      <div style="margin-top:10px;">
+        <label>塗布頻度${d.taper ? '（前半）' : ''}</label>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">${freqPills}</div>
       </div>
       <div style="margin-top:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0;">
@@ -1349,6 +1424,25 @@
       </div>
     </div>`;
       });
+      renderAddDrugPanel();
+    }
+
+    // ===== 薬追加パネル =====
+    function renderAddDrugPanel() {
+      const el = document.getElementById('drug-add-panel');
+      if (!el) return;
+      const drugBtns = PRESETS.map((p, pi) =>
+        `<button class="drug-pick-btn" onclick="addDrug(${pi})">${p.short || p.name}</button>`
+      ).join('');
+      el.innerHTML = `
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">よく使う（タップで追加）</div>
+        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+          <button class="quick-preset-btn" onclick="addDrugWithFreq(7,0)">ロコ/ヘパ<br><span style="font-size:12px;font-weight:400;">1日2回</span></button>
+          <button class="quick-preset-btn" onclick="addDrugWithFreq(8,0)">リン/ヘパ<br><span style="font-size:12px;font-weight:400;">1日2回</span></button>
+        </div>
+        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">薬を個別に追加</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">${drugBtns}</div>
+      `;
     }
 
     function syncNotes(i) {
@@ -1410,7 +1504,13 @@
       renderDrugs(); calc();
     }
     function setAllParts(i, checked) { getAllParts().forEach(p => { drugs[i].parts[p.key].checked = checked; }); renderDrugs(); calc(); }
-    function addDrug() { drugs.push(newDrug(0)); renderDrugs(); calc(); }
+    function addDrug(pi = 0) { drugs.push(newDrug(pi)); renderDrugs(); calc(); }
+    function addDrugWithFreq(pi, fi) {
+      const d = newDrug(pi);
+      d.freqIdx = fi;
+      drugs.push(d);
+      renderDrugs(); calc();
+    }
     function removeDrug(i) { drugs.splice(i, 1); renderDrugs(); calc(); }
 
     // 部位ごとの1回FTU数・g数を計算して返す
@@ -5023,8 +5123,12 @@
       { pattern: /体幹/,           parts: [{key:'trunk_f',sides:1},{key:'trunk_b',sides:1}] },
       { pattern: /片腕|右腕|左腕/,  parts: [{key:'arm',sides:1}] },
       { pattern: /両腕|両手|両上肢|腕|手足/,  parts: [{key:'arm',sides:2}] },
+      { pattern: /片肘|右肘|左肘/,  parts: [{key:'elbow',sides:1}] },
+      { pattern: /両肘|肘/,          parts: [{key:'elbow',sides:2}] },
       { pattern: /片足|右足|左足|片脚|右脚|左脚/, parts: [{key:'leg',sides:1}] },
       { pattern: /両足|両脚|両下肢|足(?!首)|脚/, parts: [{key:'leg',sides:2}] },
+      { pattern: /片膝|右膝|左膝/,  parts: [{key:'knee',sides:1}] },
+      { pattern: /両膝|膝/,          parts: [{key:'knee',sides:2}] },
     ];
 
     function _voiceExtractDate(text) {
