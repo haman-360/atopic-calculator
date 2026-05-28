@@ -257,6 +257,97 @@ details .detail-body { padding: 8px 0 2px; }
   flex-shrink: 0;
 }
 .mg-bar-p2 { border-left: 2px dashed rgba(0,0,0,0.18); }
+
+/* ===== 患者選択パネル ===== */
+#patient-switcher-panel {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+#patient-switcher-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+}
+#patient-switcher-drawer {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-height: 80vh;
+  background: var(--surface);
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+}
+#patient-switcher-panel.open { display: block; }
+.ps-header {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+.ps-search {
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.ps-search input {
+  width: 100%;
+  padding: 9px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 15px;
+  font-family: inherit;
+  background: var(--surface2);
+  color: var(--text);
+  outline: none;
+}
+.ps-search input:focus { border-color: var(--teal); }
+.ps-list {
+  overflow-y: auto;
+  flex: 1;
+  padding: 8px 0;
+}
+.ps-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: 8px 18px 4px;
+}
+.ps-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 18px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--surface2);
+  gap: 10px;
+  transition: background .1s;
+}
+.ps-item:hover, .ps-item:active { background: var(--surface2); }
+.ps-item.today { background: #e8f5e9; }
+.ps-item.today:hover { background: #d7eeda; }
+.ps-item.current { opacity: .45; cursor: default; }
+.ps-pno { font-size: 15px; font-weight: 700; color: var(--text); }
+.ps-age { font-size: 12px; color: var(--text2); }
+.ps-date { font-size: 11px; color: var(--text3); white-space: nowrap; }
+.ps-today-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--teal);
+  color: white;
+  border-radius: 10px;
+  padding: 2px 7px;
+  white-space: nowrap;
+}
 </style>
 </head>
 <body>
@@ -266,10 +357,33 @@ details .detail-body { padding: 8px 0 2px; }
     <h1 style="font-size:16px;font-weight:700;">📋 カルテビュー</h1>
     <div id="header-sub" style="font-size:11px;color:var(--text2);margin-top:2px;">はまこどもクリニック</div>
   </div>
-  <button onclick="history.back()"
-    style="padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;color:var(--text2);font-family:inherit;white-space:nowrap;">
-    ← 戻る
-  </button>
+  <div style="display:flex;gap:8px;align-items:center;">
+    <button onclick="openPatientSwitcher()"
+      style="padding:6px 14px;background:var(--teal);border:none;border-radius:var(--radius-sm);font-size:13px;cursor:pointer;color:white;font-family:inherit;white-space:nowrap;font-weight:600;">
+      👥 患者を切り替える
+    </button>
+    <button onclick="history.back()"
+      style="padding:6px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;color:var(--text2);font-family:inherit;white-space:nowrap;">
+      ← 戻る
+    </button>
+  </div>
+</div>
+
+<!-- 患者選択パネル -->
+<div id="patient-switcher-panel">
+  <div id="patient-switcher-backdrop" onclick="closePatientSwitcher()"></div>
+  <div id="patient-switcher-drawer">
+    <div class="ps-header">
+      <span style="font-size:15px;font-weight:700;">患者を切り替える</span>
+      <button onclick="closePatientSwitcher()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text2);line-height:1;">✕</button>
+    </div>
+    <div class="ps-search">
+      <input type="search" id="ps-search-input" placeholder="診察券番号で検索..." oninput="filterPatientList(this.value)" inputmode="numeric">
+    </div>
+    <div class="ps-list" id="ps-list">
+      <div style="padding:24px;text-align:center;color:var(--text2);font-size:13px;">読み込み中...</div>
+    </div>
+  </div>
 </div>
 
 <!-- 読み込み中 -->
@@ -396,6 +510,107 @@ function fmtDate(d) {
   });
 }
 
+// ===== 患者選択パネル =====
+var _allPatients = [];
+var _patientListLoaded = false;
+
+function openPatientSwitcher() {
+  document.getElementById('patient-switcher-panel').classList.add('open');
+  document.getElementById('ps-search-input').value = '';
+  if (!_patientListLoaded) {
+    _patientListLoaded = true;
+    google.script.run
+      .withSuccessHandler(function(result) {
+        if (result && result.ok) {
+          _allPatients = result.patients || [];
+          renderPatientList(_allPatients);
+        } else {
+          document.getElementById('ps-list').innerHTML =
+            '<div style="padding:24px;text-align:center;color:var(--text2);font-size:13px;">取得に失敗しました</div>';
+        }
+      })
+      .withFailureHandler(function() {
+        document.getElementById('ps-list').innerHTML =
+          '<div style="padding:24px;text-align:center;color:var(--text2);font-size:13px;">取得に失敗しました</div>';
+      })
+      .getPatientListForChart();
+  } else {
+    renderPatientList(_allPatients);
+  }
+  setTimeout(function() { document.getElementById('ps-search-input').focus(); }, 200);
+}
+
+function closePatientSwitcher() {
+  document.getElementById('patient-switcher-panel').classList.remove('open');
+}
+
+function filterPatientList(q) {
+  var filtered = q
+    ? _allPatients.filter(function(p) { return p.patientNo.includes(q.trim()); })
+    : _allPatients;
+  renderPatientList(filtered);
+}
+
+function renderPatientList(patients) {
+  var el = document.getElementById('ps-list');
+  if (!patients.length) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text2);font-size:13px;">該当する患者が見つかりません</div>';
+    return;
+  }
+  var todayPts  = patients.filter(function(p) { return p.todayVisit; });
+  var otherPts  = patients.filter(function(p) { return !p.todayVisit; });
+  var currentNo = chartData ? chartData.patientNo : '';
+
+  function itemHtml(p) {
+    var isCurrent = (p.patientNo === currentNo);
+    var cls = 'ps-item' + (p.todayVisit ? ' today' : '') + (isCurrent ? ' current' : '');
+    var onclick = isCurrent ? '' : 'onclick="switchPatient(\'' + esc(p.patientNo) + '\')"';
+    return '<div class="' + cls + '" ' + onclick + '>' +
+      '<div>' +
+        '<div class="ps-pno">' + esc(p.patientNo) + (isCurrent ? ' <span style="font-size:11px;font-weight:400;color:var(--text2);">（表示中）</span>' : '') + '</div>' +
+        (p.ageLabel ? '<div class="ps-age">' + esc(p.ageLabel) + '</div>' : '') +
+      '</div>' +
+      '<div style="display:flex;align-items:center;gap:6px;">' +
+        (p.todayVisit ? '<span class="ps-today-badge">今日</span>' : '') +
+        '<span class="ps-date">' + esc(p.lastVisit) + '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  var html = '';
+  if (todayPts.length) {
+    html += '<div class="ps-section-label">今日の患者（' + todayPts.length + '名）</div>';
+    html += todayPts.map(itemHtml).join('');
+  }
+  if (otherPts.length) {
+    html += '<div class="ps-section-label">過去の患者</div>';
+    html += otherPts.map(itemHtml).join('');
+  }
+  el.innerHTML = html;
+}
+
+function switchPatient(patientNo) {
+  closePatientSwitcher();
+  _patientListLoaded = false; // 次回開いたとき再取得
+
+  // ローディング表示
+  document.getElementById('main-content').style.display = 'none';
+  document.getElementById('loading-state').style.display = 'flex';
+  document.getElementById('loading-state').innerHTML =
+    '<div class="spinner"></div>' +
+    '<div style="color:var(--text2);font-size:14px;">カルテを読み込み中...</div>';
+
+  google.script.run
+    .withSuccessHandler(onDataLoaded)
+    .withFailureHandler(function(err) {
+      document.getElementById('loading-state').innerHTML =
+        '<div class="phase-icon">⚠️</div>' +
+        '<div class="phase-title" style="font-size:16px;">読み込みエラー</div>' +
+        '<div class="phase-sub">' + esc(String(err.message || err)) + '</div>';
+    })
+    .getPatientChartData(patientNo);
+}
+
 // ===== データ取得 =====
 window.addEventListener('load', function() {
   if (!PATIENT_NO) {
@@ -426,11 +641,17 @@ function onDataLoaded(data) {
     return;
   }
   chartData = data;
+  _patientListLoaded = false; // 患者切り替え後は次回パネル開時に再取得
   document.getElementById('main-content').style.display = 'block';
 
   var ageStr = data.ageLabel ? (' · ' + data.ageLabel) : '';
   document.getElementById('header-sub').textContent =
     '診察券 ' + data.patientNo + ageStr + ' — はまこどもクリニック';
+
+  // 患者切り替え時: 前の患者のグラフとタイムラインをリセット
+  document.getElementById('patient-summary').innerHTML = '';
+  document.getElementById('timeline-container').innerHTML = '';
+  if (chartInstance) { chartInstance.destroy(); chartInstance = null; }
 
   renderPatientSummary(data);
   renderScoreChart(data);

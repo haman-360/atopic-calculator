@@ -1121,6 +1121,53 @@ function saveAssessment(data)          { return saveAssessment_(data); }
 function getAssessmentList(patientNo)  { return getAssessmentList_(patientNo); }
 function getPatientChartData(patientNo) { return getPatientChartData_(patientNo); }
 
+// ===== カルテビュー: 患者一覧取得 =====
+function getPatientListForChart() {
+  const today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+
+  // VisitHistory から患者ごとの最終受診日と当日受診フラグを収集
+  const vhSheet = getSheet_('VisitHistory');
+  const vhData  = vhSheet.getDataRange().getValues();
+  const byPatient = {}; // patientNo -> { lastVisit, todayVisit }
+  for (let i = 1; i < vhData.length; i++) {
+    const pno = String(vhData[i][0]).trim();
+    if (!pno) continue;
+    const vd = dateToStr_(vhData[i][1]);
+    if (!vd) continue;
+    if (!byPatient[pno]) byPatient[pno] = { lastVisit: vd, todayVisit: false };
+    if (vd > byPatient[pno].lastVisit) byPatient[pno].lastVisit = vd;
+    if (vd === today) byPatient[pno].todayVisit = true;
+  }
+
+  // PatientRegistry から患者情報を取得して結合
+  const regSheet = getSheet_('PatientRegistry');
+  const regData  = regSheet.getDataRange().getValues();
+  const patients = [];
+  const seen = new Set();
+  for (let i = 1; i < regData.length; i++) {
+    const pno = String(regData[i][0]).trim();
+    if (!pno || seen.has(pno)) continue;
+    seen.add(pno);
+    const vh = byPatient[pno];
+    if (!vh) continue; // 受診歴のない患者は除外
+    const birthdate = regData[i][1] ? dateToStr_(regData[i][1]) : '';
+    patients.push({
+      patientNo:  pno,
+      ageLabel:   calcAgeLabel_(birthdate),
+      lastVisit:  vh.lastVisit,
+      todayVisit: vh.todayVisit
+    });
+  }
+
+  // 今日の患者を先頭に、次いで最終受診日降順
+  patients.sort(function(a, b) {
+    if (a.todayVisit !== b.todayVisit) return a.todayVisit ? -1 : 1;
+    return b.lastVisit.localeCompare(a.lastVisit);
+  });
+
+  return { ok: true, patients: patients, today: today };
+}
+
 // ===== ClinicalAssessments: 既存スプレッドシートへの1回限り追加（移行用） =====
 function addClinicalAssessmentsSheet() {
   const sheet = getOrCreateClinicalAssessmentsSheet_();
