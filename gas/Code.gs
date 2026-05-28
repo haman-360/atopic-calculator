@@ -47,7 +47,8 @@ function doGet(e) {
       return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">アクセスが拒否されました</p>');
     }
     const dash = HtmlService.createTemplateFromFile('doctor_dashboard');
-    dash.secret = e.parameter.secret;
+    dash.secret  = e.parameter.secret;
+    dash.execUrl = ScriptApp.getService().getUrl();
     return dash.evaluate()
       .setTitle('カルテダッシュボード — はまこどもクリニック')
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');

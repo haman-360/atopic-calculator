@@ -372,7 +372,8 @@ body { max-width: none; }
 </div>
 
 <script>
-const SECRET = '<?= secret ?>';
+const SECRET   = '<?= secret ?>';
+const EXEC_URL = '<?= execUrl ?>';
 const INFECTION_LABELS = {
   impetigo: 'とびひのような症状（かさぶた・膿）',
   crust:    '黄色いかさぶた',
@@ -528,7 +529,7 @@ function buildReportCard(r, type) {
     + '&ageGroup=' + encodeURIComponent(r.ageGroup || 'child3')
     + '&ageLabel=' + encodeURIComponent(r.ageLabel || '')
     + (r.nextAppointment ? '&nextVisit=' + encodeURIComponent(r.nextAppointment) : '');
-  const chartUrl = '?page=chart&p=' + encodeURIComponent(r.patientNo)
+  const chartUrl = EXEC_URL + '?page=chart&p=' + encodeURIComponent(r.patientNo)
     + '&secret=' + encodeURIComponent(SECRET || '');
 
   // POEM グリッド
