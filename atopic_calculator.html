@@ -1019,6 +1019,7 @@
         <div style="display:flex;gap:10px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
           <button id="schedule-share-btn" onclick="shareScheduleOnly()" style="padding:9px 18px;border-radius:8px;border:none;background:var(--green);color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">📤 画像として共有</button>
           <button id="schedule-save-btn" onclick="saveScheduleImage()" style="padding:9px 18px;border-radius:8px;border:none;background:#4a7c6f;color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">💾 画像として保存</button>
+          <button id="schedule-html-btn" onclick="exportScheduleHtml()" style="padding:9px 18px;border-radius:8px;border:none;background:#185fa5;color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">📄 HTMLとして書き出す</button>
           <span id="schedule-share-notice" style="font-size:12px;color:var(--teal);display:none;"></span>
         </div>
         <div id="schedule-area">
@@ -4774,7 +4775,9 @@
           name: r.name,
           partLabel: r.partNames.join('・'),
           freqLabel: '（安定期・直接入力）',
-          prescribedG: r.prescribeG
+          prescribedG: r.prescribeG,
+          partNames: r.partNames,
+          startDate: visitDate
         }));
         rxSummaryText = rxItems.map(r => {
           const parts = r.partNames.length ? r.partNames.join('・') : '部位未設定';
@@ -4787,7 +4790,13 @@
           freqLabel: r.taperPhases
             ? `${r.taperPhases.phase1.freqLabel}→${r.taperPhases.phase2.freqLabel}`
             : r.freq,
-          scheduleText: buildScheduleText(r, visitDate, nextVisitDate)
+          scheduleText: buildScheduleText(r, visitDate, nextVisitDate),
+          freqVal: r.freqVal,
+          taperPhases: r.taperPhases || null,
+          partNames: r.partNames,
+          startDate: visitDate,
+          endDate: r.taperPhases ? r.taperPhases.phase2.endDate : nextVisitDate,
+          prescribedG: r.prescribeG
         }));
         rxSummaryText = rxItems.map(r => buildScheduleText(r, visitDate, nextVisitDate)).join('\n');
       }
@@ -5005,6 +5014,44 @@
       a.href = url; a.download = filename;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 3000);
+    }
+
+    function exportScheduleHtml() {
+      if (!currentRxSnapshot || !currentRxSnapshot.rxItems.length) {
+        showToast('処方量計算後に実行してください');
+        return;
+      }
+      const area = document.getElementById('schedule-area');
+      if (!area) return;
+      const snap = currentRxSnapshot;
+      const today = snap.visitDate || new Date().toISOString().slice(0, 10);
+      const fname = `塗布スケジュール_${today}.html`;
+
+      // ページ内のすべてのCSSを収集（Gantt・変数含む）
+      const allCss = Array.from(document.querySelectorAll('style'))
+        .map(s => s.textContent).join('\n');
+
+      const patientLabel = snap.patientNo ? `患者ID: ${snap.patientNo}　` : '';
+      const html = `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>処方スケジュール ${today}</title>
+<style>${allCss}</style>
+</head>
+<body style="background:#f5f4f0;padding:16px;">
+<h2 style="font-size:15px;font-weight:700;margin-bottom:12px;color:#1a1916;">📅 塗布スケジュール（${patientLabel}${today}）</h2>
+${area.innerHTML}
+</body>
+</html>`;
+
+      const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = fname; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 3000);
+      showToast('HTMLを書き出しました');
     }
 
     // ===== 音声入力 =====
