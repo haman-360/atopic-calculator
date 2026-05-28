@@ -372,6 +372,7 @@ body { max-width: none; }
 </div>
 
 <script>
+const SECRET = '<?= secret ?>';
 const INFECTION_LABELS = {
   impetigo: 'とびひのような症状（かさぶた・膿）',
   crust:    '黄色いかさぶた',
@@ -527,6 +528,8 @@ function buildReportCard(r, type) {
     + '&ageGroup=' + encodeURIComponent(r.ageGroup || 'child3')
     + '&ageLabel=' + encodeURIComponent(r.ageLabel || '')
     + (r.nextAppointment ? '&nextVisit=' + encodeURIComponent(r.nextAppointment) : '');
+  const chartUrl = '?page=chart&p=' + encodeURIComponent(r.patientNo)
+    + '&secret=' + encodeURIComponent(SECRET || '');
 
   // POEM グリッド
   const poemGrid = Object.entries(POEM_LABELS).map(([key, label]) => {
@@ -608,6 +611,10 @@ function buildReportCard(r, type) {
           <a href="${calcUrl}" target="_blank"
              style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:var(--green);color:#fff;border-radius:var(--radius-sm);font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;">
             💊 処方計算を開く
+          </a>
+          <a href="${chartUrl}" target="_blank"
+             style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:var(--blue);color:#fff;border-radius:var(--radius-sm);font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;">
+            📋 カルテビュー
           </a>
           <span class="symptom-score-chip" style="background:${symptomColor}20;color:${symptomColor};">
             症状：${esc(SYMPTOM_LABELS[r.symptomScore] || '—')}
