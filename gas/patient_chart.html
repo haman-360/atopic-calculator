@@ -6,6 +6,7 @@
 <title>カルテビュー</title>
 <?!= include('shared_styles'); ?>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 body { max-width: none; }
 .chart-header {
@@ -648,7 +649,7 @@ function buildVisitCard(visit, reports, assessment) {
         '</div>';
     }
     // ミニGantt
-    var ganttHtml = buildGanttHtmlFromDrugsJson(drugs);
+    var ganttHtml = buildGanttHtmlFromDrugsJson(drugs, visit.nextVisitDate || '');
     rxHtml = '<div class="section-title">💊 処方内容</div>' +
       '<div class="rx-summary">' + esc(display) + '</div>' +
       drugsDetailHtml +
@@ -754,7 +755,15 @@ function buildVisitCard(visit, reports, assessment) {
   // 処方内容があれば書き出しボタンを表示
   var hasRxData = visit.rxSummaryText || (visit.drugsJson && visit.drugsJson.length > 0);
   var exportBtnHtml = hasRxData
-    ? '<div style="margin-top:10px;">' +
+    ? '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;">' +
+        '<button onclick="exportPatientScheduleHtml(\'' + esc(visit.visitDate) + '\')" ' +
+          'style="padding:6px 14px;border-radius:6px;border:none;background:#0f6e56;color:white;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;">' +
+          '📤 処方スケジュール（HTML）' +
+        '</button>' +
+        '<button onclick="exportPatientSchedulePng(\'' + esc(visit.visitDate) + '\')" ' +
+          'style="padding:6px 14px;border-radius:6px;border:none;background:#4a7c6f;color:white;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;">' +
+          '🖼 処方スケジュール（PNG）' +
+        '</button>' +
         '<button onclick="exportVisitScheduleHtml(\'' + esc(visit.visitDate) + '\')" ' +
           'style="padding:6px 14px;border-radius:6px;border:none;background:#185fa5;color:white;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;">' +
           '📄 カルテを書き出す' +
@@ -776,7 +785,15 @@ function buildVisitCard(visit, reports, assessment) {
 }
 
 // ===== ミニGantt生成 =====
-function buildGanttHtmlFromDrugsJson(drugs) {
+function buildGanttHtmlFromDrugsJson(drugs, fallbackEndDate) {
+  var hasStart = drugs.some(function(d) { return d.startDate; });
+  if (!hasStart) return '';
+  // endDateがない薬剤にfallbackEndDateを補完
+  if (fallbackEndDate) {
+    drugs = drugs.map(function(d) {
+      return (d.startDate && !d.endDate) ? Object.assign({}, d, { endDate: fallbackEndDate }) : d;
+    });
+  }
   var hasEnriched = drugs.some(function(d) { return d.startDate && d.endDate; });
   if (!hasEnriched) return '';
 
@@ -841,7 +858,7 @@ function exportVisitScheduleHtml(visitDate) {
   if (!visit) { showToast('受診データが見つかりません'); return; }
 
   var drugs = visit.drugsJson || [];
-  var ganttHtml = buildGanttHtmlFromDrugsJson(drugs);
+  var ganttHtml = buildGanttHtmlFromDrugsJson(drugs, visit.nextVisitDate || '');
 
   var summaryText = visit.rxSummaryText || drugs.map(function(d) {
     return d.name +
@@ -970,6 +987,144 @@ function exportVisitScheduleHtml(visitDate) {
   a.href = url; a.download = fname; a.click();
   setTimeout(function() { URL.revokeObjectURL(url); }, 3000);
   showToast('HTMLを書き出しました');
+}
+
+// ===== 患者向け処方スケジュール書き出し（HTML） =====
+function exportPatientScheduleHtml(visitDate) {
+  if (!chartData) { showToast('データが読み込まれていません'); return; }
+  var visit = (chartData.visits || []).find(function(v) { return v.visitDate === visitDate; });
+  if (!visit) { showToast('受診データが見つかりません'); return; }
+
+  var drugs = visit.drugsJson || [];
+  var ganttHtml = buildGanttHtmlFromDrugsJson(drugs, visit.nextVisitDate || '');
+  var summaryText = visit.rxSummaryText || drugs.map(function(d) {
+    return d.name +
+      (d.partLabel ? '（' + d.partLabel + '）' : '') +
+      (d.freqLabel ? ' ' + d.freqLabel : '');
+  }).join('\n');
+
+  if (!summaryText && !ganttHtml) { showToast('処方データが見つかりません'); return; }
+
+  var esc2 = function(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+
+  // 薬剤カード（薬名・部位・頻度）
+  var drugCardsHtml = '';
+  if (drugs.length > 0) {
+    drugCardsHtml = drugs.map(function(d, idx) {
+      var col = GANTT_COLORS[idx % GANTT_COLORS.length];
+      var dateStr = '';
+      var sd = d.startDate, ed = d.endDate || visit.nextVisitDate || '';
+      if (sd && ed) {
+        var days = Math.round((new Date(ed) - new Date(sd)) / 86400000);
+        var fmtD = function(s) { var v = new Date(s); return (v.getMonth()+1) + '月' + v.getDate() + '日'; };
+        dateStr = fmtD(sd) + '〜' + fmtD(ed) + '（' + days + '日間）';
+      }
+      return '<div style="border-left:4px solid ' + col.bg + ';padding:10px 14px;margin-bottom:10px;background:#fff;border-radius:0 8px 8px 0;">' +
+        '<div style="font-size:15px;font-weight:700;color:#1a1916;margin-bottom:4px;">' + esc2(d.name) + '</div>' +
+        (d.partLabel ? '<div style="font-size:13px;color:#6b6760;">📍 ' + esc2(d.partLabel) + '</div>' : '') +
+        (d.freqLabel ? '<div style="font-size:13px;color:#0f6e56;font-weight:600;">⏰ ' + esc2(d.freqLabel) + '</div>' : '') +
+        (dateStr ? '<div style="font-size:12px;color:#9b9890;margin-top:2px;">📅 ' + esc2(dateStr) + '</div>' : '') +
+        (d.prescribedG ? '<div style="font-size:12px;color:#9b9890;">処方量: ' + d.prescribedG + 'g</div>' : '') +
+        '</div>';
+    }).join('');
+  }
+
+  // Ganttに必要なCSSも含める
+  var css = '*{box-sizing:border-box;margin:0;padding:0;}\n' +
+    'body{font-family:\'Hiragino Sans\',\'Yu Gothic\',sans-serif;background:#f5f4f0;color:#1a1916;font-size:14px;padding:20px;max-width:500px;margin:0 auto;}\n' +
+    '.mini-gantt{margin:12px 0;}\n' +
+    '.mg-header{display:flex;justify-content:space-between;font-size:11px;color:#9b9890;margin-bottom:5px;padding:0 2px;}\n' +
+    '.mg-row{display:flex;align-items:center;gap:6px;margin-bottom:4px;}\n' +
+    '.mg-name{font-size:11px;font-weight:600;min-width:90px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:0;}\n' +
+    '.mg-track{flex:1;height:22px;display:flex;border-radius:4px;overflow:hidden;background:#e0ddd4;}\n' +
+    '.mg-bar{display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;overflow:hidden;white-space:nowrap;padding:0 4px;flex-shrink:0;}\n' +
+    '.mg-bar-p2{border-left:2px dashed rgba(0,0,0,0.18);}';
+
+  var html = '<!DOCTYPE html>\n<html lang="ja">\n<head>\n' +
+    '<meta charset="UTF-8">\n<meta name="viewport" content="width=device-width, initial-scale=1.0">\n' +
+    '<title>処方スケジュール ' + esc2(visitDate) + '</title>\n' +
+    '<style>' + css + '</style>\n</head>\n<body>\n' +
+    '<div style="font-size:12px;color:#6b6760;margin-bottom:2px;">はまこどもクリニック</div>\n' +
+    '<h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">💊 処方スケジュール</h2>\n' +
+    '<div style="font-size:13px;color:#6b6760;border-bottom:1px solid #e0ddd4;padding-bottom:10px;margin-bottom:14px;">' +
+      '受診日: ' + esc2(visitDate) +
+      (visit.nextVisitDate ? ' &nbsp;→&nbsp; <strong>次回: ' + esc2(visit.nextVisitDate) + '</strong>' : '') +
+    '</div>\n' +
+    drugCardsHtml +
+    (ganttHtml ? '<div style="margin-top:14px;background:#fff;border-radius:8px;padding:12px;">' + ganttHtml + '</div>\n' : '') +
+    (summaryText && !drugCardsHtml ? '<div style="background:#fff;border-radius:8px;padding:12px;white-space:pre-wrap;font-size:13px;line-height:1.7;margin-top:10px;">' + esc2(summaryText) + '</div>\n' : '') +
+    '</body>\n</html>';
+
+  var fname = 'schedule_' + (chartData.patientNo || '') + '_' + visitDate.replace(/-/g, '') + '.html';
+  var blob = new Blob([html], { type: 'text/html; charset=utf-8' });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = fname; a.click();
+  setTimeout(function() { URL.revokeObjectURL(url); }, 3000);
+  showToast('スケジュールHTMLを書き出しました');
+}
+
+// ===== 患者向け処方スケジュール書き出し（PNG） =====
+function exportPatientSchedulePng(visitDate) {
+  if (typeof html2canvas === 'undefined') { showToast('画像書き出しライブラリが読み込まれていません'); return; }
+  if (!chartData) { showToast('データが読み込まれていません'); return; }
+  var visit = (chartData.visits || []).find(function(v) { return v.visitDate === visitDate; });
+  if (!visit) { showToast('受診データが見つかりません'); return; }
+
+  var drugs = visit.drugsJson || [];
+  var ganttHtml = buildGanttHtmlFromDrugsJson(drugs, visit.nextVisitDate || '');
+  var summaryText = visit.rxSummaryText || drugs.map(function(d) {
+    return d.name + (d.partLabel ? '（' + d.partLabel + '）' : '') + (d.freqLabel ? ' ' + d.freqLabel : '');
+  }).join('\n');
+
+  if (!summaryText && !ganttHtml) { showToast('処方データが見つかりません'); return; }
+
+  var esc2 = function(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+
+  var drugCardsHtml = drugs.map(function(d, idx) {
+    var col = GANTT_COLORS[idx % GANTT_COLORS.length];
+    var dateStr = '';
+    var sd = d.startDate, ed = d.endDate || visit.nextVisitDate || '';
+    if (sd && ed) {
+      var days = Math.round((new Date(ed) - new Date(sd)) / 86400000);
+      var fmtD = function(s) { var v = new Date(s); return (v.getMonth()+1) + '月' + v.getDate() + '日'; };
+      dateStr = fmtD(sd) + '〜' + fmtD(ed) + '（' + days + '日間）';
+    }
+    return '<div style="border-left:4px solid ' + col.bg + ';padding:10px 14px;margin-bottom:10px;background:#fff;border-radius:0 8px 8px 0;">' +
+      '<div style="font-size:15px;font-weight:700;color:#1a1916;margin-bottom:4px;">' + esc2(d.name) + '</div>' +
+      (d.partLabel ? '<div style="font-size:13px;color:#6b6760;">📍 ' + esc2(d.partLabel) + '</div>' : '') +
+      (d.freqLabel ? '<div style="font-size:13px;color:#0f6e56;font-weight:600;">⏰ ' + esc2(d.freqLabel) + '</div>' : '') +
+      (dateStr ? '<div style="font-size:12px;color:#9b9890;">📅 ' + esc2(dateStr) + '</div>' : '') +
+      '</div>';
+  }).join('');
+
+  // 一時的な非表示divに描画してキャプチャ
+  var tmp = document.createElement('div');
+  tmp.style.cssText = 'position:fixed;left:-9999px;top:0;width:480px;background:#f5f4f0;padding:20px;font-family:\'Hiragino Sans\',\'Yu Gothic\',sans-serif;';
+  tmp.innerHTML =
+    '<div style="font-size:12px;color:#6b6760;margin-bottom:2px;">はまこどもクリニック</div>' +
+    '<h2 style="font-size:18px;font-weight:700;margin-bottom:4px;">💊 処方スケジュール</h2>' +
+    '<div style="font-size:13px;color:#6b6760;border-bottom:1px solid #e0ddd4;padding-bottom:10px;margin-bottom:14px;">' +
+      '受診日: ' + esc2(visitDate) +
+      (visit.nextVisitDate ? ' → 次回: <strong>' + esc2(visit.nextVisitDate) + '</strong>' : '') +
+    '</div>' +
+    drugCardsHtml +
+    (ganttHtml ? '<div style="margin-top:14px;background:#fff;border-radius:8px;padding:12px;">' + ganttHtml + '</div>' : '') +
+    (summaryText && !drugCardsHtml ? '<div style="background:#fff;border-radius:8px;padding:12px;white-space:pre-wrap;font-size:13px;line-height:1.7;margin-top:10px;">' + esc2(summaryText) + '</div>' : '');
+
+  document.body.appendChild(tmp);
+
+  html2canvas(tmp, { backgroundColor: '#f5f4f0', scale: 2 }).then(function(canvas) {
+    document.body.removeChild(tmp);
+    var a = document.createElement('a');
+    a.href = canvas.toDataURL('image/png');
+    a.download = 'schedule_' + (chartData.patientNo || '') + '_' + visitDate.replace(/-/g, '') + '.png';
+    a.click();
+    showToast('スケジュールPNGを書き出しました');
+  }).catch(function() {
+    document.body.removeChild(tmp);
+    showToast('PNG書き出しに失敗しました');
+  });
 }
 
 // ===== Claude治療相談 =====
