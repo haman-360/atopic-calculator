@@ -687,13 +687,21 @@ function renderScoreChart(data) {
   var placeholder = document.getElementById('chart-placeholder');
   var canvas      = document.getElementById('main-chart');
 
+  // report の submittedAt を「次の受診日」にマッピング（タイムラインと同じロジック）
+  var visitDatesForChart = (data.visits || []).map(function(v) { return v.visitDate; }).slice().sort();
+
   var poemMap = {}, nrsMap = {}, easiMap = {}, igaMap = {};
   (data.reports || []).forEach(function(r) {
-    var d = r.submittedAt ? r.submittedAt.slice(0, 10) : null;
-    if (!d) return;
+    var rd = r.submittedAt ? r.submittedAt.slice(0, 10) : null;
+    if (!rd) return;
+    var targetDate = null;
+    for (var i = 0; i < visitDatesForChart.length; i++) {
+      if (visitDatesForChart[i] >= rd) { targetDate = visitDatesForChart[i]; break; }
+    }
+    if (!targetDate) return;
     var pt = Object.values(r.poemScores || {}).reduce(function(s, v) { return s + (v || 0); }, 0);
-    poemMap[d] = pt;
-    if (r.nrsScore !== null && r.nrsScore !== undefined) nrsMap[d] = r.nrsScore;
+    poemMap[targetDate] = pt;
+    if (r.nrsScore !== null && r.nrsScore !== undefined) nrsMap[targetDate] = r.nrsScore;
   });
   (data.assessments || []).forEach(function(a) {
     var vd = a.visitDate ? String(a.visitDate).slice(0, 10) : null;

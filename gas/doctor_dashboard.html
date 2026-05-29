@@ -898,9 +898,23 @@ function renderChart(reportId, poemData, assessments) {
   const canvas      = document.getElementById('chart-' + reportId);
   if (!canvas) return;
 
+  // POEM の submittedAt をassessmentのvisitDateに近い「次の受診日」にマッピング
+  const visitDatesFromAssessments = assessments
+    .map(function(a) { return a.visitDate ? String(a.visitDate).slice(0, 10) : null; })
+    .filter(Boolean).sort();
+
+  const mappedPoemData = poemData.map(function(p) {
+    if (visitDatesFromAssessments.length === 0) return p;
+    var targetDate = null;
+    for (var i = 0; i < visitDatesFromAssessments.length; i++) {
+      if (visitDatesFromAssessments[i] >= p.date) { targetDate = visitDatesFromAssessments[i]; break; }
+    }
+    return { date: targetDate || p.date, poemTotal: p.poemTotal, nrsScore: p.nrsScore };
+  });
+
   // 日付ラベル: 両データの和集合・昇順（visitDateをYYYY-MM-DDに正規化）
   const dateSet = new Set();
-  poemData.forEach(function(d) { dateSet.add(d.date); });
+  mappedPoemData.forEach(function(d) { dateSet.add(d.date); });
   assessments.forEach(function(a) {
     const vd = a.visitDate ? String(a.visitDate).slice(0, 10) : null;
     if (vd) dateSet.add(vd);
@@ -915,7 +929,7 @@ function renderChart(reportId, poemData, assessments) {
 
   // 日付→値のマップ
   const poemMap = {}, nrsMap = {}, easiMap = {}, igaMap = {};
-  poemData.forEach(function(d) { poemMap[d.date] = d.poemTotal; nrsMap[d.date] = d.nrsScore; });
+  mappedPoemData.forEach(function(d) { poemMap[d.date] = d.poemTotal; nrsMap[d.date] = d.nrsScore; });
   assessments.forEach(function(a) {
     const vd = a.visitDate ? String(a.visitDate).slice(0, 10) : null;
     if (vd) {
