@@ -65,6 +65,15 @@ function doGet(e) {
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
+  if (page === 'easi') {
+    if (!e || !e.parameter || e.parameter.secret !== CLINIC_SECRET) {
+      return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">アクセスが拒否されました</p>');
+    }
+    return HtmlService.createHtmlOutputFromFile('easi_iga_2')
+      .setTitle('EASI / IGA スコアリング')
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+  }
+
   if (page === 'patientContext') {
     const p = (e && e.parameter && e.parameter.p) || '';
     const t = (e && e.parameter && e.parameter.t) || '';
@@ -1234,6 +1243,17 @@ function saveAssessment_(data) {
   const assessmentId = Utilities.getUuid();
   const assessedAt = new Date().toISOString();
 
+  // 病変マップ画像をDriveに保存（base64で渡された場合）
+  let lesionMapUrl = '';
+  if (data.lesionMapBase64) {
+    try {
+      lesionMapUrl = saveLesionMap_(String(data.patientNo), String(data.visitDate), data.lesionMapBase64);
+    } catch (imgErr) {
+      Logger.log('saveLesionMap_ failed: ' + imgErr.message);
+      // 画像保存失敗は非致命的 — 評価は続行
+    }
+  }
+
   const sheet = getOrCreateClinicalAssessmentsSheet_();
   sheet.appendRow([
     assessmentId,                        // [0]  assessmentId
@@ -1247,7 +1267,7 @@ function saveAssessment_(data) {
     easi.total,                          // [8]  easiTotal
     severity,                            // [9]  easiSeverity
     data.iga !== undefined ? data.iga : '', // [10] iga
-    '',                                  // [11] lesionMapJson（将来用）
+    lesionMapUrl,                        // [11] lesionMapJson（Drive thumbnail URL）
     data.notes || '',                    // [12] notes
     JSON.stringify(data.easi || {})      // [13] easiRawJson（入力元データ）
   ]);
@@ -1268,6 +1288,24 @@ function saveAssessment_(data) {
   }
 
   return { ok: true, assessmentId, easiTotal: easi.total, easiSeverity: severity };
+}
+
+// ===== 病変マップ画像をGoogle Driveに保存 =====
+function saveLesionMap_(patientNo, visitDate, base64png) {
+  const clean = base64png.replace(/^data:image\/png;base64,/, '');
+  const decoded = Utilities.base64Decode(clean);
+  const blob = Utilities.newBlob(decoded, MimeType.PNG,
+    'lesion_' + patientNo + '_' + visitDate + '.png');
+
+  const folderName = 'EASI_LesionMaps';
+  const folders = DriveApp.getFoldersByName(folderName);
+  const folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(folderName);
+
+  const file = folder.createFile(blob);
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  // Drive thumbnail URL（認証不要で<img>タグに使用可能）
+  return 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w800';
 }
 
 // ===== ClinicalAssessments: 行→オブジェクト変換ヘルパー =====

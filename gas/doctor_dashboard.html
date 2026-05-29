@@ -626,6 +626,12 @@ function buildReportCard(r, type) {
           ${r.lastAssessment && r.lastAssessment.iga != null && r.lastAssessment.iga !== ''
             ? `<span class="assessed-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9;">IGA ${r.lastAssessment.iga}</span>`
             : ''}
+          ${r.lastAssessment && r.lastAssessment.lesionMapJson && r.lastAssessment.lesionMapJson.startsWith('https://')
+            ? `<a href="${esc(r.lastAssessment.lesionMapJson)}" target="_blank" title="病変マップを表示" style="display:inline-block;vertical-align:middle;margin-left:4px;">
+                 <img src="${esc(r.lastAssessment.lesionMapJson)}" alt="病変マップ"
+                   style="height:36px;border-radius:4px;border:1px solid var(--border);vertical-align:middle;">
+               </a>`
+            : ''}
           <button onclick="openClaudeModal('${esc(r.patientNo)}')"
             title="Claude相談"
             style="padding:4px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;cursor:pointer;line-height:1;">🤖</button>

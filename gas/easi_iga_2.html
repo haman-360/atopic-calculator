@@ -1,0 +1,728 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>EASI / IGA スコアリング</title>
+<style>
+:root {
+  --bg: #f4f6f8; --card: #ffffff;
+  --text: #1a1a1a; --text2: #6b6b6b;
+  --border: #e0e4e8;
+  --green: #1D9E75; --green-light: #E1F5EE;
+  --amber: #EF9F27; --red: #E13D3D;
+  --sev1: #64C8FF; --sev2: #FFB432; --sev3: #FF3232;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Kaku Gothic ProN', sans-serif;
+  background: var(--bg); color: var(--text); font-size: 14px;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden; display: flex; flex-direction: column;
+}
+input, button { font-family: inherit; outline: none; }
+
+/* --- Topbar --- */
+.topbar {
+  background: var(--card); border-bottom: 1px solid var(--border);
+  padding: 8px 16px; display: flex; justify-content: space-between; align-items: center;
+  flex: 0 0 auto;
+}
+.app-title { font-size: 16px; font-weight: 700; color: var(--green); }
+.patient-fields { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.pf-wrap { display: flex; align-items: center; gap: 4px; }
+.pf-label { font-size: 12px; color: var(--text2); font-weight: 600; }
+.pf-input {
+  font-size: 13px; border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 8px; background: #fafafa; color: var(--text); width: 110px;
+}
+.pf-input:focus { border-color: var(--green); background: #fff; }
+input[type=date].pf-input { width: 130px; }
+
+/* --- Main Layout --- */
+.main-layout {
+  display: flex; flex: 1; padding: 12px; gap: 16px; overflow: hidden;
+}
+
+/* --- Left: Canvas Grid (4 items) --- */
+.canvas-grid {
+  flex: 1; display: grid;
+  grid-template-columns: max-content max-content;
+  grid-template-rows: max-content max-content;
+  gap: 12px; justify-content: start;
+  overflow-y: auto;
+  padding-bottom: 20px;
+}
+.canvas-box {
+  background: var(--card); border-radius: var(--radius); padding: 8px;
+  display: flex; flex-direction: column; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+.canvas-header {
+  width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;
+}
+.canvas-title { font-size: 13px; font-weight: 700; }
+.canvas-actions { display: flex; gap: 4px; }
+.btn-small {
+  font-size: 11px; padding: 4px 8px; border-radius: 4px; border: 1px solid var(--border);
+  background: #fff; cursor: pointer; color: var(--text2);
+}
+.btn-small:active { background: #eee; }
+.canvas-wrapper {
+  position: relative; width: 280px; height: 250px;
+  border: 1px solid var(--border); border-radius: 8px; background: #fafafa; overflow: hidden;
+}
+.bg-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.draw-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+
+/* --- Right: Side Panel --- */
+.side-panel {
+  width: 380px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-right: 4px;
+  padding-bottom: 20px;
+}
+.panel-card {
+  background: var(--card); border-radius: var(--radius); padding: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.04); flex-shrink: 0;
+}
+.panel-title { font-size: 13px; color: var(--text2); font-weight: 700; margin-bottom: 8px; border-bottom: 2px solid var(--border); padding-bottom: 4px; }
+
+/* ペンツール */
+.tool-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.tool-btn {
+  flex: 1; padding: 10px 4px; border-radius: 8px; font-size: 12px; font-weight: 700;
+  text-align: center; cursor: pointer; border: 3px solid transparent; color: #fff;
+  transition: transform 0.1s; user-select: none;
+}
+.tool-btn.active { outline: 2px solid var(--text); outline-offset: 1px; transform: scale(1.02); z-index: 2; box-shadow: 0 2px 8px rgba(0,0,0,0.2); }
+.btn-sev1 { background: var(--sev1); color: #000; }
+.btn-sev2 { background: var(--sev2); color: #000; }
+.btn-sev3 { background: var(--sev3); }
+.btn-eraser { background: #e0e0e0; color: #333; border: 1px solid #ccc; }
+
+.size-btn {
+  flex: 1; padding: 8px; border-radius: 6px; font-size: 12px; font-weight: 600; text-align: center;
+  background: #f0f0f0; border: 2px solid transparent; cursor: pointer; color: var(--text2);
+}
+.size-btn.active { border-color: var(--green); background: var(--green-light); color: var(--green); }
+
+/* スコアテーブル */
+.score-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: center; margin-bottom: 8px; }
+.score-table th { background: #f4f6f8; padding: 6px 4px; border: 1px solid var(--border); color: var(--text2); font-weight: 600; }
+.score-table td { padding: 6px 4px; border: 1px solid var(--border); }
+.score-table .pct { font-size: 10px; color: var(--text3); }
+.score-table .bold { font-weight: 700; background: #fafafa; }
+
+/* EASI合計 */
+.easi-total-box { display: flex; justify-content: space-between; align-items: center; background: var(--green-light); padding: 10px 16px; border-radius: 8px; }
+.easi-label { font-size: 14px; font-weight: 700; color: var(--green); }
+.easi-val { font-size: 32px; font-weight: 800; color: var(--green); line-height: 1; }
+.easi-band { font-size: 14px; font-weight: 700; color: #fff; padding: 4px 12px; border-radius: 20px; background: var(--green); }
+
+/* IGA */
+.iga-grid { display: flex; flex-direction: column; gap: 4px; }
+.iga-btn {
+  padding: 8px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+  background: #fafafa; border: 1px solid var(--border); transition: all 0.1s;
+}
+.iga-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
+
+/* 下部ボタン */
+.action-row { display: flex; gap: 8px; margin-top: auto; flex-shrink: 0; flex-wrap: wrap; }
+.action-btn {
+  flex: 1; padding: 12px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; text-align: center; border: none; min-width: 100px;
+}
+.btn-reset { background: #e0e4e8; color: var(--text2); }
+.btn-reset:active { background: #d0d4d8; }
+.btn-save { background: #2196F3; color: white; }
+.btn-save:active { background: #1976D2; }
+.btn-share { background: #FF9800; color: white; }
+.btn-share:active { background: #F57C00; }
+.btn-gas { background: #4CAF50; color: white; }
+.btn-gas:active { background: #388E3C; }
+.btn-gas:disabled { background: #9E9E9E; cursor: default; }
+
+@media (max-width: 900px) {
+  body { overflow: auto; height: auto; min-height: 100dvh; }
+  .main-layout { flex-direction: column; overflow: visible; }
+  .side-panel { width: 100%; flex: none; overflow: visible; }
+  .canvas-grid { grid-template-columns: 1fr; justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<div id="capture-area" style="background: var(--bg); display: flex; flex-direction: column; height: 100dvh; width: 100vw;">
+
+<div class="topbar">
+  <div class="app-title">EASI / IGA スコアリング</div>
+  <div class="patient-fields">
+    <div class="pf-wrap">
+      <span class="pf-label">患者ID</span>
+      <input class="pf-input" id="patient-id" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="数字5桁" maxlength="5">
+    </div>
+    <div class="pf-wrap">
+      <span class="pf-label">年齢</span>
+      <input class="pf-input" id="age-input" type="text" inputmode="numeric" pattern="[0-9]*" placeholder="歳" style="width:50px">
+    </div>
+    <div class="pf-wrap"><span class="pf-label">記録日</span><input class="pf-input" type="date" id="date-input"></div>
+    <div class="pf-wrap"><span class="pf-label">担当医</span><input class="pf-input" type="text" placeholder="名前" style="width:90px"></div>
+  </div>
+</div>
+
+<div class="main-layout">
+  <div class="canvas-grid" id="canvas-grid">
+    <div class="canvas-box">
+      <div class="canvas-header">
+        <div class="canvas-title">E: 赤み（紅斑）</div>
+        <div class="canvas-actions">
+          <button class="btn-small" onclick="undoCanvas('E')">戻る</button>
+          <button class="btn-small" onclick="clearCanvas('E')">クリア</button>
+        </div>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas class="bg-canvas" id="bg-E"></canvas>
+        <canvas class="draw-canvas" id="cvs-E"></canvas>
+      </div>
+    </div>
+    <div class="canvas-box">
+      <div class="canvas-header">
+        <div class="canvas-title">I: ぶつぶつ（浮腫・丘疹）</div>
+        <div class="canvas-actions">
+          <button class="btn-small" onclick="undoCanvas('I')">戻る</button>
+          <button class="btn-small" onclick="clearCanvas('I')">クリア</button>
+        </div>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas class="bg-canvas" id="bg-I"></canvas>
+        <canvas class="draw-canvas" id="cvs-I"></canvas>
+      </div>
+    </div>
+    <div class="canvas-box">
+      <div class="canvas-header">
+        <div class="canvas-title">Ex: ひっかき傷（掻破痕）</div>
+        <div class="canvas-actions">
+          <button class="btn-small" onclick="undoCanvas('Ex')">戻る</button>
+          <button class="btn-small" onclick="clearCanvas('Ex')">クリア</button>
+        </div>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas class="bg-canvas" id="bg-Ex"></canvas>
+        <canvas class="draw-canvas" id="cvs-Ex"></canvas>
+      </div>
+    </div>
+    <div class="canvas-box">
+      <div class="canvas-header">
+        <div class="canvas-title">L: ごわごわ（苔癬化）</div>
+        <div class="canvas-actions">
+          <button class="btn-small" onclick="undoCanvas('L')">戻る</button>
+          <button class="btn-small" onclick="clearCanvas('L')">クリア</button>
+        </div>
+      </div>
+      <div class="canvas-wrapper">
+        <canvas class="bg-canvas" id="bg-L"></canvas>
+        <canvas class="draw-canvas" id="cvs-L"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="side-panel">
+
+    <div class="panel-card">
+      <div class="panel-title">塗り絵ツール（重症度を選択して塗る）</div>
+      <div class="tool-row">
+        <div class="tool-btn btn-sev1" id="tool-1" onclick="setTool(1)">軽症 (1)</div>
+        <div class="tool-btn btn-sev2 active" id="tool-2" onclick="setTool(2)">中等症 (2)</div>
+        <div class="tool-btn btn-sev3" id="tool-3" onclick="setTool(3)">重症 (3)</div>
+        <div class="tool-btn btn-eraser" id="tool-0" onclick="setTool(0)">消しゴム</div>
+      </div>
+      <div class="tool-row" style="margin-bottom:0; gap:4px">
+        <div class="size-btn" id="size-8" onclick="setSize(8)">細いペン</div>
+        <div class="size-btn active" id="size-15" onclick="setSize(15)">普通のペン</div>
+        <div class="size-btn" id="size-25" onclick="setSize(25)">太いペン</div>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-title">自動計算結果（EASI）</div>
+      <table class="score-table">
+        <thead>
+          <tr><th>部位</th><th>E</th><th>I</th><th>Ex</th><th>L</th><th>A (面積%)</th><th>小計</th></tr>
+        </thead>
+        <tbody id="score-tbody">
+          </tbody>
+      </table>
+      <div class="easi-total-box">
+        <div class="easi-label">EASI 合計</div>
+        <div class="easi-val" id="easi-total">0.0</div>
+        <div class="easi-band" id="easi-band">寛解</div>
+      </div>
+    </div>
+
+    <div class="panel-card">
+      <div class="panel-title">IGA 総合評価（タップで選択）</div>
+      <div class="iga-grid">
+        <div class="iga-btn" id="iga-0" onclick="setIGA(0)">0: 皮疹なし・炎症所見なし</div>
+        <div class="iga-btn" id="iga-1" onclick="setIGA(1)">1: ほぼ消失・かすかに残る</div>
+        <div class="iga-btn" id="iga-2" onclick="setIGA(2)">2: 軽症・軽い赤みやぶつぶつ</div>
+        <div class="iga-btn" id="iga-3" onclick="setIGA(3)">3: 中等症・はっきりした所見</div>
+        <div class="iga-btn" id="iga-4" onclick="setIGA(4)">4: 重症・強い炎症や広範囲</div>
+      </div>
+    </div>
+
+    <div class="action-row">
+      <button class="action-btn btn-reset" onclick="resetAll()">リセット</button>
+      <button class="action-btn btn-save" onclick="saveAsImage()">保存</button>
+      <button class="action-btn btn-share" onclick="shareImage()">共有</button>
+      <button class="action-btn btn-gas" id="btn-gas" onclick="saveToGAS()">GASに保存</button>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<script>
+// --- 画像保存・共有機能 ---
+function getFileName() {
+  const date = document.getElementById('date-input').value || 'date';
+  let pName = document.getElementById('patient-id').value.trim() || 'ID未入力';
+  return 'EASI_IGA_' + date + '_' + pName + '.png';
+}
+
+function saveAsImage() {
+  const target = document.getElementById('capture-area');
+  html2canvas(target, { scale: 2, useCORS: true, backgroundColor: '#f4f6f8' }).then(function(canvas) {
+    const link = document.createElement('a');
+    link.download = getFileName();
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  }).catch(function(err) {
+    console.error('画像の保存に失敗しました', err);
+    alert('画像の保存に失敗しました。');
+  });
+}
+
+function shareImage() {
+  const target = document.getElementById('capture-area');
+  html2canvas(target, { scale: 2, useCORS: true, backgroundColor: '#f4f6f8' }).then(function(canvas) {
+    canvas.toBlob(function(blob) {
+      if (!blob) return;
+      const file = new File([blob], getFileName(), { type: 'image/png' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        navigator.share({
+          files: [file],
+          title: 'EASI/IGA スコア記録',
+        }).catch(function(err) { console.error('共有がキャンセルまたは失敗しました:', err); });
+      } else {
+        alert('お使いのブラウザは画像の直接共有に対応していません。保存ボタンを使用してください。');
+      }
+    }, 'image/png');
+  }).catch(function(err) {
+    console.error('画像の生成に失敗しました', err);
+    alert('共有用画像の生成に失敗しました。');
+  });
+}
+
+// --- GASに保存 ---
+function saveToGAS() {
+  const patientNo = document.getElementById('patient-id').value.trim();
+  const visitDate = document.getElementById('date-input').value;
+
+  if (!patientNo) { alert('患者IDを入力してください'); return; }
+  if (!visitDate) { alert('記録日を入力してください'); return; }
+
+  const btn = document.getElementById('btn-gas');
+  btn.textContent = '保存中...';
+  btn.disabled = true;
+
+  // resultScores の upper/lower → upperLimb/lowerLimb へキー変換
+  const toEasiPart = function(s) {
+    return { E: s.E || 0, I: s.I || 0, Ex: s.Ex || 0, L: s.L || 0, A: s.A || 0 };
+  };
+  const easiPayload = {
+    head:      toEasiPart(resultScores.head  || {}),
+    trunk:     toEasiPart(resultScores.trunk || {}),
+    upperLimb: toEasiPart(resultScores.upper || {}),
+    lowerLimb: toEasiPart(resultScores.lower || {})
+  };
+
+  // キャンバスグリッドをキャプチャ（4枚の描画を含む）
+  const captureTarget = document.getElementById('capture-area');
+  html2canvas(captureTarget, { scale: 1, useCORS: true, backgroundColor: '#f4f6f8' }).then(function(canvas) {
+    const base64 = canvas.toDataURL('image/png');
+
+    const payload = {
+      action:          'saveAssessment',
+      patientNo:       patientNo,
+      visitDate:       visitDate,
+      easi:            easiPayload,
+      iga:             currentIGA !== null ? currentIGA : undefined,
+      lesionMapBase64: base64,
+      notes:           ''
+    };
+
+    google.script.run
+      .withSuccessHandler(function(res) {
+        btn.disabled = false;
+        if (res && res.ok) {
+          btn.textContent = '保存済み ✓';
+          btn.style.background = '#388E3C';
+          setTimeout(function() {
+            btn.textContent = 'GASに保存';
+            btn.style.background = '';
+          }, 4000);
+        } else {
+          btn.textContent = 'GASに保存';
+          alert('保存に失敗しました: ' + ((res && res.reason) || '不明なエラー'));
+        }
+      })
+      .withFailureHandler(function(err) {
+        btn.disabled = false;
+        btn.textContent = 'GASに保存';
+        alert('エラー: ' + (err.message || '不明なエラー'));
+      })
+      .saveAssessment(payload);
+
+  }).catch(function(err) {
+    btn.disabled = false;
+    btn.textContent = 'GASに保存';
+    alert('画像キャプチャに失敗しました: ' + err.message);
+  });
+}
+
+// --- 初期設定 ---
+document.getElementById('date-input').value = new Date().toISOString().slice(0, 10);
+
+const C_W = 280;
+const C_H = 250;
+
+let currentTool = 2;
+let currentSize = 15;
+let currentIGA = null;
+
+const historyStates = { E: [], I: [], Ex: [], L: [] };
+const maxHistory = 10;
+
+const REGIONS = [
+  { id: 'head', name: '頭・首', weight: 0.1 },
+  { id: 'trunk', name: '体幹', weight: 0.3 },
+  { id: 'upper', name: '上肢', weight: 0.2 },
+  { id: 'lower', name: '下肢', weight: 0.4 }
+];
+const canvasKeys = ['E', 'I', 'Ex', 'L'];
+const ctxMap = {};
+
+const maskCvs = document.createElement('canvas');
+maskCvs.width = C_W; maskCvs.height = C_H;
+const maskCtx = maskCvs.getContext('2d', { willReadFrequently: true });
+let maskData = null;
+let totalMaskPixels = { head: 0, trunk: 0, upper: 0, lower: 0 };
+let regionMapArray = new Uint8Array(C_W * C_H);
+
+// --- 人体図の描画パス定義 ---
+function pathHead(ctx) { ctx.ellipse(100, 35, 22, 28, 0, 0, Math.PI*2); }
+function pathTrunk(ctx) {
+  ctx.moveTo(70, 65); ctx.lineTo(130, 65); ctx.lineTo(135, 170); ctx.lineTo(65, 170); ctx.closePath();
+}
+function pathUpperLeft(ctx) {
+  ctx.moveTo(65, 65); ctx.lineTo(35, 120); ctx.lineTo(20, 160); ctx.lineTo(35, 165); ctx.lineTo(60, 110); ctx.closePath();
+}
+function pathUpperRight(ctx) {
+  ctx.moveTo(135, 65); ctx.lineTo(165, 120); ctx.lineTo(180, 160); ctx.lineTo(165, 165); ctx.lineTo(140, 110); ctx.closePath();
+}
+function pathLowerLeft(ctx) {
+  ctx.moveTo(65, 170); ctx.lineTo(60, 240); ctx.lineTo(55, 305); ctx.lineTo(85, 305); ctx.lineTo(95, 240); ctx.lineTo(98, 170); ctx.closePath();
+}
+function pathLowerRight(ctx) {
+  ctx.moveTo(135, 170); ctx.lineTo(140, 240); ctx.lineTo(145, 305); ctx.lineTo(115, 305); ctx.lineTo(105, 240); ctx.lineTo(102, 170); ctx.closePath();
+}
+
+function drawPathList(ctx, paths) {
+  paths.forEach(function(fn) {
+    ctx.beginPath(); fn(ctx); ctx.fill(); if(ctx.lineWidth > 0) ctx.stroke();
+  });
+}
+
+function renderBodies(ctx, isMask) {
+  const render = function(color, paths) {
+    ctx.fillStyle = color;
+    ctx.save();
+    ctx.translate(70, 15); ctx.scale(0.7, 0.7); ctx.translate(-100, 0);
+    drawPathList(ctx, paths);
+    ctx.restore();
+    ctx.save();
+    ctx.translate(210, 15); ctx.scale(0.7, 0.7); ctx.translate(-100, 0);
+    drawPathList(ctx, paths);
+    ctx.restore();
+  };
+
+  if (isMask) {
+    ctx.lineWidth = 0;
+    render('#ff0000', [pathHead]);
+    render('#00ff00', [pathTrunk]);
+    render('#0000ff', [pathUpperLeft, pathUpperRight]);
+    render('#ffff00', [pathLowerLeft, pathLowerRight]);
+  } else {
+    ctx.fillStyle = '#f0f0f0'; ctx.strokeStyle = '#bbbbbb'; ctx.lineWidth = 2; ctx.lineJoin = 'round';
+    render('#f0f0f0', [pathHead, pathTrunk, pathUpperLeft, pathUpperRight, pathLowerLeft, pathLowerRight]);
+    ctx.fillStyle = '#999'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('前', 70, 240);
+    ctx.fillText('後', 210, 240);
+  }
+}
+
+// --- 初期化 ---
+function init() {
+  renderBodies(maskCtx, true);
+  maskData = maskCtx.getImageData(0,0,C_W,C_H).data;
+  for(let i=0; i<C_W*C_H; i++) {
+    const r = maskData[i*4], g = maskData[i*4+1], b = maskData[i*4+2];
+    if (r>200 && g<50 && b<50) { regionMapArray[i] = 1; totalMaskPixels.head++; }
+    else if (r<50 && g>200 && b<50) { regionMapArray[i] = 2; totalMaskPixels.trunk++; }
+    else if (r<50 && g<50 && b>200) { regionMapArray[i] = 3; totalMaskPixels.upper++; }
+    else if (r>200 && g>200 && b<50) { regionMapArray[i] = 4; totalMaskPixels.lower++; }
+  }
+
+  canvasKeys.forEach(function(k) {
+    const bgCvs = document.getElementById('bg-' + k);
+    bgCvs.width = C_W; bgCvs.height = C_H;
+    renderBodies(bgCvs.getContext('2d'), false);
+
+    const drawCvs = document.getElementById('cvs-' + k);
+    drawCvs.width = C_W; drawCvs.height = C_H;
+    const ctx = drawCvs.getContext('2d', { willReadFrequently: true });
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctxMap[k] = ctx;
+
+    saveState(k);
+
+    let isDrawing = false, lastX = 0, lastY = 0;
+
+    function getPos(e) {
+      const rect = drawCvs.getBoundingClientRect();
+      const scaleX = drawCvs.width / rect.width;
+      const scaleY = drawCvs.height / rect.height;
+      let cx = e.clientX, cy = e.clientY;
+      if (e.touches && e.touches.length > 0) { cx = e.touches[0].clientX; cy = e.touches[0].clientY; }
+      return [(cx - rect.left) * scaleX, (cy - rect.top) * scaleY];
+    }
+
+    function start(e) {
+      e.preventDefault();
+      isDrawing = true;
+      [lastX, lastY] = getPos(e);
+      drawCvs.setPointerCapture(e.pointerId);
+    }
+    function move(e) {
+      if (!isDrawing) return;
+      e.preventDefault();
+      const [x, y] = getPos(e);
+      ctx.lineWidth = currentSize;
+      if (currentTool === 0) {
+        ctx.globalCompositeOperation = 'destination-out'; ctx.strokeStyle = 'rgba(0,0,0,1)';
+      } else {
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.strokeStyle = currentTool === 1 ? 'rgba(100, 200, 255, 0.8)' :
+                          currentTool === 2 ? 'rgba(255, 180, 50, 0.8)' : 'rgba(255, 50, 50, 0.8)';
+      }
+      ctx.beginPath(); ctx.moveTo(lastX, lastY); ctx.lineTo(x, y); ctx.stroke();
+      lastX = x; lastY = y;
+    }
+    function end(e) {
+      if (!isDrawing) return;
+      e.preventDefault(); isDrawing = false;
+      drawCvs.releasePointerCapture(e.pointerId);
+      saveState(k);
+      calculateScores();
+    }
+    drawCvs.addEventListener('pointerdown', start);
+    drawCvs.addEventListener('pointermove', move);
+    drawCvs.addEventListener('pointerup', end);
+    drawCvs.addEventListener('pointercancel', end);
+  });
+
+  document.getElementById('age-input').addEventListener('input', updateTableUI);
+  updateTableUI();
+}
+
+// --- 履歴管理 ---
+function saveState(k) {
+  const imageData = ctxMap[k].getImageData(0, 0, C_W, C_H);
+  historyStates[k].push(imageData);
+  if (historyStates[k].length > maxHistory + 1) {
+    historyStates[k].shift();
+  }
+}
+
+function undoCanvas(k) {
+  if (historyStates[k].length > 1) {
+    historyStates[k].pop();
+    const previousState = historyStates[k][historyStates[k].length - 1];
+    ctxMap[k].putImageData(previousState, 0, 0);
+    calculateScores();
+  }
+}
+
+function clearCanvas(k) {
+  ctxMap[k].clearRect(0, 0, C_W, C_H);
+  saveState(k);
+  calculateScores();
+}
+
+// --- ツール切替 ---
+function setTool(t) {
+  currentTool = t;
+  [0,1,2,3].forEach(function(v) { document.getElementById('tool-'+v).classList.toggle('active', v===t); });
+}
+function setSize(s) {
+  currentSize = s;
+  [8,15,25].forEach(function(v) { document.getElementById('size-'+v).classList.toggle('active', v===s); });
+}
+function setIGA(v) {
+  currentIGA = v;
+  [0,1,2,3,4].forEach(function(i) { document.getElementById('iga-'+i).classList.toggle('active', i===v); });
+}
+function resetAll() {
+  if(!confirm("すべての入力をリセットしますか？")) return;
+  canvasKeys.forEach(function(k) {
+    ctxMap[k].clearRect(0, 0, C_W, C_H);
+    historyStates[k] = [];
+    saveState(k);
+  });
+  currentIGA = null;
+  [0,1,2,3,4].forEach(function(i) { document.getElementById('iga-'+i).classList.remove('active'); });
+  document.getElementById('patient-id').value = '';
+  document.getElementById('age-input').value = '';
+  const btn = document.getElementById('btn-gas');
+  btn.textContent = 'GASに保存';
+  btn.style.background = '';
+  calculateScores();
+}
+
+// --- スコア解析処理 ---
+function getColorDist(r1, g1, b1, r2, g2, b2) { return Math.abs(r1-r2) + Math.abs(g1-g2) + Math.abs(b1-b2); }
+function decodeSev(r, g, b, a) {
+  if (a < 30) return 0;
+  const d1 = getColorDist(r,g,b, 100,200,255);
+  const d2 = getColorDist(r,g,b, 255,180,50);
+  const d3 = getColorDist(r,g,b, 255,50,50);
+  if (d1 < d2 && d1 < d3) return 1;
+  if (d2 < d1 && d2 < d3) return 2;
+  return 3;
+}
+function convertArea(pct) {
+  if (pct === 0) return 0;
+  if (pct < 10) return 1; if (pct < 30) return 2; if (pct < 50) return 3;
+  if (pct < 70) return 4; if (pct < 90) return 5; return 6;
+}
+
+const regNames = ['none', 'head', 'trunk', 'upper', 'lower'];
+let resultScores = {};
+
+function calculateScores() {
+  const dataMap = {
+    E: ctxMap['E'].getImageData(0,0,C_W,C_H).data,
+    I: ctxMap['I'].getImageData(0,0,C_W,C_H).data,
+    Ex: ctxMap['Ex'].getImageData(0,0,C_W,C_H).data,
+    L: ctxMap['L'].getImageData(0,0,C_W,C_H).data,
+  };
+
+  let stats = {
+    head:  { E_s:0, E_c:0, I_s:0, I_c:0, Ex_s:0, Ex_c:0, L_s:0, L_c:0, area_c:0 },
+    trunk: { E_s:0, E_c:0, I_s:0, I_c:0, Ex_s:0, Ex_c:0, L_s:0, L_c:0, area_c:0 },
+    upper: { E_s:0, E_c:0, I_s:0, I_c:0, Ex_s:0, Ex_c:0, L_s:0, L_c:0, area_c:0 },
+    lower: { E_s:0, E_c:0, I_s:0, I_c:0, Ex_s:0, Ex_c:0, L_s:0, L_c:0, area_c:0 },
+  };
+
+  for(let i=0; i<C_W*C_H; i++) {
+    const rId = regionMapArray[i];
+    if (rId === 0) continue;
+    const reg = regNames[rId];
+    const idx = i * 4;
+    let hasArea = false;
+
+    canvasKeys.forEach(function(k) {
+      const a = dataMap[k][idx+3];
+      if (a > 30) {
+        hasArea = true;
+        stats[reg][k+'_c']++;
+        stats[reg][k+'_s'] += decodeSev(dataMap[k][idx], dataMap[k][idx+1], dataMap[k][idx+2], a);
+      }
+    });
+    if (hasArea) stats[reg].area_c++;
+  }
+
+  REGIONS.forEach(function(r) {
+    const s = stats[r.id];
+    const e = s.E_c > 0 ? Math.round(s.E_s / s.E_c) : 0;
+    const i = s.I_c > 0 ? Math.round(s.I_s / s.I_c) : 0;
+    const ex = s.Ex_c > 0 ? Math.round(s.Ex_s / s.Ex_c) : 0;
+    const l = s.L_c > 0 ? Math.round(s.L_s / s.L_c) : 0;
+
+    const pct = totalMaskPixels[r.id] > 0 ? (s.area_c / totalMaskPixels[r.id]) * 100 : 0;
+    const a = convertArea(pct);
+    resultScores[r.id] = { E: e, I: i, Ex: ex, L: l, A: a, pct: pct };
+  });
+
+  updateTableUI();
+}
+
+function updateTableUI() {
+  const tbody = document.getElementById('score-tbody');
+  tbody.innerHTML = '';
+  let totalEASI = 0;
+
+  const ageStr = document.getElementById('age-input').value;
+  const age = ageStr === "" ? 8 : parseInt(ageStr, 10);
+  const isChild = age < 8;
+
+  const getWeight = function(id) {
+    if (isChild) {
+      if (id === 'head') return 0.2;
+      if (id === 'trunk') return 0.3;
+      if (id === 'upper') return 0.2;
+      if (id === 'lower') return 0.3;
+    } else {
+      if (id === 'head') return 0.1;
+      if (id === 'trunk') return 0.3;
+      if (id === 'upper') return 0.2;
+      if (id === 'lower') return 0.4;
+    }
+    return 0;
+  };
+
+  REGIONS.forEach(function(reg) {
+    const r = resultScores[reg.id] || { E:0, I:0, Ex:0, L:0, A:0, pct:0 };
+    const weight = getWeight(reg.id);
+    const score = (r.E + r.I + r.Ex + r.L) * r.A * weight;
+    totalEASI += score;
+
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td>' + reg.name + '<br><span class="pct">(x' + weight + ')</span></td>' +
+      '<td style="color:' + (r.E>0?'#FF3232':'inherit') + '">' + r.E + '</td>' +
+      '<td style="color:' + (r.I>0?'#FF3232':'inherit') + '">' + r.I + '</td>' +
+      '<td style="color:' + (r.Ex>0?'#FF3232':'inherit') + '">' + r.Ex + '</td>' +
+      '<td style="color:' + (r.L>0?'#FF3232':'inherit') + '">' + r.L + '</td>' +
+      '<td class="bold">' + r.A + ' <span class="pct"><br>(' + r.pct.toFixed(1) + '%)</span></td>' +
+      '<td class="bold" style="color:var(--green)">' + score.toFixed(1) + '</td>';
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('easi-total').textContent = totalEASI.toFixed(1);
+  const bandEl = document.getElementById('easi-band');
+  let band = '寛解', color = '#1D9E75';
+  if(totalEASI >= 50) { band = '最重症'; color = '#E13D3D'; }
+  else if(totalEASI >= 21) { band = '重症'; color = '#D85A30'; }
+  else if(totalEASI >= 7) { band = '中等症'; color = '#EF9F27'; }
+  else if(totalEASI >= 1) { band = '軽症'; color = '#5DCAA5'; }
+
+  bandEl.textContent = band;
+  bandEl.style.background = color;
+}
+
+init();
+</script>
+</body>
+</html>
