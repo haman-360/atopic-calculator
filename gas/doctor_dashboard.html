@@ -775,7 +775,7 @@ function igaBtnClick(reportId, value) {
 function updateEasiDisplay(reportId) {
   const state = easiState[reportId];
   if (!state) return;
-  const { parts, total } = calcEasiLocal(state);
+  const { parts, total, weight } = calcEasiLocal(state);
 
   EASI_PARTS.forEach(part => {
     // 部位スコア表示
