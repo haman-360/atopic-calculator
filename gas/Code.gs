@@ -1243,14 +1243,18 @@ function saveAssessment_(data) {
   const assessmentId = Utilities.getUuid();
   const assessedAt = new Date().toISOString();
 
-  // 病変マップ画像をDriveに保存（base64で渡された場合）
+  // 病変マップ画像をSheetsセルに直接保存（base64 data URL、DriveApp不要）
   let lesionMapUrl = '';
+  let lesionMapError = '';
+  Logger.log('lesionMapBase64 length: ' + (data.lesionMapBase64 ? data.lesionMapBase64.length : 'none'));
   if (data.lesionMapBase64) {
-    try {
-      lesionMapUrl = saveLesionMap_(String(data.patientNo), String(data.visitDate), data.lesionMapBase64);
-    } catch (imgErr) {
-      Logger.log('saveLesionMap_ failed: ' + imgErr.message);
-      // 画像保存失敗は非致命的 — 評価は続行
+    const imgLen = data.lesionMapBase64.length;
+    if (imgLen <= 45000) {
+      lesionMapUrl = data.lesionMapBase64; // data:image/png;base64,... をそのまま保存
+      Logger.log('lesionMap stored in sheet: ' + imgLen + ' chars');
+    } else {
+      lesionMapError = '画像が大きすぎます（' + imgLen + '文字）。キャプチャサイズを小さくしてください。';
+      Logger.log('lesionMap too large: ' + imgLen);
     }
   }
 
@@ -1287,7 +1291,13 @@ function saveAssessment_(data) {
     }
   }
 
-  return { ok: true, assessmentId, easiTotal: easi.total, easiSeverity: severity };
+  return { ok: true, assessmentId, easiTotal: easi.total, easiSeverity: severity, lesionMapUrl, lesionMapError };
+}
+
+// ===== DriveApp初回認証用（実行後に削除可） =====
+function testDriveAuth() {
+  DriveApp.getFoldersByName('EASI_LesionMaps');
+  Logger.log('Drive認証OK');
 }
 
 // ===== 病変マップ画像をGoogle Driveに保存 =====

@@ -908,7 +908,7 @@ function buildVisitCard(visit, reports, assessment) {
           ? '<span>IGA: <strong>' + assessment.iga + '</strong></span>'
           : '') +
       '</div>';
-    if (assessment.lesionMapJson && assessment.lesionMapJson.indexOf('https://') === 0) {
+    if (assessment.lesionMapJson && (assessment.lesionMapJson.indexOf('https://') === 0 || assessment.lesionMapJson.indexOf('data:image/') === 0)) {
       easiHtml += '<div style="margin-top:8px;">' +
         '<img src="' + esc(assessment.lesionMapJson) + '" alt="病変マップ" loading="lazy" ' +
         'style="max-width:100%;border-radius:6px;border:1px solid #e0e4e8;cursor:pointer;display:block;" ' +

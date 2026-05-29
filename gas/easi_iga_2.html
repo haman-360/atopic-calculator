@@ -347,9 +347,9 @@ function saveToGAS() {
     lowerLimb: toEasiPart(resultScores.lower || {})
   };
 
-  // キャンバスグリッドをキャプチャ（4枚の描画を含む）
-  const captureTarget = document.getElementById('capture-area');
-  html2canvas(captureTarget, { scale: 1, useCORS: true, backgroundColor: '#f4f6f8' }).then(function(canvas) {
+  // キャンバスグリッドのみを小さくキャプチャ（Sheetsセルに保存できるサイズ）
+  const captureTarget = document.getElementById('canvas-grid');
+  html2canvas(captureTarget, { scale: 0.28, useCORS: true, backgroundColor: '#f4f6f8' }).then(function(canvas) {
     const base64 = canvas.toDataURL('image/png');
 
     const payload = {
@@ -366,7 +366,14 @@ function saveToGAS() {
       .withSuccessHandler(function(res) {
         btn.disabled = false;
         if (res && res.ok) {
-          btn.textContent = '保存済み ✓';
+          var msg = '保存済み ✓';
+          if (res.lesionMapUrl) {
+            msg = '保存済み ✓（画像あり）';
+          } else if (res.lesionMapError) {
+            msg = '保存済み（画像エラー）';
+            alert('スコアは保存されましたが、画像の保存に失敗しました:\n' + res.lesionMapError);
+          }
+          btn.textContent = msg;
           btn.style.background = '#388E3C';
           setTimeout(function() {
             btn.textContent = 'GASに保存';
