@@ -324,6 +324,57 @@ function shareImage() {
   });
 }
 
+// --- 4枚のキャンバスを合成してコンパクトな画像を生成 ---
+function createLesionMapCanvas() {
+  var SCALE = 0.42;           // 出力スケール（解像度とファイルサイズのバランス）
+  var CROP_H = 242;           // ソースキャンバスの有効高さ（下部余白5pxを除去）
+  var TITLE_H = 13;           // 各キャンバス上のラベル高さ（出力px）
+  var GAP = 3;                // キャンバス間の隙間（出力px）
+  var keys   = ['E', 'I', 'Ex', 'L'];
+  var titles = ['E:赤み', 'I:ぶつぶつ', 'Ex:ひっかき傷', 'L:ごわごわ'];
+
+  var srcW = C_W;
+  var srcH = CROP_H;
+  var cellW = Math.round(srcW * SCALE);
+  var cellH = Math.round(srcH * SCALE);
+  var outW = cellW * 2 + GAP;
+  var outH = (cellH + TITLE_H) * 2 + GAP;
+
+  var out = document.createElement('canvas');
+  out.width = outW;
+  out.height = outH;
+  var ctx = out.getContext('2d');
+  ctx.fillStyle = '#f0f0f0';
+  ctx.fillRect(0, 0, outW, outH);
+
+  keys.forEach(function(k, idx) {
+    var col = idx % 2;
+    var row = Math.floor(idx / 2);
+    var dx = col * (cellW + GAP);
+    var dy = row * (cellH + TITLE_H + GAP);
+
+    // セル背景
+    ctx.fillStyle = '#fafafa';
+    ctx.fillRect(dx, dy, cellW, cellH + TITLE_H);
+
+    // ラベル
+    ctx.fillStyle = '#555';
+    ctx.font = 'bold 9px sans-serif';
+    ctx.textBaseline = 'top';
+    ctx.fillText(titles[idx], dx + 2, dy + 2);
+
+    // 人体図（背景キャンバス）
+    var bgCvs = document.getElementById('bg-' + k);
+    ctx.drawImage(bgCvs, 0, 0, srcW, srcH, dx, dy + TITLE_H, cellW, cellH);
+
+    // 描画レイヤー（着色キャンバス）
+    var drawCvs = document.getElementById('cvs-' + k);
+    ctx.drawImage(drawCvs, 0, 0, srcW, srcH, dx, dy + TITLE_H, cellW, cellH);
+  });
+
+  return out;
+}
+
 // --- GASに保存 ---
 function saveToGAS() {
   const patientNo = document.getElementById('patient-id').value.trim();
@@ -347,9 +398,8 @@ function saveToGAS() {
     lowerLimb: toEasiPart(resultScores.lower || {})
   };
 
-  // キャンバスグリッドのみを小さくキャプチャ（Sheetsセルに保存できるサイズ）
-  const captureTarget = document.getElementById('canvas-grid');
-  html2canvas(captureTarget, { scale: 0.28, useCORS: true, backgroundColor: '#f4f6f8' }).then(function(canvas) {
+  // 4枚のキャンバスを直接合成（余白なし・html2canvas不要・高解像度）
+  Promise.resolve(createLesionMapCanvas()).then(function(canvas) {
     const base64 = canvas.toDataURL('image/png');
 
     const payload = {

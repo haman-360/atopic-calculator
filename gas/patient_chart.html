@@ -790,11 +790,23 @@ function renderTimeline(data) {
     reportsByVisitDate[targetDate].push(r);
   });
 
-  // assessment → visitDate にマッピング（最初の1件）
+  // assessment → visitDate にマッピング（最新で上書き、ただしlesionMapJsonは引き継ぐ）
   var assessByVisitDate = {};
   (data.assessments || []).forEach(function(a) {
     var vd = a.visitDate ? String(a.visitDate).slice(0, 10) : null;
-    if (vd && !assessByVisitDate[vd]) assessByVisitDate[vd] = a;
+    if (!vd) return;
+    var existing = assessByVisitDate[vd];
+    if (!existing) {
+      assessByVisitDate[vd] = a;
+    } else {
+      // 最新で上書き。ただし新しい方に画像がなく古い方にある場合は古い画像を引き継ぐ
+      var merged = {};
+      for (var key in a) merged[key] = a[key];
+      if (!merged.lesionMapJson && existing.lesionMapJson) {
+        merged.lesionMapJson = existing.lesionMapJson;
+      }
+      assessByVisitDate[vd] = merged;
+    }
   });
 
   var html = visits.map(function(v) {
