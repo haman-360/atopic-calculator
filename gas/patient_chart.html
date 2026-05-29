@@ -1259,11 +1259,17 @@ function buildScheduleInnerHtml(visit) {
         var p1 = d.taperPhases.phase1, p2 = d.taperPhases.phase2;
         var p1pct = (p1.days / totalDays * 100).toFixed(1);
         var p2pct = (p2.days / totalDays * 100).toFixed(1);
+        // 切り替え日を計算（phase1.days後）
+        var switchDate = new Date(new Date(sd).getTime() + p1.days * 86400000);
+        var switchDateStr = fmtDate(switchDate.toISOString().slice(0, 10));
+        // 切り替え日ラベルの左位置（%）= offset + p1pct
+        var switchLabelLeft = (parseFloat(offsetPct) + parseFloat(p1pct)).toFixed(1);
         barHtml =
-          '<div style="display:flex;justify-content:space-between;font-size:11px;color:#9b9890;margin-bottom:4px;">' +
+          '<div style="position:relative;display:flex;justify-content:space-between;font-size:11px;color:#9b9890;margin-bottom:4px;">' +
             '<span>' + esc2(fmtDate(sd)) + '</span>' +
             '<span>' + drugDays + '日間</span>' +
             '<span>' + esc2(fmtDate(ed)) + '</span>' +
+            '<span style="position:absolute;left:' + switchLabelLeft + '%;transform:translateX(-50%);color:#e07b39;font-weight:700;">' + esc2(switchDateStr) + '</span>' +
           '</div>' +
           '<div style="height:20px;display:flex;border-radius:6px;overflow:hidden;background:#e0ddd4;margin-bottom:6px;">' +
             (offsetPct > 0 ? '<div style="width:' + offsetPct + '%;flex-shrink:0;"></div>' : '') +
