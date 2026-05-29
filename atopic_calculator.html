@@ -1077,14 +1077,12 @@
       { name: "リンデロンV軟膏",             short: "リンデロンV",    tubeg: 10, gPerFTU: 0.3,  custom: false },
       { name: "リンデロンVクリーム",         short: "リンデロンVCr",  tubeg: 10, gPerFTU: 0.3,  custom: false },
       { name: "アンテベート軟膏",            short: "アンテベート",   tubeg: 10, gPerFTU: 0.3,  custom: false },
-      // 6: ステロイドクリーム（1FTU=0.5g）
-      { name: "ベタメタゾンクリーム",        short: "βCr",           tubeg: 30, gPerFTU: 0.5,  custom: false },
-      // 7〜8: 混合軟膏
+      // 6〜7: 混合軟膏
       { name: "ロコイド/ヘパリン混合軟膏",   short: "ロコ/ヘパ",     tubeg: 10, gPerFTU: 0.5,  custom: false, mixed: true },
       { name: "リンデロン/ヘパリン混合軟膏", short: "リン/ヘパ",     tubeg: 10, gPerFTU: 0.5,  custom: false, mixed: true },
-      // 9: 保湿剤
+      // 8: 保湿剤
       { name: "ブイタマークリーム",          short: "ブイタマー",     tubeg: 15, gPerFTU: 0.5,  custom: false },
-      // 10: 手入力
+      // 9: 手入力
       { name: "その他（手入力）",             short: "手入力",         tubeg: 10, gPerFTU: 0.5,  custom: true },
     ];
     const FREQS = [
@@ -5140,16 +5138,15 @@ ${area.innerHTML}
 
     // ルールベース解析テーブル（PRESETS のインデックスに対応）
     const VOICE_DRUG_MAP = [
-      { pattern: /ロコイド.{0,5}混合|混合.{0,5}ロコイド/,       idx: 7 },  // ロコイド/ヘパリン混合軟膏
-      { pattern: /リンデロン.{0,5}混合|混合.{0,5}リンデロン/,   idx: 8 },  // リンデロン/ヘパリン混合軟膏
+      { pattern: /ロコイド.{0,5}混合|混合.{0,5}ロコイド/,       idx: 6 },  // ロコイド/ヘパリン混合軟膏
+      { pattern: /リンデロン.{0,5}混合|混合.{0,5}リンデロン/,   idx: 7 },  // リンデロン/ヘパリン混合軟膏
       { pattern: /モイゼルト/,  idx: 0 },
       { pattern: /コレクチム/,  idx: 1 },
       { pattern: /ロコイド/,    idx: 2 },
       { pattern: /リンデロン.{0,3}[Vｖ].{0,3}クリーム/, idx: 4 },  // リンデロンVクリーム
       { pattern: /リンデロン/,  idx: 3 },  // リンデロンV軟膏
       { pattern: /アンテベート/, idx: 5 },
-      { pattern: /ベタメタゾン.{0,5}クリーム|クリーム.{0,5}ベタメタゾン/, idx: 6 },  // ベタメタゾンクリーム
-      { pattern: /ブイタマー|VTM|ビタマー/, idx: 9 },
+      { pattern: /ブイタマー|VTM|ビタマー/, idx: 8 },
     ];
 
     const VOICE_FREQ_MAP = [

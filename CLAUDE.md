@@ -231,14 +231,12 @@ atopic-calculator/
   { name: "リンデロンV軟膏",             tubeg: 10, gPerFTU: 0.3,  mixed: false },
   { name: "リンデロンVクリーム",         tubeg: 10, gPerFTU: 0.3,  mixed: false },
   { name: "アンテベート軟膏",            tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  // idx 6
-  { name: "ベタメタゾンクリーム",        tubeg: 30, gPerFTU: 0.5,  mixed: false },
-  // idx 7〜8: 混合軟膏
+  // idx 6〜7: 混合軟膏
   { name: "ロコイド/ヘパリン混合軟膏",   tubeg: 10, gPerFTU: 0.5,  mixed: true  },
   { name: "リンデロン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5,  mixed: true  },
-  // idx 9: 保湿剤
+  // idx 8: 保湿剤
   { name: "ブイタマークリーム",          tubeg: 15, gPerFTU: 0.5,  mixed: false },
-  // idx 10: 手入力
+  // idx 9: 手入力
   { name: "その他（手入力）",             tubeg: 10, gPerFTU: 0.5,  custom: true },
 ]
 ```
