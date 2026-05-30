@@ -1222,7 +1222,7 @@ function getEasiSeverity_(total) {
   return 'very_severe';
 }
 
-// ===== ClinicalAssessments: 保存 =====
+// ===== ClinicalAssessments: 保存（upsert: assessmentIdがあれば既存行を更新） =====
 function saveAssessment_(data) {
   if (!data.patientNo || !data.visitDate) {
     return { ok: false, reason: 'patientNo and visitDate are required' };
@@ -1240,7 +1240,6 @@ function saveAssessment_(data) {
   }
   const easi = calcEasi_(data.easi || {}, birthdate, data.visitDate);
   const severity = getEasiSeverity_(easi.total);
-  const assessmentId = Utilities.getUuid();
   const assessedAt = new Date().toISOString();
 
   // 病変マップ画像をSheetsセルに直接保存（base64 data URL、DriveApp不要）
@@ -1250,7 +1249,7 @@ function saveAssessment_(data) {
   if (data.lesionMapBase64) {
     const imgLen = data.lesionMapBase64.length;
     if (imgLen <= 45000) {
-      lesionMapUrl = data.lesionMapBase64; // data:image/png;base64,... をそのまま保存
+      lesionMapUrl = data.lesionMapBase64;
       Logger.log('lesionMap stored in sheet: ' + imgLen + ' chars');
     } else {
       lesionMapError = '画像が大きすぎます（' + imgLen + '文字）。キャプチャサイズを小さくしてください。';
@@ -1259,21 +1258,57 @@ function saveAssessment_(data) {
   }
 
   const sheet = getOrCreateClinicalAssessmentsSheet_();
+
+  // ===== assessmentId が渡された場合: 既存行をin-place更新 =====
+  if (data.assessmentId) {
+    const rows = sheet.getDataRange().getValues();
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][0]).trim() !== String(data.assessmentId).trim()) continue;
+      // 画像が新しく渡されていない場合は既存を保持
+      const finalLesionMap = lesionMapUrl || String(rows[i][11] || '');
+      sheet.getRange(i + 1, 4, 1, 11).setValues([[
+        assessedAt,
+        easi.head, easi.trunk, easi.upperLimb, easi.lowerLimb,
+        easi.total, severity,
+        data.iga !== undefined ? data.iga : (rows[i][10] !== '' ? rows[i][10] : ''),
+        finalLesionMap,
+        data.notes || '',
+        JSON.stringify(data.easi || {})
+      ]]);
+      Logger.log('saveAssessment_: 既存行を更新 assessmentId=' + data.assessmentId);
+      // reportId が渡された場合、PatientReport の status を 'assessed' に更新
+      if (data.reportId) {
+        const prSheet = getSheet_('PatientReports');
+        const prData = prSheet.getDataRange().getValues();
+        for (let j = 1; j < prData.length; j++) {
+          if (String(prData[j][0]).trim() === String(data.reportId).trim()) {
+            prSheet.getRange(j + 1, 13).setValue('assessed');
+            break;
+          }
+        }
+      }
+      return { ok: true, assessmentId: data.assessmentId, easiTotal: easi.total, easiSeverity: severity, lesionMapUrl: finalLesionMap, lesionMapError };
+    }
+    Logger.log('saveAssessment_: assessmentId が見つからないため新規作成 assessmentId=' + data.assessmentId);
+  }
+
+  // ===== 新規 APPEND =====
+  const assessmentId = Utilities.getUuid();
   sheet.appendRow([
-    assessmentId,                        // [0]  assessmentId
-    String(data.patientNo),              // [1]  patientNo
-    String(data.visitDate),              // [2]  visitDate
-    assessedAt,                          // [3]  assessedAt
-    easi.head,                           // [4]  easiHead
-    easi.trunk,                          // [5]  easiTrunk
-    easi.upperLimb,                      // [6]  easiUpperLimb
-    easi.lowerLimb,                      // [7]  easiLowerLimb
-    easi.total,                          // [8]  easiTotal
-    severity,                            // [9]  easiSeverity
+    assessmentId,                          // [0]  assessmentId
+    String(data.patientNo),                // [1]  patientNo
+    String(data.visitDate),                // [2]  visitDate
+    assessedAt,                            // [3]  assessedAt
+    easi.head,                             // [4]  easiHead
+    easi.trunk,                            // [5]  easiTrunk
+    easi.upperLimb,                        // [6]  easiUpperLimb
+    easi.lowerLimb,                        // [7]  easiLowerLimb
+    easi.total,                            // [8]  easiTotal
+    severity,                              // [9]  easiSeverity
     data.iga !== undefined ? data.iga : '', // [10] iga
-    lesionMapUrl,                        // [11] lesionMapJson（Drive thumbnail URL）
-    data.notes || '',                    // [12] notes
-    JSON.stringify(data.easi || {})      // [13] easiRawJson（入力元データ）
+    lesionMapUrl,                          // [11] lesionMapJson
+    data.notes || '',                      // [12] notes
+    JSON.stringify(data.easi || {})        // [13] easiRawJson
   ]);
   const newRow = sheet.getLastRow();
   sheet.getRange(newRow, 2).setNumberFormat('@');

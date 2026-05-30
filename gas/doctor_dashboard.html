@@ -744,7 +744,9 @@ function initEasiState(reportId, lastAssessment, birthdate) {
   const raw = lastAssessment && lastAssessment.easiRawJson;
   const defaultPart = { E: 0, I: 0, Ex: 0, L: 0, A: 0 };
   easiState[reportId] = {
-    birthdate: birthdate || '',
+    birthdate:    birthdate || '',
+    assessmentId: (lastAssessment && lastAssessment.assessmentId) || null,
+    visitDate:    (lastAssessment && lastAssessment.visitDate)    || null,
     head:      Object.assign({}, defaultPart, raw && raw.head      ? raw.head      : {}),
     trunk:     Object.assign({}, defaultPart, raw && raw.trunk     ? raw.trunk     : {}),
     upperLimb: Object.assign({}, defaultPart, raw && raw.upperLimb ? raw.upperLimb : {}),
@@ -837,11 +839,17 @@ function saveAssessment(reportId, patientNo) {
   const state = easiState[reportId];
   if (!state) { showToast('評価データが見つかりません'); return; }
 
-  const visitDate = new Date().toISOString().slice(0, 10);
+  // 既存評価を上書きする場合は確認ダイアログ
+  if (state.assessmentId) {
+    if (!confirm('既存のEASI評価を上書きします。続けますか？')) return;
+  }
+
+  const visitDate = state.visitDate || new Date().toISOString().slice(0, 10);
   const payload = {
     action: 'saveAssessment',
     patientNo: patientNo,
     visitDate: visitDate,
+    assessmentId: state.assessmentId || null,
     easi: { head: state.head, trunk: state.trunk, upperLimb: state.upperLimb, lowerLimb: state.lowerLimb },
     iga: state.iga,
     reportId: reportId,
@@ -1062,6 +1070,14 @@ function hasEasiInput(reportId) {
 
 function unifiedSave(reportId, patientNo) {
   const btn = document.getElementById('unified-save-' + reportId);
+
+  // 確認済みレコードの変更確認
+  const report = findReport(reportId);
+  const status = report ? report.status : 'pending';
+  if (status === 'reviewed' || status === 'assessed') {
+    if (!confirm('確認済みの記録を修正します。続けますか？')) return;
+  }
+
   if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
 
   const comment  = (document.getElementById('comment-' + reportId) || {}).value || '';
@@ -1087,12 +1103,13 @@ function unifiedSave(reportId, patientNo) {
 
   if (hasEasiInput(reportId)) {
     const s = easiState[reportId];
-    const visitDate = new Date().toISOString().slice(0, 10);
+    const visitDate = s.visitDate || new Date().toISOString().slice(0, 10);
     const notesEl = document.getElementById('easi-notes-' + reportId);
     const payload = {
       action: 'saveAssessment',
       patientNo: patientNo,
       visitDate: visitDate,
+      assessmentId: s.assessmentId || null,
       easi: { head: s.head || {}, trunk: s.trunk || {}, upperLimb: s.upperLimb || {}, lowerLimb: s.lowerLimb || {} },
       iga: s.iga || 0,
       reportId: reportId,
