@@ -1126,9 +1126,10 @@ function getOrCreateClinicalAssessmentsSheet_() {
 }
 
 // ===== google.script.run 用の公開ラッパー（アンダースコア付き関数は呼び出せないため） =====
-function saveAssessment(data)          { return saveAssessment_(data); }
-function getAssessmentList(patientNo)  { return getAssessmentList_(patientNo); }
-function getPatientChartData(patientNo) { return getPatientChartData_(patientNo); }
+function saveAssessment(data)                        { return saveAssessment_(data); }
+function getAssessmentList(patientNo)               { return getAssessmentList_(patientNo); }
+function getAssessmentByVisit(patientNo, visitDate) { return getAssessmentByVisit_(patientNo, visitDate); }
+function getPatientChartData(patientNo)             { return getPatientChartData_(patientNo); }
 
 // ===== カルテビュー: 患者一覧取得 =====
 function getPatientListForChart() {

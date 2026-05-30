@@ -271,12 +271,14 @@ input[type=date].pf-input { width: 130px; }
       </div>
     </div>
 
+    <div id="assessment-indicator" style="font-size:11px;text-align:right;min-height:14px;margin-bottom:4px;"></div>
     <div class="action-row">
       <button class="action-btn btn-reset" onclick="resetAll()">リセット</button>
       <button class="action-btn btn-save" onclick="saveAsImage()">保存</button>
       <button class="action-btn btn-share" onclick="shareImage()">共有</button>
       <button class="action-btn btn-gas" id="btn-gas" onclick="saveToGAS()">GASに保存</button>
     </div>
+    <button class="action-btn" id="btn-ipad" onclick="saveToIPad()" style="display:none;width:100%;margin-top:8px;background:#FF6F00;color:#fff;font-weight:700;">📲 iPadに保存</button>
 
   </div>
 </div>
@@ -301,6 +303,34 @@ function saveAsImage() {
     console.error('画像の保存に失敗しました', err);
     alert('画像の保存に失敗しました。');
   });
+}
+
+// --- GAS保存後のiPadローカル保存 ---
+function saveToIPad() {
+  var canvas = lastSavedCanvas;
+  if (!canvas) {
+    alert('先に「GASに保存」を実行してください。');
+    return;
+  }
+  canvas.toBlob(function(blob) {
+    if (!blob) { alert('画像の生成に失敗しました。'); return; }
+    var file = new File([blob], getFileName(), { type: 'image/png' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({
+        files: [file],
+        title: 'EASI/IGA 病変マップ'
+      }).catch(function(err) {
+        if (err.name !== 'AbortError') alert('共有に失敗しました: ' + err.message);
+      });
+    } else {
+      // iOS非対応ブラウザ: <a download> フォールバック
+      var link = document.createElement('a');
+      link.download = getFileName();
+      link.href = URL.createObjectURL(blob);
+      link.click();
+      URL.revokeObjectURL(link.href);
+    }
+  }, 'image/png');
 }
 
 function shareImage() {
@@ -406,6 +436,7 @@ function saveToGAS() {
       action:          'saveAssessment',
       patientNo:       patientNo,
       visitDate:       visitDate,
+      assessmentId:    currentAssessmentId || null,
       easi:            easiPayload,
       iga:             currentIGA !== null ? currentIGA : undefined,
       lesionMapBase64: base64,
@@ -416,6 +447,10 @@ function saveToGAS() {
       .withSuccessHandler(function(res) {
         btn.disabled = false;
         if (res && res.ok) {
+          // GAS 保存成功: assessmentId を保持してupsertモードへ
+          currentAssessmentId = res.assessmentId || currentAssessmentId;
+          lastSavedCanvas = canvas;
+
           var msg = '保存済み ✓';
           if (res.lesionMapUrl) {
             msg = '保存済み ✓（画像あり）';
@@ -429,6 +464,17 @@ function saveToGAS() {
             btn.textContent = 'GASに保存';
             btn.style.background = '';
           }, 4000);
+
+          // 「iPadに保存」ボタンを表示
+          var ipadBtn = document.getElementById('btn-ipad');
+          if (ipadBtn) {
+            ipadBtn.style.display = 'block';
+            ipadBtn.style.background = '#FF6F00';
+          }
+
+          // 評価インジケーターを更新
+          var indicator = document.getElementById('assessment-indicator');
+          if (indicator) { indicator.textContent = '↺ 既存の評価あり（上書きモード）'; indicator.style.color = '#EF9F27'; }
         } else {
           btn.textContent = 'GASに保存';
           alert('保存に失敗しました: ' + ((res && res.reason) || '不明なエラー'));
@@ -457,6 +503,43 @@ const C_H = 250;
 let currentTool = 2;
 let currentSize = 15;
 let currentIGA = null;
+let currentAssessmentId = null;  // 既存評価があればそのID（upsert用）
+let lastSavedCanvas = null;      // GAS保存後にiPad保存で使う
+
+// --- 既存評価の自動検索 ---
+let _lookupTimer = null;
+function scheduleAssessmentLookup() {
+  clearTimeout(_lookupTimer);
+  currentAssessmentId = null;
+  const indicator = document.getElementById('assessment-indicator');
+  if (indicator) indicator.textContent = '';
+  _lookupTimer = setTimeout(lookupExistingAssessment, 800);
+}
+
+function lookupExistingAssessment() {
+  const patientNo = document.getElementById('patient-id').value.trim();
+  const visitDate = document.getElementById('date-input').value;
+  if (!patientNo || !visitDate) return;
+  if (typeof google === 'undefined' || !google.script) return;
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      const indicator = document.getElementById('assessment-indicator');
+      if (res && res.ok && res.assessments && res.assessments.length > 0) {
+        const latest = res.assessments[res.assessments.length - 1];
+        currentAssessmentId = latest.assessmentId;
+        if (indicator) {
+          indicator.textContent = '↺ 既存の評価あり（上書きモード）';
+          indicator.style.color = '#EF9F27';
+        }
+      } else {
+        currentAssessmentId = null;
+        if (indicator) { indicator.textContent = '＋ 新規登録モード'; indicator.style.color = '#1D9E75'; }
+      }
+    })
+    .withFailureHandler(function() { currentAssessmentId = null; })
+    .getAssessmentByVisit(patientNo, visitDate);
+}
 
 const historyStates = { E: [], I: [], Ex: [], L: [] };
 const maxHistory = 10;
@@ -600,7 +683,10 @@ function init() {
   });
 
   document.getElementById('age-input').addEventListener('input', updateTableUI);
+  document.getElementById('patient-id').addEventListener('change', scheduleAssessmentLookup);
+  document.getElementById('date-input').addEventListener('change', scheduleAssessmentLookup);
   updateTableUI();
+  scheduleAssessmentLookup();
 }
 
 // --- 履歴管理 ---
@@ -648,12 +734,18 @@ function resetAll() {
     saveState(k);
   });
   currentIGA = null;
+  currentAssessmentId = null;
+  lastSavedCanvas = null;
   [0,1,2,3,4].forEach(function(i) { document.getElementById('iga-'+i).classList.remove('active'); });
   document.getElementById('patient-id').value = '';
   document.getElementById('age-input').value = '';
-  const btn = document.getElementById('btn-gas');
+  var btn = document.getElementById('btn-gas');
   btn.textContent = 'GASに保存';
   btn.style.background = '';
+  var ipadBtn = document.getElementById('btn-ipad');
+  if (ipadBtn) { ipadBtn.style.display = 'none'; }
+  var indicator = document.getElementById('assessment-indicator');
+  if (indicator) indicator.textContent = '';
   calculateScores();
 }
 
