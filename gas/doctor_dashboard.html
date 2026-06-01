@@ -760,7 +760,9 @@ function initEasiState(reportId, lastAssessment, birthdate, currentVisitDate) {
     trunk:     Object.assign({}, defaultPart, raw && raw.trunk     ? raw.trunk     : {}),
     upperLimb: Object.assign({}, defaultPart, raw && raw.upperLimb ? raw.upperLimb : {}),
     lowerLimb: Object.assign({}, defaultPart, raw && raw.lowerLimb ? raw.lowerLimb : {}),
-    iga: sameVisit && lastAssessment.iga !== null ? lastAssessment.iga : 0
+    iga: sameVisit && lastAssessment.iga !== null ? lastAssessment.iga : 0,
+    igaTouched:   false,
+    easiTouched:  false
   };
   updateEasiDisplay(reportId);
 }
@@ -769,12 +771,14 @@ function initEasiState(reportId, lastAssessment, birthdate, currentVisitDate) {
 function easiBtnClick(reportId, part, sign, value) {
   if (!easiState[reportId]) return;
   easiState[reportId][part][sign] = value;
+  easiState[reportId].easiTouched = true;
   updateEasiDisplay(reportId);
 }
 
 function igaBtnClick(reportId, value) {
   if (!easiState[reportId]) return;
   easiState[reportId].iga = value;
+  easiState[reportId].igaTouched = true;
   // IGAボタン選択状態を更新
   [0,1,2,3,4].forEach(v => {
     const btn = document.getElementById('iga-btn-' + reportId + '-' + v);
@@ -1062,6 +1066,10 @@ function findReport(reportId) {
 function hasEasiInput(reportId) {
   const s = easiState[reportId];
   if (!s) return false;
+  // 既存評価を上書き編集中（assessmentIdあり）は常に保存許可
+  if (s.assessmentId) return true;
+  // IGA/EASIボタンを明示的に操作した場合（0点含む）は保存許可
+  if (s.igaTouched || s.easiTouched) return true;
   for (const p of ['head', 'trunk', 'upperLimb', 'lowerLimb']) {
     const pt = s[p] || {};
     if ((pt.E || 0) + (pt.I || 0) + (pt.Ex || 0) + (pt.L || 0) + (pt.A || 0) > 0) return true;
