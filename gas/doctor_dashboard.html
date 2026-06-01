@@ -754,11 +754,6 @@ function initEasiState(reportId, lastAssessment, birthdate) {
     iga: lastAssessment && lastAssessment.iga !== null ? lastAssessment.iga : 0
   };
   updateEasiDisplay(reportId);
-  // 既存メモを復元
-  if (lastAssessment && lastAssessment.notes) {
-    const notesEl = document.getElementById('easi-notes-' + reportId);
-    if (notesEl) notesEl.value = lastAssessment.notes;
-  }
 }
 
 // ===== EASIボタンクリック =====
