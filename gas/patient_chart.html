@@ -710,7 +710,7 @@ function renderScoreChart(data) {
     if (a.iga !== null && a.iga !== undefined) igaMap[vd] = a.iga;
   });
 
-  var allDates = Object.keys(poemMap).concat(Object.keys(easiMap));
+  var allDates = Object.keys(poemMap).concat(Object.keys(easiMap)).concat(Object.keys(igaMap));
   var dateSet  = {};
   allDates.forEach(function(d) { dateSet[d] = true; });
   var labels   = Object.keys(dateSet).sort();

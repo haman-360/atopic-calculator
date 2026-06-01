@@ -496,7 +496,12 @@ function renderList(type, reports) {
 
   container.innerHTML = cards.join('');
 
-  reports.forEach(r => { try { initEasiState(r.reportId, r.lastAssessment || null, r.birthdate || ''); } catch(e) {} });
+  reports.forEach(r => {
+    try {
+      const currentVisitDate = r.submittedAt ? r.submittedAt.slice(0, 10) : new Date().toISOString().slice(0, 10);
+      initEasiState(r.reportId, r.lastAssessment || null, r.birthdate || '', currentVisitDate);
+    } catch(e) {}
+  });
 
   // グラフ非同期読み込み（全カード）
   reports.forEach(r => { try { loadPatientChart(r.reportId, r.patientNo); } catch(e) {} });
@@ -740,18 +745,22 @@ function buildEasiSection(r, type) {
 }
 
 // ===== EASI状態初期化（DOM生成後に呼び出す） =====
-function initEasiState(reportId, lastAssessment, birthdate) {
-  const raw = lastAssessment && lastAssessment.easiRawJson;
+function initEasiState(reportId, lastAssessment, birthdate, currentVisitDate) {
+  const today = currentVisitDate || new Date().toISOString().slice(0, 10);
+  // 同じ受診日に既存評価があれば編集モード（assessmentId再利用）
+  // 前回受診日の評価は参考にしない（新規作成）
+  const sameVisit = lastAssessment && lastAssessment.visitDate === today;
+  const raw = sameVisit ? lastAssessment.easiRawJson : null;
   const defaultPart = { E: 0, I: 0, Ex: 0, L: 0, A: 0 };
   easiState[reportId] = {
     birthdate:    birthdate || '',
-    assessmentId: (lastAssessment && lastAssessment.assessmentId) || null,
-    visitDate:    (lastAssessment && lastAssessment.visitDate)    || null,
+    assessmentId: sameVisit ? lastAssessment.assessmentId : null,
+    visitDate:    today,
     head:      Object.assign({}, defaultPart, raw && raw.head      ? raw.head      : {}),
     trunk:     Object.assign({}, defaultPart, raw && raw.trunk     ? raw.trunk     : {}),
     upperLimb: Object.assign({}, defaultPart, raw && raw.upperLimb ? raw.upperLimb : {}),
     lowerLimb: Object.assign({}, defaultPart, raw && raw.lowerLimb ? raw.lowerLimb : {}),
-    iga: lastAssessment && lastAssessment.iga !== null ? lastAssessment.iga : 0
+    iga: sameVisit && lastAssessment.iga !== null ? lastAssessment.iga : 0
   };
   updateEasiDisplay(reportId);
 }
