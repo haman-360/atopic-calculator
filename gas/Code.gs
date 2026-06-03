@@ -300,7 +300,7 @@ function validateFixedAuthNew(patientNo, pin) {
   for (let i = 1; i < pinData.length; i++) {
     if (String(pinData[i][0]).trim().substring(0, 10) === todayStr &&
         pinData[i][2] === true &&
-        String(pinData[i][1]).trim() === String(pin).trim()) {
+        String(pinData[i][1]).trim().padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
       pinValid = true;
       break;
     }
@@ -349,7 +349,7 @@ function registerBirthdateAndGetContext(patientNo, pin, birthdate) {
   for (let i = 1; i < pinData.length; i++) {
     if (String(pinData[i][0]).trim().substring(0, 10) === todayStr &&
         pinData[i][2] === true &&
-        String(pinData[i][1]).trim() === String(pin).trim()) {
+        String(pinData[i][1]).trim().padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
       pinValid = true;
       break;
     }
@@ -386,7 +386,7 @@ function submitPatientReportFixed2(patientNo, pin, reportData) {
   for (let i = 1; i < pinData.length; i++) {
     if (String(pinData[i][0]).trim().substring(0, 10) === todayStr &&
         pinData[i][2] === true &&
-        String(pinData[i][1]).trim() === String(pin).trim()) {
+        String(pinData[i][1]).trim().padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
       pinValid = true;
       break;
     }
@@ -446,7 +446,7 @@ function validateFixedAuth(patientNo, birthdate, pin) {
     const rowDate    = String(pinData[i][0]).trim().substring(0, 10);
     const rowPin     = String(pinData[i][1]).trim();
     const rowEnabled = pinData[i][2];
-    if (rowDate === todayStr && rowEnabled === true && rowPin === String(pin).trim()) {
+    if (rowDate === todayStr && rowEnabled === true && rowPin.padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
       pinValid = true;
       break;
     }
@@ -494,7 +494,7 @@ function submitPatientReportFixed(patientNo, birthdate, pin, reportData) {
     const rowDate    = String(pinData[i][0]).trim().substring(0, 10);
     const rowPin     = String(pinData[i][1]).trim();
     const rowEnabled = pinData[i][2];
-    if (rowDate === todayStr && rowEnabled === true && rowPin === String(pin).trim()) {
+    if (rowDate === todayStr && rowEnabled === true && rowPin.padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
       pinValid = true;
       break;
     }
@@ -1044,6 +1044,7 @@ function addDailyPinSheet() {
     sheet.appendRow(headers);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e8f5e9');
     sheet.getRange('A:A').setNumberFormat('@');
+    sheet.getRange('B:B').setNumberFormat('@');
     Logger.log('DailyPIN シートを作成しました');
   } else {
     Logger.log('DailyPIN シートはすでに存在します');
@@ -1067,9 +1068,10 @@ function generateDailyPin() {
 
   // 4桁ランダムPIN（0000〜9999）
   const pin = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-  sheet.appendRow([today, pin, true]);
-  const newRow = sheet.getLastRow();
+  const newRow = sheet.getLastRow() + 1;
   sheet.getRange(newRow, 1).setNumberFormat('@');
+  sheet.getRange(newRow, 2).setNumberFormat('@');
+  sheet.appendRow([today, pin, true]);
   sheet.getRange(newRow, 1).setValue(today);
   Logger.log('DailyPIN生成: ' + today + ' / ' + pin);
 }
