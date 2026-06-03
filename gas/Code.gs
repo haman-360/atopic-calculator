@@ -606,9 +606,13 @@ function getDashboardData() {
       const caData = caSheet.getDataRange().getValues();
       for (let i = 1; i < caData.length; i++) {
         const pno = String(caData[i][1]);
-        const assessedAt = caData[i][3] ? String(caData[i][3]) : '';
-        if (!assessmentMap[pno] || assessedAt > assessmentMap[pno].assessedAt) {
-          assessmentMap[pno] = assessmentRowToObj_(caData[i]);
+        // String() だと Date オブジェクトが非ISO形式になり辞書順比較が壊れるため getTime() で比較
+        const assessedAtMs = caData[i][3] ? new Date(caData[i][3]).getTime() : 0;
+        const prev = assessmentMap[pno];
+        if (!prev || assessedAtMs > (prev._assessedAtMs || 0)) {
+          const obj = assessmentRowToObj_(caData[i]);
+          obj._assessedAtMs = assessedAtMs;
+          assessmentMap[pno] = obj;
         }
       }
     }
