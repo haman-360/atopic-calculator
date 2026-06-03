@@ -1298,6 +1298,19 @@ function saveAssessment_(data) {
   }
 
   // ===== 新規 APPEND =====
+  // 画像未送信の場合、同患者の直前評価から画像を引き継ぐ
+  let inheritedLesionMap = lesionMapUrl;
+  if (!inheritedLesionMap) {
+    const rows = sheet.getDataRange().getValues();
+    let latestMs = 0;
+    for (let i = 1; i < rows.length; i++) {
+      if (String(rows[i][1]) !== String(data.patientNo)) continue;
+      const img = String(rows[i][11] || '');
+      if (!img.startsWith('data:image/')) continue;
+      const ms = rows[i][3] ? new Date(rows[i][3]).getTime() : 0;
+      if (ms > latestMs) { latestMs = ms; inheritedLesionMap = img; }
+    }
+  }
   const assessmentId = Utilities.getUuid();
   sheet.appendRow([
     assessmentId,                          // [0]  assessmentId
@@ -1311,7 +1324,7 @@ function saveAssessment_(data) {
     easi.total,                            // [8]  easiTotal
     severity,                              // [9]  easiSeverity
     data.iga !== undefined ? data.iga : '', // [10] iga
-    lesionMapUrl,                          // [11] lesionMapJson
+    inheritedLesionMap,                    // [11] lesionMapJson（前回画像を引き継ぎ）
     data.notes || '',                      // [12] notes
     JSON.stringify(data.easi || {})        // [13] easiRawJson
   ]);
@@ -1433,6 +1446,30 @@ function addEasiRawJsonColumn() {
     Logger.log('easiRawJson 列を追加しました');
   } else {
     Logger.log('easiRawJson 列はすでに存在します');
+  }
+}
+
+// ===== デバッグ用: 患者番号を指定してClinicalAssessmentsの全行を確認 =====
+function debugAssessmentRows() {
+  const TARGET_PNO = '08859'; // ← 確認したい患者番号
+  const sheet = getSheet_('ClinicalAssessments');
+  const data = sheet.getDataRange().getValues();
+  Logger.log('=== ClinicalAssessments 全行数（ヘッダ含む）: ' + data.length + ' ===');
+  for (let i = 1; i < data.length; i++) {
+    const pno = String(data[i][1]);
+    if (pno !== TARGET_PNO) continue;
+    const assessedAt = data[i][3];
+    const assessedAtMs = assessedAt ? new Date(assessedAt).getTime() : 0;
+    const easiTotal = data[i][8];
+    const iga = data[i][10];
+    const hasImage = String(data[i][11]).startsWith('data:image/') ? 'あり' : 'なし';
+    Logger.log(
+      'Row ' + (i+1) + ': assessedAt=' + assessedAt +
+      ' (ms=' + assessedAtMs + ')' +
+      ', EASI=' + easiTotal +
+      ', IGA=' + iga +
+      ', 画像=' + hasImage
+    );
   }
 }
 

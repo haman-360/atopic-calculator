@@ -1115,9 +1115,8 @@ function findReport(reportId) {
 function hasEasiInput(reportId) {
   const s = easiState[reportId];
   if (!s) return false;
-  // 既存評価を上書き編集中（assessmentIdあり）は常に保存許可
-  if (s.assessmentId) return true;
   // IGA/EASIボタンを明示的に操作した場合（0点含む）は保存許可
+  // ※ assessmentId がある場合でも、操作していなければ再保存しない（タイムスタンプ上書き防止）
   if (s.igaTouched || s.easiTouched) return true;
   for (const p of ['head', 'trunk', 'upperLimb', 'lowerLimb']) {
     const pt = s[p] || {};
