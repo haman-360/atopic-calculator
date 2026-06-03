@@ -4549,8 +4549,10 @@
       if (p.trunk_f?.checked && p.trunk_b?.checked) parts.push('体幹（前後）');
       else if (p.trunk_f?.checked) parts.push('体幹前面');
       else if (p.trunk_b?.checked) parts.push('体幹後面');
-      if (p.arm?.checked) parts.push(p.arm.sides === 2 ? '両腕' : '片腕');
-      if (p.leg?.checked) parts.push(p.leg.sides === 2 ? '両足' : '片足');
+      if (p.arm?.checked)   parts.push(p.arm.sides   === 2 ? '両腕'         : '片腕');
+      if (p.elbow?.checked) parts.push(p.elbow.sides === 2 ? '肘関節（両）' : '肘関節（片）');
+      if (p.leg?.checked)   parts.push(p.leg.sides   === 2 ? '両足'         : '片足');
+      if (p.knee?.checked)  parts.push(p.knee.sides  === 2 ? '膝関節（両）' : '膝関節（片）');
       return parts.join('<br>');
     }
 
@@ -4567,8 +4569,10 @@
       if (p.trunk_f?.checked && p.trunk_b?.checked) parts.push('体幹（前後）');
       else if (p.trunk_f?.checked) parts.push('体幹前面');
       else if (p.trunk_b?.checked) parts.push('体幹後面');
-      if (p.arm?.checked) parts.push(p.arm.sides === 2 ? '両腕' : '片腕');
-      if (p.leg?.checked) parts.push(p.leg.sides === 2 ? '両足' : '片足');
+      if (p.arm?.checked)   parts.push(p.arm.sides   === 2 ? '両腕'         : '片腕');
+      if (p.elbow?.checked) parts.push(p.elbow.sides === 2 ? '肘関節（両）' : '肘関節（片）');
+      if (p.leg?.checked)   parts.push(p.leg.sides   === 2 ? '両足'         : '片足');
+      if (p.knee?.checked)  parts.push(p.knee.sides  === 2 ? '膝関節（両）' : '膝関節（片）');
       customParts.forEach(cp => {
         if (p[cp.key]?.checked) {
           const s = cp.bilateral ? (p[cp.key].sides === 2 ? '（両側）' : '（片側）') : '';
