@@ -542,10 +542,17 @@ function renderList(type, reports) {
 
 function buildReportCard(r, type) {
   const poemTotal = Object.values(r.poemScores || {}).reduce((s, v) => s + (v || 0), 0);
-  const poemSeverity = poemTotal <= 2 ? '症状なし' : poemTotal <= 7 ? '軽症' : poemTotal <= 16 ? '中等症' : poemTotal <= 24 ? '重症' : '最重症';
+  const poemSeverity = poemTotal <= 2 ? 'ほぼ正常' : poemTotal <= 7 ? '軽症' : poemTotal <= 16 ? '中等症' : poemTotal <= 24 ? '重症' : '最重症';
   const poemColor = poemTotal <= 2 ? 'var(--green-bg);color:var(--green-text)' :
                     poemTotal <= 7 ? '#f1f8e9;color:#2e7d32' :
-                    poemTotal <= 16 ? 'var(--amber-bg);color:var(--amber-text)' : 'var(--red-bg);color:var(--red-text)';
+                    poemTotal <= 16 ? 'var(--amber-bg);color:var(--amber-text)' :
+                    poemTotal <= 24 ? 'var(--red-bg);color:var(--red-text)' : '#4a0000;color:#ffcccc';
+  const nrs = r.nrsScore;
+  const nrsSeverity = nrs === 0 ? 'なし' : nrs <= 3 ? '軽度' : nrs <= 6 ? '中等度' : nrs <= 8 ? '重度' : '非常に重度';
+  const nrsColor = nrs === 0 ? 'var(--green-bg);color:var(--green-text)' :
+                   nrs <= 3 ? '#f1f8e9;color:#2e7d32' :
+                   nrs <= 6 ? 'var(--amber-bg);color:var(--amber-text)' :
+                   nrs <= 8 ? '#fff3e0;color:#e65100' : 'var(--red-bg);color:var(--red-text)';
 
   const symptomColor = SYMPTOM_COLORS[r.symptomScore] || 'var(--text2)';
   const dateStr = r.submittedAt ? new Date(r.submittedAt).toLocaleString('ja-JP', {month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '';
@@ -671,8 +678,8 @@ function buildReportCard(r, type) {
             <span class="symptom-score-chip" style="background:${symptomColor}20;color:${symptomColor};">
               症状：${esc(SYMPTOM_LABELS[r.symptomScore] || '—')}
             </span>
-            ${r.nrsScore !== null && r.nrsScore !== undefined ? `<span class="symptom-score-chip" style="background:#e8f5f0;color:#085041;">かゆみ NRS：${esc(String(r.nrsScore))} / 10</span>` : ''}
-            <span class="symptom-score-chip" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">POEM：${poemTotal} 点</span>
+            ${nrs !== null && nrs !== undefined ? `<span class="symptom-score-chip" style="background:${nrsColor.split(';')[0].split(':')[1]};color:${nrsColor.split(';')[1].split(':')[1]};">NRS：${esc(String(nrs))}/10（${nrsSeverity}）</span>` : ''}
+            <span class="symptom-score-chip" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">POEM：${poemTotal}/28（${esc(poemSeverity)}）</span>
             ${r.lastAssessment ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）</span>` : ''}
             ${r.lastAssessment && r.lastAssessment.iga != null && r.lastAssessment.iga !== ''
               ? `<span class="assessed-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9;">IGA ${r.lastAssessment.iga}</span>`
@@ -706,7 +713,7 @@ function buildReportCard(r, type) {
       </div>` : ''}
 
       <div class="section-title">POEMスコア</div>
-      <span class="poem-total" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">合計 ${poemTotal} 点（${esc(poemSeverity)}）</span>
+      <span class="poem-total" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">合計 ${poemTotal}/28（${esc(poemSeverity)}）</span>
       <div class="poem-grid">${poemGrid}</div>
 
       ${remainHtml ? `<details class="collapsible-section" open><summary>薬の残量</summary><div class="remain-grid">${remainHtml}</div></details>` : ''}
