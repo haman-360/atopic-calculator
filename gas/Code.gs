@@ -299,8 +299,8 @@ function validateFixedAuthNew(patientNo, pin) {
   let pinValid = false;
   for (let i = 1; i < pinData.length; i++) {
     if (String(pinData[i][0]).trim().substring(0, 10) === todayStr &&
-        pinData[i][2] === true &&
-        String(pinData[i][1]).trim().padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
+        isPinEnabled_(pinData[i][2]) &&
+        String(pinData[i][1]).trim() === String(pin).trim()) {
       pinValid = true;
       break;
     }
@@ -348,8 +348,8 @@ function registerBirthdateAndGetContext(patientNo, pin, birthdate) {
   let pinValid = false;
   for (let i = 1; i < pinData.length; i++) {
     if (String(pinData[i][0]).trim().substring(0, 10) === todayStr &&
-        pinData[i][2] === true &&
-        String(pinData[i][1]).trim().padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
+        isPinEnabled_(pinData[i][2]) &&
+        String(pinData[i][1]).trim() === String(pin).trim()) {
       pinValid = true;
       break;
     }
@@ -385,8 +385,8 @@ function submitPatientReportFixed2(patientNo, pin, reportData) {
   let pinValid = false;
   for (let i = 1; i < pinData.length; i++) {
     if (String(pinData[i][0]).trim().substring(0, 10) === todayStr &&
-        pinData[i][2] === true &&
-        String(pinData[i][1]).trim().padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
+        isPinEnabled_(pinData[i][2]) &&
+        String(pinData[i][1]).trim() === String(pin).trim()) {
       pinValid = true;
       break;
     }
@@ -446,7 +446,7 @@ function validateFixedAuth(patientNo, birthdate, pin) {
     const rowDate    = String(pinData[i][0]).trim().substring(0, 10);
     const rowPin     = String(pinData[i][1]).trim();
     const rowEnabled = pinData[i][2];
-    if (rowDate === todayStr && rowEnabled === true && rowPin.padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
+    if (rowDate === todayStr && isPinEnabled_(rowEnabled) && rowPin === String(pin).trim()) {
       pinValid = true;
       break;
     }
@@ -494,7 +494,7 @@ function submitPatientReportFixed(patientNo, birthdate, pin, reportData) {
     const rowDate    = String(pinData[i][0]).trim().substring(0, 10);
     const rowPin     = String(pinData[i][1]).trim();
     const rowEnabled = pinData[i][2];
-    if (rowDate === todayStr && rowEnabled === true && rowPin.padStart(4, '0') === String(pin).trim().padStart(4, '0')) {
+    if (rowDate === todayStr && isPinEnabled_(rowEnabled) && rowPin === String(pin).trim()) {
       pinValid = true;
       break;
     }
@@ -910,6 +910,11 @@ function getSheet_(name) {
   return SpreadsheetApp.openById(SHEET_ID).getSheetByName(name);
 }
 
+// DailyPIN の enabled 列: boolean true または文字列 "TRUE" / "true" を受け入れる
+function isPinEnabled_(val) {
+  return val === true || String(val).toUpperCase() === 'TRUE';
+}
+
 function hashToken_(salt, token) {
   const bytes = Utilities.computeDigest(
     Utilities.DigestAlgorithm.SHA_256,
@@ -1066,12 +1071,11 @@ function generateDailyPin() {
     }
   }
 
-  // 4桁ランダムPIN（0000〜9999）
-  const pin = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
-  const newRow = sheet.getLastRow() + 1;
-  sheet.getRange(newRow, 1).setNumberFormat('@');
-  sheet.getRange(newRow, 2).setNumberFormat('@');
+  // 4桁ランダムPIN（1000〜9999: 先頭0なし、数値として保存）
+  const pin = Math.floor(Math.random() * 9000) + 1000;
   sheet.appendRow([today, pin, true]);
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 1).setNumberFormat('@');
   sheet.getRange(newRow, 1).setValue(today);
   Logger.log('DailyPIN生成: ' + today + ' / ' + pin);
 }
