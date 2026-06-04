@@ -1080,6 +1080,21 @@ function generateDailyPin() {
   Logger.log('DailyPIN生成: ' + today + ' / ' + pin);
 }
 
+// ===== DailyPIN: 当日分を削除して再生成（GASエディタから手動実行） =====
+function regenerateTodayPin() {
+  const sheet = getSheet_('DailyPIN');
+  if (!sheet) { Logger.log('DailyPIN シートが見つかりません'); return; }
+  const today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const data = sheet.getDataRange().getValues();
+  for (let i = data.length - 1; i >= 1; i--) {
+    if (String(data[i][0]).trim().substring(0, 10) === today) {
+      sheet.deleteRow(i + 1);
+      Logger.log('当日行を削除しました: ' + today);
+    }
+  }
+  generateDailyPin();
+}
+
 // ===== DailyPIN: 毎朝8時の自動生成トリガーを設定（1回のみ実行） =====
 function setupDailyPinTrigger() {
   // 既存のトリガーを削除して重複を防ぐ
