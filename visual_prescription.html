@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ビジュアル処方指示書</title>
+<style>
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: #f4f5f7; margin: 0; padding-bottom: 40px; }
+
+  /* メインレイアウト（画像として書き出す範囲全体） */
+  #capture-area { background-color: #f4f5f7; padding: 20px; display: flex; flex-direction: column; gap: 20px; width: 100%; box-sizing: border-box; max-width: 1200px; margin: 0 auto; }
+
+  /* トップバー */
+  .topbar { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 15px 20px; display: flex; gap: 12px; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05); flex-wrap: wrap; }
+  .topbar strong { color: #007aff; font-size: 18px; margin-right: 4px; white-space: nowrap; }
+  .topbar input, .topbar select { padding: 10px; font-size: 15px; border: 1px solid #ccc; border-radius: 6px; }
+  .topbar input[type="text"] { width: 120px; }
+  .topbar input[type="date"] { width: 155px; }
+  .topbar input[type="number"] { width: 60px; }
+  .topbar label { font-size: 13px; color: #555; margin-right: 2px; }
+
+  /* 段ごとのセクション */
+  .tier-section { background: #fff; border: 1px solid #ddd; border-radius: 12px; padding: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+  .tier-header { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+  .tier-header h2 { margin: 0; font-size: 18px; color: #333; width: 140px; }
+
+  /* ツールボタン群 */
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .times-select { padding: 10px; font-size: 14px; border: 2px solid #90caf9; border-radius: 6px; background: #e3f2fd; font-weight: bold; color: #0d47a1; cursor: pointer; }
+  .tool-btn { padding: 10px 14px; font-size: 14px; font-weight: bold; border: 2px solid #ccc; background: #fff; border-radius: 6px; cursor: pointer; transition: 0.1s; touch-action: manipulation; }
+  .tool-btn.active { border-color: #000; transform: scale(1.05); box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+
+  /* キャンバスを並べるグリッド */
+  .canvas-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; }
+  .canvas-box { background: #fafafa; border: 1px solid #eee; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; align-items: center; }
+  .canvas-box h3 { margin: 0 0 6px 0; font-size: 12px; color: #555; text-align: center; }
+
+  /* SVG & Canvas */
+  svg { cursor: pointer; width: 100px; height: 160px; }
+  .face-part { stroke: #999; stroke-width: 1.5; transition: opacity 0.2s; }
+  .face-part:hover { opacity: 0.8; }
+  .face-text { font-size: 11px; fill: #333; pointer-events: none; text-anchor: middle; font-weight: bold; }
+  canvas { border: 1px dashed #aaa; background-color: #fff; touch-action: none; display: block; }
+
+  /* 下部の結果・アクションエリア */
+  .bottom-section { display: flex; gap: 20px; align-items: stretch; flex-wrap: wrap; }
+  .result-box { background: #fff; border: 2px solid #4dd0e1; border-radius: 12px; padding: 20px; flex: 3; min-width: 260px; font-size: 14px; line-height: 1.6; }
+  .result-h4 { font-size: 16px; color: #006064; margin: 0 0 10px 0; border-bottom: 1px solid #b2ebf2; padding-bottom: 5px; }
+  .result-sub { font-weight: bold; color: #333; margin: 15px 0 5px 0; background: #e0f7fa; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+  .result-item { margin-left: 10px; color: #004d40; }
+  .result-total-item { font-size: 15px; font-weight: bold; color: #d32f2f; margin-left: 10px; margin-bottom: 4px; }
+
+  /* アクションボタン */
+  .action-col { background: #fff; border: 1px solid #ccc; border-radius: 12px; padding: 15px; flex: 1; min-width: 200px; display: flex; flex-direction: column; gap: 10px; }
+  .action-col h3 { margin: 0 0 6px 0; font-size: 14px; color: #555; }
+  .action-btn { width: 100%; padding: 14px; border-radius: 8px; font-size: 15px; font-weight: bold; cursor: pointer; border: none; color: #fff; text-align: center; touch-action: manipulation; }
+  .btn-save-gas { background: #1a7a5e; }
+  .btn-share    { background: #0288d1; }
+  .btn-img-save { background: #ff9800; }
+  .btn-reset    { background: #90a4ae; }
+  .action-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* トースト */
+  #save-toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 12px 24px; border-radius: 8px; font-size: 14px; display: none; z-index: 999; white-space: nowrap; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</head>
+<body>
+
+<div id="capture-area">
+
+  <div class="topbar">
+    <strong>塗布処方指示書</strong>
+    <div>
+      <label>患者番号</label>
+      <input type="text" id="patientId" placeholder="00123" maxlength="5" pattern="[0-9]*" inputmode="numeric">
+    </div>
+    <div>
+      <label>受診日</label>
+      <input type="date" id="visitDate">
+    </div>
+    <div>
+      <label>年齢</label>
+      <select id="ageGroup">
+        <option value="under1">1歳未満</option>
+        <option value="age1-2">1〜2歳</option>
+        <option value="age3-5" selected>3〜5歳</option>
+        <option value="age6-10">6〜10歳</option>
+        <option value="adult">成人</option>
+      </select>
+    </div>
+    <div>
+      <label>処方日数</label>
+      <input type="number" id="days" value="14" min="1">
+      <label style="margin-left:2px;">日</label>
+    </div>
+  </div>
+
+  <div id="tiers-container"></div>
+
+  <div class="bottom-section">
+    <div class="action-col">
+      <h3>アクション</h3>
+      <button class="action-btn btn-save-gas" id="save-btn" onclick="savePrescription()">💾 処方を保存</button>
+      <button class="action-btn btn-share" id="share-btn" onclick="shareImage()">📤 画像を共有（患者へ）</button>
+      <button class="action-btn btn-img-save" id="img-save-btn" onclick="saveImage()">⬇️ 画像を保存</button>
+      <button class="action-btn btn-reset" id="resetBtn" onclick="resetAll()">🔄 リセット</button>
+    </div>
+    <div class="result-box" id="result-details">
+      <div style="color: #666;">塗布されていません</div>
+    </div>
+  </div>
+
+</div>
+
+<div id="save-toast"></div>
+
+<script>
+// GAS デプロイURL（saveVisit APIエンドポイント）
+const GAS_BASE_URL = 'https://script.google.com/macros/s/AKfycbyYlP8b_E-X4tDYZQm6uDn3cbsaAcAezMjsJw4coN_nW-QCTbLqMtz0tkNShej1gLApYw/exec';
+
+document.getElementById('visitDate').valueAsDate = new Date();
+
+// ===== 薬剤・FTUデータ =====
+const TIERS = [
+  {
+    id: 'steroid', title: '① ステロイド',
+    meds: [
+      { name: 'ロコイド軟膏',       rate: 0.3, color: '#bbdefb', label: 'ロコイド' },
+      { name: 'リンデロンV軟膏',    rate: 0.3, color: '#ffcdd2', label: 'リンデロン' },
+      { name: 'アンテベート軟膏',   rate: 0.3, color: '#e1bee7', label: 'アンテベート' },
+      { name: 'ロコ/ヘパ混合',      rate: 0.5, color: '#80cbc4', label: 'ロコ/ヘパ' },
+      { name: 'リン/ヘパ混合',      rate: 0.5, color: '#ffcc80', label: 'リン/ヘパ' }
+    ]
+  },
+  {
+    id: 'nonsteroid', title: '② 非ステロイド',
+    meds: [
+      { name: 'コレクチム軟膏',     rate: 0.5,  color: '#fff59d', label: 'コレクチム' },
+      { name: 'モイゼルト軟膏',     rate: 0.35, color: '#a5d6a7', label: 'モイゼルト' },
+      { name: 'ブイタマークリーム', rate: 0.5,  color: '#cfd8dc', label: 'ブイタマー' }
+    ]
+  }
+];
+
+const BASE_FTU = {
+  "under1": { face:1.0, trunkFront:1.0, trunkBack:1.5, armLeft:1.0, armRight:1.0, legLeft:1.5, legRight:1.5 },
+  "age1-2": { face:1.5, trunkFront:2.0, trunkBack:3.0, armLeft:1.5, armRight:1.5, legLeft:2.0, legRight:2.0 },
+  "age3-5": { face:1.5, trunkFront:3.0, trunkBack:3.5, armLeft:2.0, armRight:2.0, legLeft:3.0, legRight:3.0 },
+  "age6-10":{ face:2.0, trunkFront:3.5, trunkBack:5.0, armLeft:2.5, armRight:2.5, legLeft:4.5, legRight:4.5 },
+  "adult":  { face:2.5, trunkFront:7.0, trunkBack:7.0, armLeft:4.0, armRight:4.0, legLeft:8.0, legRight:8.0 }
+};
+
+const PARTS = [
+  { id:'trunkFront', label:'体幹(前)', drawPath:(ctx,w,h)=>{ ctx.moveTo(w*0.2,10);ctx.lineTo(w*0.8,10);ctx.lineTo(w*0.9,h-10);ctx.lineTo(w*0.1,h-10); } },
+  { id:'trunkBack',  label:'体幹(後)', drawPath:(ctx,w,h)=>{ ctx.moveTo(w*0.2,10);ctx.lineTo(w*0.8,10);ctx.lineTo(w*0.9,h-10);ctx.lineTo(w*0.1,h-10); } },
+  { id:'armLeft',    label:'左腕',     drawPath:(ctx,w,h)=>{ ctx.moveTo(w*0.3,10);ctx.lineTo(w*0.7,10);ctx.lineTo(w*0.6,h-10);ctx.lineTo(w*0.4,h-10); } },
+  { id:'armRight',   label:'右腕',     drawPath:(ctx,w,h)=>{ ctx.moveTo(w*0.3,10);ctx.lineTo(w*0.7,10);ctx.lineTo(w*0.6,h-10);ctx.lineTo(w*0.4,h-10); } },
+  { id:'legLeft',    label:'左脚',     drawPath:(ctx,w,h)=>{ ctx.moveTo(w*0.2,10);ctx.lineTo(w*0.8,10);ctx.lineTo(w*0.7,h-10);ctx.lineTo(w*0.3,h-10); } },
+  { id:'legRight',   label:'右脚',     drawPath:(ctx,w,h)=>{ ctx.moveTo(w*0.2,10);ctx.lineTo(w*0.8,10);ctx.lineTo(w*0.7,h-10);ctx.lineTo(w*0.3,h-10); } }
+];
+
+const FACE_LABELS = { neck:'首', chin:'顎', 'l-cheek':'左頬', 'r-cheek':'右頬', eyes:'目の周り', forehead:'おでこ' };
+const C_W = 100, C_H = 160;
+
+// ===== アプリ状態 =====
+let activeTool = { steroid: { type:'split' }, nonsteroid: { type:'split' } };
+let state = {
+  steroid:    { face:{}, canvas:{} },
+  nonsteroid: { face:{}, canvas:{} }
+};
+
+TIERS.forEach(t => {
+  PARTS.forEach(p => {
+    state[t.id].canvas[p.id] = [{ y:0, h:C_H, color:'#ffffff', med:null, rate:0, timesMult:2, timesLabel:'1日2回' }];
+  });
+});
+
+// ===== UI生成（Geminiコードより流用） =====
+const container = document.getElementById('tiers-container');
+
+TIERS.forEach(tier => {
+  let toolsHtml = `
+    <select id="times-${tier.id}" class="times-select" onchange="calculateAll()">
+      <option value="2|1日2回" selected>1日2回</option>
+      <option value="1|1日1回">1日1回</option>
+      <option value="0.5|2日に1回">2日に1回</option>
+      <option value="0.285714|週2回">週2回</option>
+      <option value="0.142857|週1回">週1回</option>
+    </select>
+    <button class="tool-btn active" id="btn-split-${tier.id}" onclick="setTool('${tier.id}','split',null)">✂️ 区切る</button>
+  `;
+  tier.meds.forEach(m => {
+    toolsHtml += `<button class="tool-btn" id="btn-med-${tier.id}-${m.label}" style="border-left:8px solid ${m.color};" onclick="setTool('${tier.id}','fill','${m.name}',${m.rate},'${m.color}',this)">🪣 ${m.label}</button>`;
+  });
+  toolsHtml += `<button class="tool-btn" id="btn-clear-${tier.id}" onclick="setTool('${tier.id}','clear',null)">消しゴム</button>`;
+
+  let gridHtml = `
+    <div class="canvas-box">
+      <h3>顔・首 (タップのみ)</h3>
+      <svg viewBox="0 0 100 160" class="face-svg" data-tier="${tier.id}">
+        <path id="${tier.id}-neck"    data-part="neck"    class="face-part" d="M 30 110 L 70 110 L 70 150 L 30 150 Z"           data-percent="0.2" fill="#ffffff"/>
+        <path id="${tier.id}-chin"    data-part="chin"    class="face-part" d="M 30 90 L 70 90 Q 50 120 30 90 Z"                 data-percent="0.1" fill="#ffffff"/>
+        <path id="${tier.id}-l-cheek" data-part="l-cheek" class="face-part" d="M 10 50 L 40 50 L 40 90 Q 15 85 10 50 Z"          data-percent="0.2" fill="#ffffff"/>
+        <path id="${tier.id}-r-cheek" data-part="r-cheek" class="face-part" d="M 60 50 L 90 50 Q 85 85 60 90 L 60 50 Z"          data-percent="0.2" fill="#ffffff"/>
+        <path id="${tier.id}-eyes"    data-part="eyes"    class="face-part" d="M 5 35 L 95 35 L 90 50 L 10 50 Z"                 data-percent="0.1" fill="#ffffff"/>
+        <path id="${tier.id}-forehead" data-part="forehead" class="face-part" d="M 5 35 Q 50 -15 95 35 Z"                        data-percent="0.2" fill="#ffffff"/>
+        <text x="50" y="25"  class="face-text">おでこ</text>
+        <text x="50" y="46"  class="face-text">目の周り</text>
+        <text x="25" y="70"  class="face-text">左頬</text>
+        <text x="75" y="70"  class="face-text">右頬</text>
+        <text x="50" y="102" class="face-text">顎</text>
+        <text x="50" y="135" class="face-text">首</text>
+      </svg>
+    </div>`;
+
+  PARTS.forEach(p => {
+    gridHtml += `<div class="canvas-box"><h3>${p.label}</h3><canvas id="cvs-${tier.id}-${p.id}" width="${C_W}" height="${C_H}"></canvas></div>`;
+  });
+
+  container.insertAdjacentHTML('beforeend', `
+    <div class="tier-section">
+      <div class="tier-header"><h2>${tier.title}</h2><div class="toolbar">${toolsHtml}</div></div>
+      <div class="canvas-grid">${gridHtml}</div>
+    </div>
+  `);
+});
+
+// ===== ツール操作 =====
+window.setTool = function(tierId, type, medName, rate, color, btnElem) {
+  activeTool[tierId] = { type, medName, rate, color };
+  const parent = document.getElementById(`btn-split-${tierId}`).parentNode;
+  parent.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+  if (type === 'split') document.getElementById(`btn-split-${tierId}`).classList.add('active');
+  else if (type === 'clear') document.getElementById(`btn-clear-${tierId}`).classList.add('active');
+  else if (btnElem) btnElem.classList.add('active');
+  document.querySelectorAll(`canvas[id^="cvs-${tierId}-"]`).forEach(c => {
+    c.style.cursor = type === 'split' ? 'crosshair' : 'pointer';
+  });
+};
+
+// ===== Canvas描画 =====
+function drawCanvas(tierId, partId) {
+  const cvs = document.getElementById(`cvs-${tierId}-${partId}`);
+  const ctx = cvs.getContext('2d');
+  const conf = PARTS.find(p => p.id === partId);
+  const regions = state[tierId].canvas[partId];
+
+  ctx.clearRect(0, 0, C_W, C_H);
+  ctx.save();
+  ctx.beginPath(); conf.drawPath(ctx, C_W, C_H); ctx.closePath();
+  ctx.clip();
+  regions.forEach(r => {
+    ctx.fillStyle = r.color; ctx.fillRect(0, r.y, C_W, r.h);
+    ctx.strokeStyle = '#999'; ctx.lineWidth = 1; ctx.strokeRect(0, r.y, C_W, r.h);
+    if (r.med && r.med !== 'クリア') {
+      // tierのmedリストからlabelを取得
+      const tierObj = TIERS.find(t => t.id === tierId);
+      const medObj  = tierObj?.meds.find(m => m.name === r.med);
+      const lbl = (medObj?.label || r.med).substring(0, 6);
+      ctx.fillStyle = '#000'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(lbl, C_W/2, r.y + r.h/2 + 4);
+    }
+  });
+  ctx.restore();
+  ctx.beginPath(); conf.drawPath(ctx, C_W, C_H); ctx.closePath();
+  ctx.strokeStyle = '#666'; ctx.lineWidth = 2; ctx.stroke();
+}
+
+// ===== イベントリスナー =====
+TIERS.forEach(t => {
+  PARTS.forEach(p => {
+    const cvs = document.getElementById(`cvs-${t.id}-${p.id}`);
+    drawCanvas(t.id, p.id);
+
+    const handleInteract = (e) => {
+      e.preventDefault();
+      const rect = cvs.getBoundingClientRect();
+      const scaleY = cvs.height / rect.height;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const clickY = (clientY - rect.top) * scaleY;
+      const tool = activeTool[t.id];
+      let regions = state[t.id].canvas[p.id];
+
+      const timesVal = document.getElementById(`times-${t.id}`).value.split('|');
+      const currentMult = parseFloat(timesVal[0]);
+      const currentLabel = timesVal[1];
+
+      if (tool.type === 'split') {
+        for (let i = 0; i < regions.length; i++) {
+          const r = regions[i];
+          if (clickY > r.y + 5 && clickY < r.y + r.h - 5) {
+            const topH = clickY - r.y, botH = r.h - topH;
+            regions.splice(i, 1,
+              { y:r.y,        h:topH, color:r.color, med:r.med, rate:r.rate, timesMult:r.timesMult, timesLabel:r.timesLabel },
+              { y:r.y + topH, h:botH, color:r.color, med:r.med, rate:r.rate, timesMult:r.timesMult, timesLabel:r.timesLabel }
+            );
+            break;
+          }
+        }
+      } else {
+        regions.forEach(r => {
+          if (clickY >= r.y && clickY <= r.y + r.h) {
+            if (tool.type === 'clear') { r.color='#ffffff'; r.med=null; r.rate=0; }
+            else { r.color=tool.color; r.med=tool.medName; r.rate=tool.rate; r.timesMult=currentMult; r.timesLabel=currentLabel; }
+          }
+        });
+      }
+      drawCanvas(t.id, p.id);
+      calculateAll();
+    };
+
+    cvs.addEventListener('mousedown', handleInteract);
+    cvs.addEventListener('touchstart', handleInteract, { passive: false });
+  });
+});
+
+document.querySelectorAll('.face-part').forEach(part => {
+  part.addEventListener('click', function() {
+    const tierId = this.parentNode.getAttribute('data-tier');
+    const tool = activeTool[tierId];
+    if (tool.type === 'split') { alert('顔はタップのみです。薬ボタンを選んでから塗ってください。'); return; }
+    const partId = this.getAttribute('data-part');
+    const timesVal = document.getElementById(`times-${tierId}`).value.split('|');
+    const currentMult = parseFloat(timesVal[0]);
+    const currentLabel = timesVal[1];
+    if (tool.type === 'clear') {
+      this.style.fill = '#ffffff'; delete state[tierId].face[partId];
+    } else {
+      this.style.fill = tool.color;
+      state[tierId].face[partId] = { med:tool.medName, rate:tool.rate, percent:parseFloat(this.getAttribute('data-percent')), timesMult:currentMult, timesLabel:currentLabel };
+    }
+    calculateAll();
+  });
+});
+
+// ===== 計算 =====
+
+// medTotals を返す純粋関数（保存・表示共用）
+function getCalculatedTotals() {
+  const ageKey = document.getElementById('ageGroup').value;
+  const days   = parseInt(document.getElementById('days').value) || 14;
+  const medTotals = {};
+
+  const addDetail = (medName, rate, timesMult, ftu) => {
+    if (!medName) return;
+    if (!medTotals[medName]) medTotals[medName] = { ftu:0, totalGram:0, timesMult, timesLabel:'' };
+    medTotals[medName].ftu += ftu;
+    medTotals[medName].totalGram += (ftu * rate) * timesMult * days;
+    // 最初に見つかったtimesLabelを保持
+    if (!medTotals[medName].timesLabel) {
+      const tierObj = TIERS.find(t => t.meds.some(m => m.name === medName));
+      if (tierObj) {
+        medTotals[medName].timesLabel = document.getElementById(`times-${tierObj.id}`).value.split('|')[1] || '1日2回';
+      }
+    }
+  };
+
+  TIERS.forEach(t => {
+    const faceBase = BASE_FTU[ageKey].face;
+    for (const id in state[t.id].face) {
+      const p = state[t.id].face[id];
+      addDetail(p.med, p.rate, p.timesMult, faceBase * p.percent);
+    }
+    PARTS.forEach(p => {
+      const baseFtu = BASE_FTU[ageKey][p.id];
+      state[t.id].canvas[p.id].forEach(r => {
+        addDetail(r.med, r.rate, r.timesMult, baseFtu * (r.h / C_H));
+      });
+    });
+  });
+
+  return medTotals;
+}
+
+// 画面表示を更新
+function calculateAll() {
+  const days = parseInt(document.getElementById('days').value) || 14;
+  const medTotals = getCalculatedTotals();
+  const resBox = document.getElementById('result-details');
+
+  // 詳細ログも収集して表示
+  const ageKey = document.getElementById('ageGroup').value;
+  let detailsLog = { steroid:[], nonsteroid:[] };
+  TIERS.forEach(t => {
+    const faceBase = BASE_FTU[ageKey].face;
+    for (const id in state[t.id].face) {
+      const p = state[t.id].face[id];
+      if (!p.med) continue;
+      detailsLog[t.id].push({ partName:FACE_LABELS[id], med:p.med, timesLabel:p.timesLabel, ftu:faceBase*p.percent, isSplit:false });
+    }
+    PARTS.forEach(p => {
+      const baseFtu = BASE_FTU[ageKey][p.id];
+      const regions = state[t.id].canvas[p.id];
+      const isSplit = regions.length > 1;
+      regions.forEach(r => {
+        if (!r.med) return;
+        detailsLog[t.id].push({ partName:p.label, med:r.med, timesLabel:r.timesLabel, ftu:baseFtu*(r.h/C_H), isSplit });
+      });
+    });
+  });
+
+  if (Object.keys(medTotals).length === 0) {
+    resBox.innerHTML = '<div style="color:#666;">塗布されていません</div>'; return;
+  }
+
+  let html = `<h4 class="result-h4">1. 場所・薬・回数</h4>`;
+  TIERS.forEach(t => {
+    if (detailsLog[t.id].length === 0) return;
+    const title = t.id === 'steroid' ? '1-1. ステロイド' : '1-2. 非ステロイド';
+    html += `<div class="result-sub">${title}</div>`;
+    detailsLog[t.id].forEach(d => {
+      const splitText = d.isSplit ? ' (一部)' : '';
+      html += `<div class="result-item">${d.partName}${splitText}: ${d.med}: ${d.timesLabel}: ${d.ftu.toFixed(2)} FTU</div>`;
+    });
+  });
+  html += `<h4 class="result-h4" style="margin-top:20px;">2. 総量 (${days}日分)</h4>`;
+  for (const med in medTotals) {
+    html += `<div class="result-total-item">- ${med}: ${medTotals[med].totalGram.toFixed(1)} g</div>`;
+  }
+  resBox.innerHTML = html;
+}
+
+document.getElementById('ageGroup').addEventListener('change', calculateAll);
+document.getElementById('days').addEventListener('input', calculateAll);
+
+// ===== 保存・共有ヘルパー =====
+
+function addDays(dateStr, n) {
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().split('T')[0];
+}
+
+// 薬剤が塗られている部位を大まかに収集
+function collectAreasForDrug(medName) {
+  const areas = new Set();
+  TIERS.forEach(t => {
+    for (const id in state[t.id].face) {
+      if (state[t.id].face[id].med === medName) areas.add('顔・首');
+    }
+    PARTS.forEach(p => {
+      state[t.id].canvas[p.id].forEach(r => {
+        if (r.med !== medName) return;
+        if (p.id.startsWith('trunk')) areas.add('体幹');
+        else if (p.id.startsWith('arm')) areas.add('腕');
+        else if (p.id.startsWith('leg')) areas.add('脚');
+      });
+    });
+  });
+  return [...areas].join('・') || '全体';
+}
+
+// 薬剤が属するtierの使用頻度ラベルを取得
+function getFreqLabelForDrug(medName) {
+  for (const t of TIERS) {
+    if (t.meds.some(m => m.name === medName)) {
+      return document.getElementById(`times-${t.id}`).value.split('|')[1] || '1日2回';
+    }
+  }
+  return '1日2回';
+}
+
+function showSaveToast(msg) {
+  const el = document.getElementById('save-toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3000);
+}
+
+// ===== GASへの処方保存 =====
+async function savePrescription() {
+  const patientNo = document.getElementById('patientId').value.trim();
+  const visitDate = document.getElementById('visitDate').value;
+  const days      = parseInt(document.getElementById('days').value) || 14;
+
+  if (!patientNo) { alert('患者番号を入力してください'); return; }
+  if (!visitDate) { alert('受診日を入力してください'); return; }
+
+  const medTotals = getCalculatedTotals();
+  if (Object.keys(medTotals).length === 0) { alert('塗布されていません'); return; }
+
+  const endDate  = addDays(visitDate, days);
+  const drugsJson = Object.entries(medTotals).map(([medName, data]) => ({
+    name:       medName,
+    partLabel:  collectAreasForDrug(medName),
+    freqLabel:  getFreqLabelForDrug(medName),
+    prescribedG: parseFloat(data.totalGram.toFixed(1)),
+    ftuTotal:   parseFloat(data.ftu.toFixed(2)),
+    startDate:  visitDate,
+    endDate:    endDate,
+  }));
+
+  const rxSummaryText = drugsJson.map(d =>
+    `${d.name} ${d.partLabel} ${d.freqLabel} ${days}日分 ${d.prescribedG}g`
+  ).join('\n');
+
+  const btn = document.getElementById('save-btn');
+  btn.textContent = '保存中...'; btn.disabled = true;
+
+  try {
+    const res = await fetch(GAS_BASE_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'saveVisit',
+        patientNo,
+        visitDate,
+        nextVisitDate: '',
+        drugsJson: JSON.stringify(drugsJson),
+        rxSummaryText,
+      })
+    });
+    const json = await res.json();
+    if (json.status === 'ok') {
+      showSaveToast('✅ 処方を保存しました');
+    } else {
+      alert('保存に失敗しました: ' + (json.error || '不明なエラー'));
+    }
+  } catch (e) {
+    alert('通信エラー: ' + e.message);
+  } finally {
+    btn.textContent = '💾 処方を保存'; btn.disabled = false;
+  }
+}
+
+// ===== 画像共有（患者へ） =====
+async function shareImage() {
+  const target = document.getElementById('capture-area');
+  const id      = document.getElementById('patientId').value || 'ID未入力';
+  const dateStr = document.getElementById('visitDate').value || 'date';
+  const filename = `塗布指示書_${dateStr}_${id}.png`;
+
+  const btn = document.getElementById('share-btn');
+  btn.textContent = '生成中...'; btn.disabled = true;
+
+  try {
+    const canvas = await html2canvas(target, { backgroundColor:'#f4f5f7', scale:2, scrollY:0 });
+    canvas.toBlob(blob => {
+      btn.textContent = '📤 画像を共有（患者へ）'; btn.disabled = false;
+      if (!blob) return;
+      const file = new File([blob], filename, { type:'image/png' });
+      if (navigator.canShare && navigator.canShare({ files:[file] })) {
+        navigator.share({ files:[file], title:'塗布指示書' }).catch(() => {});
+      } else {
+        alert('お使いのブラウザは直接共有に対応していません。「画像を保存」をご利用ください。');
+      }
+    }, 'image/png');
+  } catch(e) {
+    btn.textContent = '📤 画像を共有（患者へ）'; btn.disabled = false;
+    alert('画像生成エラー: ' + e.message);
+  }
+}
+
+// ===== 画像保存（ダウンロード） =====
+async function saveImage() {
+  const target  = document.getElementById('capture-area');
+  const id      = document.getElementById('patientId').value || 'ID未入力';
+  const dateStr = document.getElementById('visitDate').value || 'date';
+  const btn = document.getElementById('img-save-btn');
+  btn.textContent = '生成中...'; btn.disabled = true;
+
+  try {
+    const canvas = await html2canvas(target, { backgroundColor:'#f4f5f7', scale:2, scrollY:0 });
+    const link = document.createElement('a');
+    link.download = `塗布指示書_${dateStr}_${id}.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } finally {
+    btn.textContent = '⬇️ 画像を保存'; btn.disabled = false;
+  }
+}
+
+// ===== リセット =====
+function resetAll() {
+  if (!confirm('すべてリセットしますか？')) return;
+  TIERS.forEach(t => {
+    state[t.id].face = {};
+    document.querySelectorAll(`svg[data-tier="${t.id}"] .face-part`).forEach(p => p.style.fill = '#ffffff');
+    PARTS.forEach(p => {
+      state[t.id].canvas[p.id] = [{ y:0, h:C_H, color:'#ffffff', med:null, rate:0, timesMult:2, timesLabel:'1日2回' }];
+      drawCanvas(t.id, p.id);
+    });
+    setTool(t.id, 'split', null);
+  });
+  calculateAll();
+}
+</script>
+</body>
+</html>
