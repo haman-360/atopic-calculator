@@ -498,6 +498,21 @@ async function savePrescription() {
   const btn = document.getElementById('save-btn');
   btn.textContent = '保存中...'; btn.disabled = true;
 
+  // 塗布図エリアをキャプチャ（低画質JPEGで45000文字以内に収める）
+  let prescriptionImageBase64 = '';
+  try {
+    const tiersEl = document.getElementById('tiers-container');
+    const cvs = await html2canvas(tiersEl, { backgroundColor: '#f4f5f7', scale: 0.5, scrollY: 0 });
+    prescriptionImageBase64 = cvs.toDataURL('image/jpeg', 0.3);
+    if (prescriptionImageBase64.length > 45000) {
+      // さらに画質を落とす
+      prescriptionImageBase64 = cvs.toDataURL('image/jpeg', 0.15);
+    }
+    if (prescriptionImageBase64.length > 45000) {
+      prescriptionImageBase64 = ''; // それでも大きければ保存しない
+    }
+  } catch(_) {}
+
   try {
     await fetch(GAS_BASE_URL, {
       method: 'POST',
@@ -509,6 +524,7 @@ async function savePrescription() {
         nextVisitDate: endDate,
         drugsJson: drugsJson,
         rxSummaryText,
+        prescriptionImageBase64,
       })
     });
     await new Promise(r => setTimeout(r, 1500));

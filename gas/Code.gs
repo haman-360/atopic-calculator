@@ -112,7 +112,7 @@ function doPost(e) {
     if (data.action === 'registerToken') {
       registerToken_(data.patientNo, data.token, data.salt, data.expires, data.birthdate || '');
     } else if (data.action === 'saveVisit') {
-      saveVisit_(data.patientNo, data.visitDate, data.nextVisitDate, data.drugsJson, data.rxSummaryText);
+      saveVisit_(data.patientNo, data.visitDate, data.nextVisitDate, data.drugsJson, data.rxSummaryText, data.prescriptionImageBase64 || '');
     } else if (data.action === 'saveAssessment') {
       const result = saveAssessment_(data);
       return ContentService.createTextOutput(JSON.stringify(result))
@@ -544,16 +544,20 @@ function submitPatientReportFixed(patientNo, birthdate, pin, reportData) {
 }
 
 // ===== 処方履歴保存 =====
-function saveVisit_(patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryText) {
+function saveVisit_(patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryText, prescriptionImageBase64) {
   const sheet = getSheet_('VisitHistory');
   const data = sheet.getDataRange().getValues();
+  // 画像サイズ検証（45000文字以内のみ保存）
+  const imgToSave = (prescriptionImageBase64 && prescriptionImageBase64.length <= 45000) ? prescriptionImageBase64 : '';
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]) === String(patientNo) && String(data[i][1]) === String(visitDate)) {
-      sheet.getRange(i + 1, 3, 1, 3).setValues([[nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]]);
+      // 画像が新しく渡されていない場合は既存を保持
+      const finalImg = imgToSave || String(data[i][5] || '');
+      sheet.getRange(i + 1, 3, 1, 4).setValues([[nextVisitDate, JSON.stringify(drugsJson), rxSummaryText, finalImg]]);
       return;
     }
   }
-  sheet.appendRow([String(patientNo), visitDate, nextVisitDate, JSON.stringify(drugsJson), rxSummaryText]);
+  sheet.appendRow([String(patientNo), visitDate, nextVisitDate, JSON.stringify(drugsJson), rxSummaryText, imgToSave]);
   const newRow = sheet.getLastRow();
   sheet.getRange(newRow, 1).setNumberFormat('@');
   sheet.getRange(newRow, 1).setValue(String(patientNo));
@@ -590,7 +594,8 @@ function getDashboardData() {
         visitDate: dateToStr_(vhData[i][1]),
         nextVisitDate: dateToStr_(vhData[i][2]),
         drugsJson: drugsJson,
-        rxSummaryText: vhData[i][4] || ''
+        rxSummaryText: vhData[i][4] || '',
+        prescriptionImageBase64: vhData[i][5] || ''
       });
     } catch(e) {}
   }
@@ -721,7 +726,8 @@ function getPatientConsultData(patientNo) {
       visitDate:     dateToStr_(vhData[i][1]),
       nextVisitDate: dateToStr_(vhData[i][2]),
       drugsJson:     drugsJson,
-      rxSummaryText: String(vhData[i][4] || '')
+      rxSummaryText: String(vhData[i][4] || ''),
+      prescriptionImageBase64: String(vhData[i][5] || '')
     });
   }
   visits.sort(function(a, b) { return b.visitDate.localeCompare(a.visitDate); });
@@ -814,7 +820,8 @@ function getPatientChartData_(patientNo) {
       visitDate:     dateToStr_(vhData[i][1]),
       nextVisitDate: dateToStr_(vhData[i][2]),
       drugsJson:     drugsJson,
-      rxSummaryText: String(vhData[i][4] || '')
+      rxSummaryText: String(vhData[i][4] || ''),
+      prescriptionImageBase64: String(vhData[i][5] || '')
     });
   }
   visits.sort(function(a, b) { return b.visitDate.localeCompare(a.visitDate); });
@@ -1013,7 +1020,7 @@ function setupSheets() {
 
   const sheets = {
     'PatientRegistry': ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'],
-    'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText'],
+    'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText', 'prescriptionImageBase64'],
     'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status', 'triggersJson', 'triggerNote', 'topicalUseJson'],
     'AuditLog':              ['timestamp', 'patientNo', 'action'],
     'ClinicalAssessments':   ['assessmentId', 'patientNo', 'visitDate', 'assessedAt', 'easiHead', 'easiTrunk', 'easiUpperLimb', 'easiLowerLimb', 'easiTotal', 'easiSeverity', 'iga', 'lesionMapJson', 'notes', 'easiRawJson'],

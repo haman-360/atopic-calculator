@@ -891,10 +891,17 @@ function buildVisitCard(visit, reports, assessment) {
     }
     // ミニGantt
     var ganttHtml = buildGanttHtmlFromDrugsJson(drugs, visit.nextVisitDate || '');
+    var imgHtml = '';
+    if (visit.prescriptionImageBase64 && visit.prescriptionImageBase64.startsWith('data:image/')) {
+      imgHtml = '<div style="margin-top:10px;"><img src="' + visit.prescriptionImageBase64 + '" alt="塗布図" ' +
+        'style="max-width:100%;border-radius:8px;border:1px solid #ddd;cursor:pointer;" ' +
+        'onclick="this.style.maxWidth=this.style.maxWidth===\'100%\'?\'none\':\'100%\'"></div>';
+    }
     rxHtml = '<div class="section-title">💊 処方内容</div>' +
       '<div class="rx-summary">' + esc(display) + '</div>' +
       drugsDetailHtml +
-      ganttHtml;
+      ganttHtml +
+      imgHtml;
   }
 
   // --- POEM詳細 ---
