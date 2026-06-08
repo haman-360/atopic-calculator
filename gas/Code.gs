@@ -1074,6 +1074,7 @@ function generateDailyPin() {
   for (let i = 1; i < data.length; i++) {
     if (String(data[i][0]).trim().substring(0, 10) === today) {
       Logger.log('DailyPIN: 当日行が既に存在します ' + today);
+      syncDailyPinToStaffSheet_({ date: today, pin: String(data[i][1]) });
       return;
     }
   }
@@ -1085,6 +1086,7 @@ function generateDailyPin() {
   sheet.getRange(newRow, 1).setNumberFormat('@');
   sheet.getRange(newRow, 1).setValue(today);
   Logger.log('DailyPIN生成: ' + today + ' / ' + pin);
+  syncDailyPinToStaffSheet_({ date: today, pin: String(pin) });
 }
 
 // ===== DailyPIN: 当日分を削除して再生成（GASエディタから手動実行） =====
@@ -1586,6 +1588,124 @@ function recalcEasiWithAgeWeights() {
   }
 
   Logger.log('完了: ' + updated + '件更新, ' + skipped + '件スキップ');
+}
+
+// ===== メニュー =====
+function onOpen() {
+  SpreadsheetApp.getUi()
+    .createMenu('アトピー問診')
+    .addItem('今日の確認コードを作成', 'generateDailyPin')
+    .addSeparator()
+    .addItem('スタッフ用PIN一覧の連携先を設定', 'setStaffDailyPinSpreadsheetIdFromMenu')
+    .addItem('今日の確認コードをスタッフ用PIN一覧へ同期', 'syncTodayDailyPinToStaffSheetFromMenu')
+    .addToUi();
+}
+
+// ===== スタッフ用PIN一覧: 連携先Spreadsheet IDを設定 =====
+function setStaffDailyPinSpreadsheetIdFromMenu() {
+  const ui = SpreadsheetApp.getUi();
+  const response = ui.prompt(
+    'スタッフ用PIN一覧の連携先を設定',
+    'スタッフ用Google SheetsのSpreadsheet IDを入力してください:',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (response.getSelectedButton() !== ui.Button.OK) return;
+  const id = response.getResponseText().trim();
+  if (!id) { ui.alert('IDが入力されていません'); return; }
+  PropertiesService.getScriptProperties().setProperty('STAFF_DAILY_PIN_SPREADSHEET_ID', id);
+  ui.alert('連携先を設定しました:\n' + id);
+}
+
+// ===== スタッフ用PIN一覧: 今日のPINを手動同期 =====
+function syncTodayDailyPinToStaffSheetFromMenu() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = getSheet_('DailyPIN');
+  if (!sheet) { ui.alert('DailyPIN シートが見つかりません'); return; }
+  const today = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const data = sheet.getDataRange().getValues();
+  let pin = null;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim().substring(0, 10) === today && isPinEnabled_(data[i][2])) {
+      pin = String(data[i][1]).trim();
+      break;
+    }
+  }
+  if (!pin) { ui.alert('今日のPINがまだ生成されていません'); return; }
+  try {
+    syncDailyPinToStaffSheet_({ date: today, pin: pin });
+    ui.alert('スタッフ用PIN一覧へ同期しました\n日付: ' + today + '\nPIN: ' + pin);
+  } catch(e) {
+    ui.alert('同期に失敗しました:\n' + e.message);
+  }
+}
+
+// ===== スタッフ用PIN一覧: 書き込みコア =====
+function syncDailyPinToStaffSheet_(dailyPin, options) {
+  const spreadsheetId = PropertiesService.getScriptProperties().getProperty('STAFF_DAILY_PIN_SPREADSHEET_ID');
+  if (!spreadsheetId) {
+    Logger.log('syncDailyPinToStaffSheet_: STAFF_DAILY_PIN_SPREADSHEET_ID が未設定');
+    return;
+  }
+  const opts = options || {};
+  const form      = opts.form  || 'atopic_dermatitis';
+  const label     = opts.label || 'アトピー';
+  const source    = opts.source || 'atopic';
+  const note      = opts.note  || '自動作成';
+  try {
+    const ss = SpreadsheetApp.openById(spreadsheetId);
+    const sheet = getOrCreateStaffDailyPinSheet_(ss);
+    upsertStaffDailyPinRow_(sheet, {
+      date:       dailyPin.date,
+      form:       form,
+      label:      label,
+      pin:        dailyPin.pin,
+      source:     source,
+      updated_at: Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd HH:mm:ss'),
+      note:       note
+    });
+    Logger.log('syncDailyPinToStaffSheet_: 同期完了 date=' + dailyPin.date + ' pin=' + dailyPin.pin);
+  } catch(e) {
+    Logger.log('syncDailyPinToStaffSheet_: エラー ' + e.message);
+  }
+}
+
+// ===== スタッフ用PIN一覧: StaffDailyPIN シートを取得または作成 =====
+function getOrCreateStaffDailyPinSheet_(spreadsheet) {
+  const SHEET_NAME = 'StaffDailyPIN';
+  let sheet = spreadsheet.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = spreadsheet.insertSheet(SHEET_NAME);
+    const headers = ['date', 'form', 'label', 'pin', 'source', 'updated_at', 'note'];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e8f5e9');
+    Logger.log('StaffDailyPIN シートを作成しました');
+  }
+  return sheet;
+}
+
+// ===== スタッフ用PIN一覧: 行のupsert =====
+function upsertStaffDailyPinRow_(sheet, row) {
+  const rowIdx = findStaffDailyPinRow_(sheet, row.date, row.form);
+  const values = [row.date, row.form, row.label, row.pin, row.source, row.updated_at, row.note];
+  if (rowIdx > 0) {
+    sheet.getRange(rowIdx, 1, 1, values.length).setValues([values]);
+    Logger.log('StaffDailyPIN: 既存行を上書き row=' + rowIdx);
+  } else {
+    sheet.appendRow(values);
+    Logger.log('StaffDailyPIN: 新規行を追加');
+  }
+}
+
+// ===== スタッフ用PIN一覧: date + form で行を検索 =====
+function findStaffDailyPinRow_(sheet, dateText, form) {
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]).trim() === String(dateText).trim() &&
+        String(data[i][1]).trim() === String(form).trim()) {
+      return i + 1; // 1-indexed
+    }
+  }
+  return -1;
 }
 
 // ===== PatientRegistry スキーマ移行（旧8列→新7列） =====
