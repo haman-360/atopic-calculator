@@ -1634,11 +1634,11 @@
       drugs.forEach(d => {
         const pname = getDrugName(d);
         const consumedG = d.givenG - d.remainG;
-        if (consumedG < 0) { tbl += `<tr><td><strong>${pname}</strong></td><td colspan="5"><span class="badge badge-warn">残量が処方量を超えています</span></td></tr>`; return; }
-        const perDayG = days ? consumedG / days : null;
         const ftuG = calcFTU(d, ak, nextDays, tv, nv);
         const hasFTU = getAllParts().some(p => d.parts[p.key]?.checked);
         const taperPhases = calcTaperPhases(d, ak, tv, nv);
+        if (consumedG < 0 && !hasFTU) { tbl += `<tr><td><strong>${pname}</strong></td><td colspan="5"><span class="badge badge-warn">残量が処方量を超えています</span></td></tr>`; return; }
+        const perDayG = (consumedG >= 0 && days) ? consumedG / days : null;
         if (!hasFTU && perDayG === null) {
           tbl += `<tr><td><strong>${pname}</strong></td><td colspan="5"><span class="badge badge-warn">前回受診日がないため、塗布部位を設定してください</span></td></tr>`;
           return;
