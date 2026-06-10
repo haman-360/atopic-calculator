@@ -503,6 +503,19 @@ function easiSeverityInfo(total) {
   return EASI_SEVERITY_MAP[EASI_SEVERITY_MAP.length - 1];
 }
 
+function calcEasiImprovementChart(currentEasi, baselineAssessment) {
+  if (!baselineAssessment) return null;
+  var baseline = baselineAssessment.easiTotal;
+  if (baseline === null || baseline === undefined || baseline === '' || baseline === 0) return null;
+  if (currentEasi > baseline) return { rate: null, badges: [] };
+  var rate = Math.round((baseline - currentEasi) / baseline * 1000) / 10;
+  var badges = [];
+  if (rate >= 90)      badges.push({ label: 'EASI90', color: '#1b5e20', bg: '#e8f5e9' });
+  else if (rate >= 75) badges.push({ label: 'EASI75', color: '#2e7d32', bg: '#c8e6c9' });
+  else if (rate >= 50) badges.push({ label: 'EASI50', color: '#388e3c', bg: '#dcedc8' });
+  return { rate: rate, badges: badges };
+}
+
 function fmtDate(d) {
   if (!d) return '';
   return String(d).replace(/^(\d{4})-(\d{2})-(\d{2})$/, function(_, y, m, dd) {
@@ -677,6 +690,9 @@ function renderPatientSummary(data) {
         '<div class="stat-box"><div class="s-val">' + visitCount  + '</div><div class="s-lbl">受診</div></div>',
         '<div class="stat-box"><div class="s-val">' + reportCount + '</div><div class="s-lbl">レポート</div></div>',
         '<div class="stat-box"><div class="s-val">' + assessCount + '</div><div class="s-lbl">EASI評価</div></div>',
+        (data.baselineAssessment
+          ? '<div class="stat-box"><div class="s-val">' + data.baselineAssessment.easiTotal + '</div><div class="s-lbl">ベースラインEASI</div></div>'
+          : ''),
       '</div>',
     '</div>'
   ].join('');
@@ -848,6 +864,16 @@ function buildVisitCard(visit, reports, assessment) {
   if (assessment) {
     var sev = easiSeverityInfo(assessment.easiTotal);
     chips.push('<span class="score-chip" style="background:' + esc(sev.bg) + ';color:' + esc(sev.color) + ';">EASI ' + assessment.easiTotal + '（' + esc(sev.label) + '）</span>');
+    // EASI改善率バッジ（ベースラインと異なる記録の場合のみ）
+    var impInfo = (chartData && chartData.baselineAssessment &&
+                   chartData.baselineAssessment.assessmentId !== assessment.assessmentId)
+      ? calcEasiImprovementChart(assessment.easiTotal, chartData.baselineAssessment)
+      : null;
+    if (impInfo && impInfo.badges.length > 0) {
+      impInfo.badges.forEach(function(b) {
+        chips.push('<span class="score-chip" style="background:' + b.bg + ';color:' + b.color + ';">' + b.label + ' ✓</span>');
+      });
+    }
     if (assessment.iga !== null && assessment.iga !== undefined) {
       chips.push('<span class="score-chip" style="background:#e3f2fd;color:#1565c0;">IGA ' + assessment.iga + '</span>');
     }
@@ -919,10 +945,24 @@ function buildVisitCard(visit, reports, assessment) {
   var easiHtml = '';
   if (assessment) {
     var sev2 = easiSeverityInfo(assessment.easiTotal);
+    var impInfo2 = (chartData && chartData.baselineAssessment &&
+                    chartData.baselineAssessment.assessmentId !== assessment.assessmentId)
+      ? calcEasiImprovementChart(assessment.easiTotal, chartData.baselineAssessment)
+      : null;
+    var impBadgesHtml2 = (impInfo2 && impInfo2.badges.length > 0)
+      ? impInfo2.badges.map(function(b) {
+          return '<span class="score-chip" style="background:' + b.bg + ';color:' + b.color + ';margin-left:4px;">' + b.label + ' ✓</span>';
+        }).join('')
+      : '';
+    var impRateHtml2 = (impInfo2 && impInfo2.rate !== null)
+      ? '<span style="font-size:12px;color:var(--text2);margin-left:6px;">改善率 ' + impInfo2.rate + '%</span>'
+      : '';
     easiHtml = '<div class="section-title">EASI/IGA評価</div>' +
       '<div class="easi-readonly">' +
         '<span>EASI合計: <strong>' + assessment.easiTotal + '</strong></span>' +
         '<span class="score-chip" style="background:' + esc(sev2.bg) + ';color:' + esc(sev2.color) + ';">' + esc(sev2.label) + '</span>' +
+        impBadgesHtml2 +
+        impRateHtml2 +
         (assessment.iga !== null && assessment.iga !== undefined
           ? '<span>IGA: <strong>' + assessment.iga + '</strong></span>'
           : '') +

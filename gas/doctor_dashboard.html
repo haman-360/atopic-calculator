@@ -541,6 +541,19 @@ function renderList(type, reports) {
 }
 
 function buildReportCard(r, type) {
+  const easiImp = (r.lastAssessment && r.baselineAssessment)
+    ? calcEasiImprovement(r.lastAssessment.easiTotal, r.baselineAssessment)
+    : null;
+  const easiImpBadgesHtml = (easiImp && easiImp.badges.length > 0)
+    ? easiImp.badges.map(b =>
+        `<span class="assessed-badge" style="background:${b.bg};color:${b.color};">${b.label} ✓</span>`
+      ).join('')
+    : '';
+  const easiRateHtml = (easiImp && easiImp.rate !== null &&
+    r.baselineAssessment && r.lastAssessment &&
+    r.baselineAssessment.assessmentId !== r.lastAssessment.assessmentId)
+    ? `<span style="font-size:11px;color:var(--text2);margin-left:2px;">（改善率 ${easiImp.rate}%）</span>`
+    : '';
   const poemTotal = Object.values(r.poemScores || {}).reduce((s, v) => s + (v || 0), 0);
   const poemSeverity = poemTotal <= 2 ? 'ほぼ正常' : poemTotal <= 7 ? '軽症' : poemTotal <= 16 ? '中等症' : poemTotal <= 24 ? '重症' : '最重症';
   const poemColor = poemTotal <= 2 ? 'var(--green-bg);color:var(--green-text)' :
@@ -680,7 +693,7 @@ function buildReportCard(r, type) {
             </span>
             ${nrs !== null && nrs !== undefined ? `<span class="symptom-score-chip" style="background:${nrsColor.split(';')[0].split(':')[1]};color:${nrsColor.split(';')[1].split(':')[1]};">NRS：${esc(String(nrs))}/10（${nrsSeverity}）</span>` : ''}
             <span class="symptom-score-chip" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">POEM：${poemTotal}/28（${esc(poemSeverity)}）</span>
-            ${r.lastAssessment ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）</span>` : ''}
+            ${r.lastAssessment ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）</span>${easiImpBadgesHtml}${easiRateHtml}` : ''}
             ${r.lastAssessment && r.lastAssessment.iga != null && r.lastAssessment.iga !== ''
               ? `<span class="assessed-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9;">IGA ${r.lastAssessment.iga}</span>`
               : ''}
@@ -743,6 +756,19 @@ function calcEasiLocal(state) {
 function getEasiSeverityLocal(total) {
   for (const s of EASI_SEVERITY_MAP) { if (total <= s.max) return s; }
   return EASI_SEVERITY_MAP[EASI_SEVERITY_MAP.length - 1];
+}
+
+function calcEasiImprovement(currentEasi, baselineAssessment) {
+  if (!baselineAssessment) return null;
+  const baseline = baselineAssessment.easiTotal;
+  if (baseline === null || baseline === undefined || baseline === '' || baseline === 0) return null;
+  if (currentEasi > baseline) return { rate: null, badges: [] };
+  const rate = Math.round((baseline - currentEasi) / baseline * 1000) / 10;
+  const badges = [];
+  if (rate >= 90)      badges.push({ label: 'EASI90', color: '#1b5e20', bg: '#e8f5e9' });
+  else if (rate >= 75) badges.push({ label: 'EASI75', color: '#2e7d32', bg: '#c8e6c9' });
+  else if (rate >= 50) badges.push({ label: 'EASI50', color: '#388e3c', bg: '#dcedc8' });
+  return { rate, badges };
 }
 
 // EASI入力グリッド（pending用）を生成

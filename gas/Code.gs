@@ -603,8 +603,9 @@ function getDashboardData() {
     vhByPatient[pno].sort(function(a, b) { return b.visitDate.localeCompare(a.visitDate); });
   }
 
-  // ClinicalAssessments から最新評価をマップ化
+  // ClinicalAssessments から最新評価・ベースライン評価をマップ化
   const assessmentMap = {};
+  const baselineMap = {};
   try {
     const caSheet = getSheet_('ClinicalAssessments');
     if (caSheet) {
@@ -618,6 +619,13 @@ function getDashboardData() {
           const obj = assessmentRowToObj_(caData[i]);
           obj._assessedAtMs = assessedAtMs;
           assessmentMap[pno] = obj;
+        }
+        // ベースライン（最古のEASI記録）を追跡
+        const bprev = baselineMap[pno];
+        if (!bprev || assessedAtMs < (bprev._assessedAtMs || Infinity)) {
+          const baseObj = assessmentRowToObj_(caData[i]);
+          baseObj._assessedAtMs = assessedAtMs;
+          baselineMap[pno] = baseObj;
         }
       }
     }
@@ -666,6 +674,7 @@ function getDashboardData() {
           return null;
         })(),
         lastAssessment: assessmentMap[pno] || null,
+        baselineAssessment: baselineMap[pno] || null,
         rowIndex: i + 1
       };
       if (entry.status === 'pending') pending.push(entry);
@@ -874,6 +883,9 @@ function getPatientChartData_(patientNo) {
     }
   } catch(e) {}
 
+  // ベースライン = visitDate が最も古い評価（配列は降順ソート済みなので末尾が最古）
+  const baselineAssessment = assessments.length > 0 ? assessments[assessments.length - 1] : null;
+
   return {
     ok:          true,
     patientNo:   pno,
@@ -881,7 +893,8 @@ function getPatientChartData_(patientNo) {
     ageLabel:    calcAgeLabel_(birthdate),
     visits:      visits,
     reports:     reports,
-    assessments: assessments
+    assessments: assessments,
+    baselineAssessment: baselineAssessment
   };
 }
 
