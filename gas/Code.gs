@@ -564,7 +564,8 @@ function saveVisit_(patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryTex
 }
 
 // ===== 医師ダッシュボード: データ取得 =====
-function getDashboardData() {
+// reviewedDays: 確認済みレコードを何日前まで取得するか（デフォルト14日）
+function getDashboardData(reviewedDays) {
   const prSheet = getSheet_('PatientReports');
   const prData = prSheet.getDataRange().getValues();
   const vhSheet = getSheet_('VisitHistory');
@@ -631,6 +632,9 @@ function getDashboardData() {
     }
   } catch(e) {}
 
+  const reviewedCutoff = new Date();
+  reviewedCutoff.setDate(reviewedCutoff.getDate() - (reviewedDays || 14));
+
   const pending = [], reviewed = [];
   for (let i = 1; i < prData.length; i++) {
     try {
@@ -677,8 +681,11 @@ function getDashboardData() {
         baselineAssessment: baselineMap[pno] || null,
         rowIndex: i + 1
       };
-      if (entry.status === 'pending') pending.push(entry);
-      else reviewed.push(entry);
+      if (entry.status === 'pending') {
+        pending.push(entry);
+      } else if (new Date(entry.submittedAt) >= reviewedCutoff) {
+        reviewed.push(entry);
+      }
     } catch(e) {}
   }
 
