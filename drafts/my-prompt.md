@@ -331,3 +331,13 @@ function generateTodayDailyPin() {
 codex のプランを参考にして、** `atopic_calculator` の `DailyPIN` の情報を、スタッフ用spreadsheetに集めることはできますか。
 
 スタッフ用のspreadsheetのIDは、`1ZunSK7aWGynMa34dd70YSlE-HfBrHUOQRKJ9oicA2ig` です。
+
+---
+
+## カルテダッシュボードついて
+
+EASI Score をiPadで作って保存した画像は、次回最新時にも（初診時に作成してあった）画像が出るのでしょうか?
+
+今回のケースでは、`診察券 09782` の人が、6月10日に受信されました。6月2日に評価したEASI score の時の画像が付いていました。
+
+6月10日に追加でもう一度EASI Scoreを評価した場合は、今6月2日に入っている画像が、6月10日のものに置き換わる、すなわち、**一番新しい画像が添付される** という認識であっていますか
