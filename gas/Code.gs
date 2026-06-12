@@ -913,9 +913,9 @@ function calcAgeLabel_(birthdate) {
   const now = new Date();
   let years = now.getFullYear() - birth.getFullYear();
   let months = now.getMonth() - birth.getMonth();
+  if (now.getDate() < birth.getDate()) months--;
   if (months < 0) { years--; months += 12; }
-  if (years < 1) return months + 'か月';
-  if (years < 3) return years + '歳' + (months > 0 ? months + 'か月' : '');
+  if (years < 15) return years + '歳' + (months > 0 ? months + 'か月' : '');
   return years + '歳';
 }
 
