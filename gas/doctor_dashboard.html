@@ -711,6 +711,7 @@ function buildReportCard(r, type) {
             </span>
             ${nrs !== null && nrs !== undefined ? `<span class="symptom-score-chip" style="background:${nrsColor.split(';')[0].split(':')[1]};color:${nrsColor.split(';')[1].split(':')[1]};">NRS：${esc(String(nrs))}/10（${nrsSeverity}）</span>` : ''}
             <span class="symptom-score-chip" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">POEM：${poemTotal}/28（${esc(poemSeverity)}）</span>
+            ${r.hasCurrentRx ? `<span class="assessed-badge" style="background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;">✓ 処方入力済み</span>` : ''}
             ${r.lastAssessment ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）</span>${easiImpBadgesHtml}${easiRateHtml}` : ''}
             ${r.lastAssessment && r.lastAssessment.iga != null && r.lastAssessment.iga !== ''
               ? `<span class="assessed-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9;">IGA ${r.lastAssessment.iga}</span>`

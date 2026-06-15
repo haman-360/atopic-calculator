@@ -677,6 +677,16 @@ function getDashboardData(reviewedDays) {
           }
           return null;
         })(),
+        hasCurrentRx: (function() {
+          // レポート送信日以降に処方入力済みかどうか
+          var reportDateStr = row[2] ? Utilities.formatDate(new Date(row[2]), 'Asia/Tokyo', 'yyyy-MM-dd') : '';
+          if (!reportDateStr) return false;
+          var visits = vhByPatient[pno] || [];
+          for (var vi = 0; vi < visits.length; vi++) {
+            if (visits[vi].visitDate >= reportDateStr) return true;
+          }
+          return false;
+        })(),
         lastAssessment: assessmentMap[pno] || null,
         baselineAssessment: baselineMap[pno] || null,
         rowIndex: i + 1
