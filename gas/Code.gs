@@ -1197,80 +1197,40 @@ function saveAssessment(data)                        { return saveAssessment_(da
 function getAssessmentList(patientNo)               { return getAssessmentList_(patientNo); }
 function getAssessmentByVisit(patientNo, visitDate) { return getAssessmentByVisit_(patientNo, visitDate); }
 function getPatientChartData(patientNo)             { return getPatientChartData_(patientNo); }
-function getPatientForDirectEntry(patientNo)        { return getPatientForDirectEntry_(patientNo); }
+function registerDirectVisit(patientNo, visitDate)  { return registerDirectVisit_(patientNo, visitDate); }
 
-// ===== 直接入力モード: 患者情報取得（アンケートなし受診向け） =====
-function getPatientForDirectEntry_(patientNo) {
+// ===== 直接受診登録: アンケートなし受診のスタブ行を PatientReports に追加 =====
+function registerDirectVisit_(patientNo, visitDate) {
   const pno = String(patientNo).trim();
   if (!pno) return { ok: false, reason: 'patientNo required' };
+  const vd = visitDate || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
+  const reportId = Utilities.getUuid();
+  const submittedAt = vd + 'T00:00:00.000Z';
 
-  // PatientRegistry から基本情報取得
-  const regSheet = getSheet_('PatientRegistry');
-  const regData  = regSheet.getDataRange().getValues();
-  let birthdate = '', notes = '';
-  for (let i = 1; i < regData.length; i++) {
-    if (String(regData[i][0]).trim() === pno) {
-      birthdate = regData[i][1] ? dateToStr_(regData[i][1]) : '';
-      notes     = regData[i][2] || '';
-      break;
-    }
-  }
-  if (birthdate === '' && notes === '') {
-    // 患者が見つからない場合でも空で返す（初診対応）
-  }
+  const sheet = getSheet_('PatientReports');
+  sheet.appendRow([
+    reportId,    // A reportId
+    pno,         // B patientNo
+    submittedAt, // C submittedAt
+    '',          // D symptomScore
+    '',          // E nrsScore
+    '[]',        // F infectionSigns
+    '',          // G symptomNotes
+    '{}',        // H poemJson
+    '[]',        // I medicationJson
+    '',          // J doctorComment
+    '',          // K nextAppointment
+    '',          // L commentAt
+    'pending',   // M status
+    '[]',        // N triggersJson
+    '',          // O triggerNote
+    '[]'         // P topicalUseJson
+  ]);
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 2).setNumberFormat('@');
+  sheet.getRange(newRow, 2).setValue(pno);
 
-  // VisitHistory から直近処方を取得
-  const vhSheet = getSheet_('VisitHistory');
-  const vhData  = vhSheet.getDataRange().getValues();
-  let lastRx = null;
-  for (let i = 1; i < vhData.length; i++) {
-    if (String(vhData[i][0]).trim() !== pno) continue;
-    const vd = dateToStr_(vhData[i][1]);
-    if (!vd) continue;
-    if (!lastRx || vd > lastRx.visitDate) {
-      let drugsJson = [];
-      try { drugsJson = vhData[i][3] ? JSON.parse(vhData[i][3]) : []; } catch(e) {}
-      lastRx = {
-        visitDate:      vd,
-        nextVisitDate:  dateToStr_(vhData[i][2]),
-        drugsJson:      drugsJson,
-        rxSummaryText:  vhData[i][4] || ''
-      };
-    }
-  }
-
-  // ClinicalAssessments から最新評価・ベースライン評価を取得
-  let lastAssessment = null, baselineAssessment = null;
-  try {
-    const caSheet = getSheet_('ClinicalAssessments');
-    if (caSheet) {
-      const caData = caSheet.getDataRange().getValues();
-      for (let i = 1; i < caData.length; i++) {
-        if (String(caData[i][1]).trim() !== pno) continue;
-        const assessedAtMs = caData[i][3] ? new Date(caData[i][3]).getTime() : 0;
-        if (!lastAssessment || assessedAtMs > lastAssessment._ms) {
-          lastAssessment = assessmentRowToObj_(caData[i]);
-          lastAssessment._ms = assessedAtMs;
-        }
-        if (!baselineAssessment || assessedAtMs < baselineAssessment._ms) {
-          baselineAssessment = assessmentRowToObj_(caData[i]);
-          baselineAssessment._ms = assessedAtMs;
-        }
-      }
-    }
-  } catch(e) {}
-
-  return {
-    ok:                 true,
-    patientNo:          pno,
-    birthdate:          birthdate,
-    ageLabel:           calcAgeLabel_(birthdate),
-    ageGroup:           calcAgeGroup_(birthdate),
-    patientNotes:       notes,
-    lastRx:             lastRx,
-    lastAssessment:     lastAssessment,
-    baselineAssessment: baselineAssessment
-  };
+  return { ok: true, reportId: reportId };
 }
 
 // ===== カルテビュー: 患者一覧取得 =====
