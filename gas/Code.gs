@@ -550,7 +550,10 @@ function saveVisit_(patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryTex
   // 画像サイズ検証（45000文字以内のみ保存）
   const imgToSave = (prescriptionImageBase64 && prescriptionImageBase64.length <= 45000) ? prescriptionImageBase64 : '';
   for (let i = 1; i < data.length; i++) {
-    if (String(data[i][0]) === String(patientNo) && String(data[i][1]) === String(visitDate)) {
+    const rowDate = data[i][1] instanceof Date
+      ? Utilities.formatDate(data[i][1], 'Asia/Tokyo', 'yyyy-MM-dd')
+      : String(data[i][1]);
+    if (String(data[i][0]) === String(patientNo) && rowDate === String(visitDate)) {
       // 画像が新しく渡されていない場合は既存を保持
       const finalImg = imgToSave || String(data[i][5] || '');
       sheet.getRange(i + 1, 3, 1, 4).setValues([[nextVisitDate, JSON.stringify(drugsJson), rxSummaryText, finalImg]]);
