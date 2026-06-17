@@ -338,6 +338,65 @@ body { max-width: none; }
   font-size: 13px;
   margin-bottom: 8px;
 }
+/* ===== 直接入力パネル ===== */
+.direct-entry-panel {
+  background: #f0f7ff;
+  border: 1px solid #b3d4f5;
+  border-radius: var(--radius);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+.direct-entry-panel h3 {
+  font-size: 13px;
+  font-weight: 700;
+  color: #1565c0;
+  margin: 0 0 10px;
+}
+.direct-entry-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.direct-entry-row input[type="text"],
+.direct-entry-row input[type="date"] {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--surface);
+  color: var(--text);
+}
+.direct-entry-row input[type="text"] { width: 120px; }
+.direct-entry-row input[type="date"] { width: 160px; }
+.direct-search-btn {
+  padding: 7px 16px;
+  background: #1565c0;
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 14px;
+  font-family: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+.direct-search-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+.direct-card-wrap { margin-top: 12px; }
+.direct-card {
+  background: var(--surface);
+  border: 2px solid #1565c0;
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.direct-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
 /* ===== アコーディオン ===== */
 .collapsible-section {
   border: 1px solid var(--border);
@@ -387,6 +446,18 @@ body { max-width: none; }
 </div>
 
 <div class="main">
+
+  <!-- ===== 直接入力パネル ===== -->
+  <div class="direct-entry-panel">
+    <h3>🔍 患者を直接検索（アンケートなし受診）</h3>
+    <div class="direct-entry-row">
+      <input type="text" id="direct-pno" placeholder="診察券番号" inputmode="numeric">
+      <input type="date" id="direct-date">
+      <button class="direct-search-btn" id="direct-search-btn" onclick="directSearch()">検索</button>
+    </div>
+    <div id="direct-card-wrap" class="direct-card-wrap" style="display:none;"></div>
+  </div>
+
   <div class="tabs" style="display:flex;align-items:center;gap:0;">
     <button class="tab-btn active" id="tab-pending" onclick="switchTab('pending')">未確認 <span id="pending-count" style="display:none;background:var(--red);color:white;border-radius:20px;padding:1px 7px;font-size:11px;margin-left:4px;"></span></button>
     <button class="tab-btn" id="tab-reviewed" onclick="switchTab('reviewed')">確認済み</button>
@@ -468,6 +539,150 @@ const chartInstances = {}; // { [reportId]: Chart }
 
 let currentTab = 'pending';
 let dashboardData = { pending: [], reviewed: [] };
+
+// ===== 直接入力モード =====
+(function initDirectDate() {
+  const el = document.getElementById('direct-date');
+  if (el) el.value = new Date().toISOString().slice(0, 10);
+})();
+
+function directSearch() {
+  const pno = (document.getElementById('direct-pno').value || '').trim();
+  if (!pno) { showToast('診察券番号を入力してください'); return; }
+  const btn = document.getElementById('direct-search-btn');
+  btn.disabled = true;
+  btn.textContent = '検索中...';
+  const wrap = document.getElementById('direct-card-wrap');
+  wrap.style.display = 'none';
+  wrap.innerHTML = '';
+  google.script.run
+    .withSuccessHandler(function(res) {
+      btn.disabled = false;
+      btn.textContent = '検索';
+      if (!res || !res.ok) {
+        wrap.innerHTML = '<p style="color:var(--red);font-size:13px;">患者が見つかりませんでした</p>';
+        wrap.style.display = 'block';
+        return;
+      }
+      const visitDate = document.getElementById('direct-date').value || new Date().toISOString().slice(0, 10);
+      const syntheticId = 'direct-' + res.patientNo;
+      wrap.innerHTML = buildDirectCard(res, syntheticId, visitDate);
+      wrap.style.display = 'block';
+      initEasiState(syntheticId, res.lastAssessment || null, res.birthdate || '', visitDate);
+    })
+    .withFailureHandler(function(err) {
+      btn.disabled = false;
+      btn.textContent = '検索';
+      wrap.innerHTML = '<p style="color:var(--red);font-size:13px;">エラー: ' + esc(String(err.message || err)) + '</p>';
+      wrap.style.display = 'block';
+    })
+    .getPatientForDirectEntry(pno);
+}
+
+function buildDirectCard(r, syntheticId, visitDate) {
+  const rid = esc(syntheticId);
+  const calcUrl = 'https://haman-360.github.io/atopic-calculator/atopic_calculator.html'
+    + '?p=' + encodeURIComponent(r.patientNo)
+    + '&ageGroup=' + encodeURIComponent(r.ageGroup || 'child3')
+    + '&ageLabel=' + encodeURIComponent(r.ageLabel || '');
+  const chartUrl = EXEC_URL + '?page=chart&p=' + encodeURIComponent(r.patientNo)
+    + '&secret=' + encodeURIComponent(SECRET || '');
+
+  // 直近処方
+  let rxHtml = '';
+  if (r.lastRx) {
+    const drugs = r.lastRx.drugsJson || [];
+    const schedLines = drugs.map(d => d.scheduleText || (d.name + (d.partLabel ? '（' + d.partLabel + '）' : '') + (d.freqLabel ? '　' + d.freqLabel : '')));
+    const schedDisplay = schedLines.length ? schedLines.join('\n') : (r.lastRx.rxSummaryText || '');
+    rxHtml = `<details class="collapsible-section" open>
+      <summary>前回処方（${esc(r.lastRx.visitDate)}）</summary>
+      <div class="rx-summary" style="margin:0;background:transparent;padding:0;">${esc(schedDisplay)}</div>
+    </details>`;
+  }
+
+  // EASI済みバッジ
+  const hasAssessment = !!r.lastAssessment;
+  const easiBadge = hasAssessment
+    ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）</span>`
+    : '';
+
+  const fakeReport = Object.assign({}, r, {
+    reportId:  syntheticId,
+    lastAssessment: r.lastAssessment || null
+  });
+
+  return `<div class="direct-card" id="card-${rid}">
+    <div class="direct-card-header">
+      <div>
+        <div style="font-size:18px;font-weight:700;">診察券 ${esc(r.patientNo)}
+          <span style="font-size:14px;font-weight:400;color:var(--text2);margin-left:10px;">${esc(r.ageLabel || '年齢不明')}</span>
+        </div>
+        <div style="font-size:12px;color:var(--text2);margin-top:3px;">
+          受診日: ${esc(visitDate)}
+          ${r.patientNotes ? '　' + esc(r.patientNotes) : ''}
+        </div>
+        <div style="font-size:11px;color:#1565c0;margin-top:2px;">※ アンケートなし受診 — 客観的評価のみ記録可能</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <a href="${calcUrl}" target="_blank"
+             style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:var(--green);color:#fff;border-radius:var(--radius-sm);font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;">
+            💊 処方計算を開く
+          </a>
+          <a href="${chartUrl}" target="_blank"
+             style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:var(--blue);color:#fff;border-radius:var(--radius-sm);font-size:13px;font-weight:700;text-decoration:none;white-space:nowrap;">
+            📋 カルテビュー
+          </a>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          ${easiBadge}
+        </div>
+      </div>
+    </div>
+    ${rxHtml}
+    ${buildEasiSection(fakeReport, 'pending')}
+    <div style="margin-top:8px;">
+      <button class="save-btn" id="easi-save-${rid}" onclick="saveDirectAssessment('${rid}','${esc(r.patientNo)}')">💾 EASI/IGA を保存</button>
+    </div>
+  </div>`;
+}
+
+function saveDirectAssessment(syntheticId, patientNo) {
+  const state = easiState[syntheticId];
+  if (!state) { showToast('評価データが見つかりません'); return; }
+  if (state.assessmentId) {
+    if (!confirm('既存のEASI評価を上書きします。続けますか？')) return;
+  }
+  const visitDate = state.visitDate || new Date().toISOString().slice(0, 10);
+  const payload = {
+    action: 'saveAssessment',
+    patientNo: patientNo,
+    visitDate: visitDate,
+    assessmentId: state.assessmentId || null,
+    easi: { head: state.head, trunk: state.trunk, upperLimb: state.upperLimb, lowerLimb: state.lowerLimb },
+    iga: state.iga,
+    reportId: null,  // PatientReportsには紐付けない
+    notes: (document.getElementById('easi-notes-' + syntheticId) || {}).value || ''
+  };
+  const btn = document.getElementById('easi-save-' + syntheticId);
+  if (btn) { btn.textContent = '保存中...'; btn.disabled = true; }
+  google.script.run
+    .withSuccessHandler(function(res) {
+      if (btn) { btn.textContent = '💾 EASI/IGA を保存'; btn.disabled = false; }
+      if (res.ok) {
+        showToast('EASI/IGA評価を保存しました（合計 ' + res.easiTotal + '）');
+        // assessmentIdを更新して次回は上書きになるよう記録
+        if (easiState[syntheticId]) easiState[syntheticId].assessmentId = res.assessmentId;
+      } else {
+        showToast('保存失敗: ' + esc(res.reason || ''));
+      }
+    })
+    .withFailureHandler(function(err) {
+      if (btn) { btn.textContent = '💾 EASI/IGA を保存'; btn.disabled = false; }
+      showToast('エラー: ' + esc(err.message || '不明なエラー'));
+    })
+    .saveAssessment(payload);
+}
 
 function getReviewedDays() {
   const sel = document.getElementById('reviewed-days-select');
