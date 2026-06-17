@@ -941,7 +941,7 @@
             oninput="calc()">
         </div>
         <div>
-          <label>前回受診日</label>
+          <label>前回受診日（任意）</label>
           <input type="date" id="lastDate" oninput="calc()">
         </div>
         <div>
@@ -1198,6 +1198,7 @@
         mixedPlanIdx: 0,    // 選択中のプランインデックス
         // 直接入力モード用
         directG: 0,         // 今回処方量（g）直接入力
+        showPrevRx: false,  // 前回処方・残量セクションの開閉
       };
     }
     const drugs = [newDrug(0)];
@@ -1212,11 +1213,13 @@
       const btnDirect = document.getElementById('mode-btn-direct');
       btnFtu.className    = mode === 'ftu'    ? 'btn btn-sm mode-btn-on'  : 'btn btn-ghost btn-sm';
       btnDirect.className = mode === 'direct' ? 'btn btn-sm mode-btn-on'  : 'btn btn-ghost btn-sm';
-      // 次回受診予定日・前回受診日 の required感を制御
-      const schedTabBtn = document.getElementById('tab-btn-schedule');
-      if (schedTabBtn) schedTabBtn.style.display = mode === 'direct' ? 'none' : '';
       const elapsedLabel = document.getElementById('elapsed-label');
       if (mode === 'direct') { if (elapsedLabel) elapsedLabel.textContent = ''; }
+      renderDrugs(); calc();
+    }
+
+    function togglePrevRx(i) {
+      drugs[i].showPrevRx = !drugs[i].showPrevRx;
       renderDrugs(); calc();
     }
 
@@ -1282,6 +1285,12 @@
           </div>
         </div>
         <div class="part-grid">${partsHtml}</div>
+        <div style="margin-top:10px;">
+          <label>塗布頻度</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">${FREQS.map((f, fi) =>
+            `<button class="freq-pill${fi === d.freqIdx ? ' on' : ''}" onclick="drugs[${i}].freqIdx=${fi};renderDrugs();calc()">${f.label}</button>`
+          ).join('')}</div>
+        </div>
         <div style="margin-top:14px;display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap;">
           <div>
             <label>今回処方量 (g)</label>
@@ -1349,44 +1358,50 @@
       </div>
       ${pre.custom ? `<div style="margin-bottom:10px;"><label>薬剤名（手入力）</label>
         <input type="text" value="${d.customName}" placeholder="例: ○○軟膏 10g" oninput="drugs[${i}].customName=this.value;calc()"></div>` : ''}
-      <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">前回処方・残量</div>
-      <div class="grid grid-4">
-        <div>
-          <label>1本の内容量 (g)</label>
-          <input type="number" value="${d.tubeg}" min="1" step="1" inputmode="decimal"
-            oninput="onTubeG(${i},this.value)">
-          <div class="input-note">規格</div>
+      <div style="margin-bottom:12px;">
+        <button onclick="togglePrevRx(${i})" style="font-size:12px;color:var(--text2);background:var(--surface2);border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:5px 12px;display:inline-flex;align-items:center;gap:5px;font-family:inherit;">
+          ${d.showPrevRx ? '▼' : '▶'} 前回処方・残量（任意）
+        </button>
+        ${d.showPrevRx ? `<div style="margin-top:10px;">
+        <div class="grid grid-4">
+          <div>
+            <label>1本の内容量 (g)</label>
+            <input type="number" value="${d.tubeg}" min="1" step="1" inputmode="decimal"
+              oninput="onTubeG(${i},this.value)">
+            <div class="input-note">規格</div>
+          </div>
+          <div>
+            <label>前回処方 (本)</label>
+            <input type="number" id="gB-${i}" value="${givenB}" min="0" step="any" inputmode="decimal"
+              oninput="onGivenB(${i},this.value)">
+            <div class="input-note" id="gBn-${i}">${d.givenG.toFixed(1)}g</div>
+          </div>
+          <div>
+            <label>前回処方 (g)</label>
+            <input type="number" id="gG-${i}" value="${d.givenG.toFixed(1)}" min="0" step="any" inputmode="decimal"
+              oninput="onGivenG(${i},this.value)">
+            <div class="input-note" id="gGn-${i}">${givenB}本</div>
+          </div>
+          <div></div>
+          <div>
+            <label>現在の残量 (本)</label>
+            <input type="number" id="rB-${i}" value="${remB}" min="0" step="any" inputmode="decimal"
+              oninput="onRemainB(${i},this.value)">
+            <div class="input-note" id="rBn-${i}">${d.remainG.toFixed(1)}g</div>
+          </div>
+          <div>
+            <label>現在の残量 (g)</label>
+            <input type="number" id="rG-${i}" value="${d.remainG.toFixed(1)}" min="0" step="any" inputmode="decimal"
+              oninput="onRemainG(${i},this.value)">
+            <div class="input-note" id="rGn-${i}">${remB}本</div>
+          </div>
         </div>
-        <div>
-          <label>前回処方 (本)</label>
-          <input type="number" id="gB-${i}" value="${givenB}" min="0" step="any" inputmode="decimal"
-            oninput="onGivenB(${i},this.value)">
-          <div class="input-note" id="gBn-${i}">${d.givenG.toFixed(1)}g</div>
+        <div class="drug-summary" id="drug-summary-${i}">
+          前回処方: <strong>${d.givenG.toFixed(1)}g</strong>（${givenB}本）
+          残量: <strong>${d.remainG.toFixed(1)}g</strong>（${remB}本）
+          消費: <strong>${consumed}g</strong>
         </div>
-        <div>
-          <label>前回処方 (g)</label>
-          <input type="number" id="gG-${i}" value="${d.givenG.toFixed(1)}" min="0" step="any" inputmode="decimal"
-            oninput="onGivenG(${i},this.value)">
-          <div class="input-note" id="gGn-${i}">${givenB}本</div>
-        </div>
-        <div></div>
-        <div>
-          <label>現在の残量 (本)</label>
-          <input type="number" id="rB-${i}" value="${remB}" min="0" step="any" inputmode="decimal"
-            oninput="onRemainB(${i},this.value)">
-          <div class="input-note" id="rBn-${i}">${d.remainG.toFixed(1)}g</div>
-        </div>
-        <div>
-          <label>現在の残量 (g)</label>
-          <input type="number" id="rG-${i}" value="${d.remainG.toFixed(1)}" min="0" step="any" inputmode="decimal"
-            oninput="onRemainG(${i},this.value)">
-          <div class="input-note" id="rGn-${i}">${remB}本</div>
-        </div>
-      </div>
-      <div class="drug-summary" id="drug-summary-${i}">
-        前回処方: <strong>${d.givenG.toFixed(1)}g</strong>（${givenB}本）
-        残量: <strong>${d.remainG.toFixed(1)}g</strong>（${remB}本）
-        消費: <strong>${consumed}g</strong>
+        </div>` : ''}
       </div>
       <div class="section-sub" style="display:flex;align-items:center;justify-content:space-between;">
         <span>塗布部位</span>
@@ -1862,9 +1877,10 @@
     // ===== 直接入力モード計算 =====
     function calcDirect() {
       const tv  = document.getElementById('todayDate').value;
+      const nv  = document.getElementById('nextDate').value;
       const pid = document.getElementById('patientId').value.trim();
       const rxItems = [];
-      currentRxSnapshot = { patientNo: pid, visitDate: tv, nextVisitDate: '', rxItems };
+      currentRxSnapshot = { patientNo: pid, visitDate: tv, nextVisitDate: nv, rxItems };
 
       let tbl = `<div style="overflow-x:auto"><table class="result-table">
   <tr><th>薬剤</th><th>塗布部位</th><th>今回処方量</th></tr>`;
@@ -1891,7 +1907,9 @@
           name: pname, tubeg: d.tubeg, directG: g,
           prescribeG: g, prescribeB: bCount,
           partNames, isMixed: isMixed(d), hasFTU: partNames.length > 0,
-          isDirect: true, drugRef: d
+          isDirect: true, drugRef: d,
+          freq: FREQS[d.freqIdx].label, freqVal: FREQS[d.freqIdx].val,
+          taperPhases: null, neededG: g, netG: g, remainG: 0
         });
       });
       tbl += '</table></div>';
@@ -1908,6 +1926,7 @@
       });
       document.getElementById('text-output').value = txt;
       document.getElementById('elapsed-label').textContent = '';
+      renderScheduleGantt();
     }
 
     function selectMixedPlan(drugIdx, planIdx) {
