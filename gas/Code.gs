@@ -690,8 +690,8 @@ function getDashboardData(reviewedDays) {
           }
           return false;
         })(),
-        lastAssessment: assessmentMap[pno] || null,
-        baselineAssessment: baselineMap[pno] || null,
+        lastAssessment: assessmentMap[pno] || assessmentMap[pno.replace(/^0+/, '')] || null,
+        baselineAssessment: baselineMap[pno] || baselineMap[pno.replace(/^0+/, '')] || null,
         rowIndex: i + 1
       };
       if (entry.status === 'pending') {
@@ -1201,8 +1201,23 @@ function registerDirectVisit(patientNo, visitDate)  { return registerDirectVisit
 
 // ===== 直接受診登録: アンケートなし受診のスタブ行を PatientReports に追加 =====
 function registerDirectVisit_(patientNo, visitDate) {
-  const pno = String(patientNo).trim();
+  let pno = String(patientNo).trim();
   if (!pno) return { ok: false, reason: 'patientNo required' };
+  // PatientRegistry から正規の患者番号形式（先頭0含む）を取得
+  try {
+    const regSheet = getSheet_('PatientRegistry');
+    if (regSheet) {
+      const regData = regSheet.getDataRange().getValues();
+      const stripped = pno.replace(/^0+/, '');
+      for (let i = 1; i < regData.length; i++) {
+        const regPno = String(regData[i][0]).trim();
+        if (regPno === pno || regPno.replace(/^0+/, '') === stripped) {
+          pno = regPno;
+          break;
+        }
+      }
+    }
+  } catch(e) {}
   const vd = visitDate || Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd');
   const reportId = Utilities.getUuid();
   const submittedAt = vd + 'T00:00:00.000Z';
