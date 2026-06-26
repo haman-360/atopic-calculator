@@ -719,11 +719,22 @@ function renderScoreChart(data) {
     poemMap[targetDate] = pt;
     if (r.nrsScore !== null && r.nrsScore !== undefined) nrsMap[targetDate] = r.nrsScore;
   });
+  // assessedAt最新のものだけグラフに使う
+  var easiLatestAt = {}, igaLatestAt = {};
   (data.assessments || []).forEach(function(a) {
     var vd = a.visitDate ? String(a.visitDate).slice(0, 10) : null;
     if (!vd) return;
-    easiMap[vd] = a.easiTotal;
-    if (a.iga !== null && a.iga !== undefined) igaMap[vd] = a.iga;
+    var aTime = a.assessedAt ? new Date(a.assessedAt).getTime() : 0;
+    if (!(vd in easiMap) || aTime > (easiLatestAt[vd] || 0)) {
+      easiMap[vd] = a.easiTotal;
+      easiLatestAt[vd] = aTime;
+    }
+    if (a.iga !== null && a.iga !== undefined) {
+      if (!(vd in igaMap) || aTime > (igaLatestAt[vd] || 0)) {
+        igaMap[vd] = a.iga;
+        igaLatestAt[vd] = aTime;
+      }
+    }
   });
 
   var allDates = Object.keys(poemMap).concat(Object.keys(easiMap)).concat(Object.keys(igaMap));
@@ -806,7 +817,7 @@ function renderTimeline(data) {
     reportsByVisitDate[targetDate].push(r);
   });
 
-  // assessment → visitDate にマッピング（最新で上書き、ただしlesionMapJsonは引き継ぐ）
+  // assessment → visitDate にマッピング（assessedAt最新で上書き、ただしlesionMapJsonは引き継ぐ）
   var assessByVisitDate = {};
   (data.assessments || []).forEach(function(a) {
     var vd = a.visitDate ? String(a.visitDate).slice(0, 10) : null;
@@ -815,13 +826,20 @@ function renderTimeline(data) {
     if (!existing) {
       assessByVisitDate[vd] = a;
     } else {
-      // 最新で上書き。ただし新しい方に画像がなく古い方にある場合は古い画像を引き継ぐ
-      var merged = {};
-      for (var key in a) merged[key] = a[key];
-      if (!merged.lesionMapJson && existing.lesionMapJson) {
-        merged.lesionMapJson = existing.lesionMapJson;
+      // assessedAtが新しい方を採用。ただし新しい方に画像がなく古い方にある場合は古い画像を引き継ぐ
+      var aTime = a.assessedAt ? new Date(a.assessedAt).getTime() : 0;
+      var existingTime = existing.assessedAt ? new Date(existing.assessedAt).getTime() : 0;
+      if (aTime > existingTime) {
+        var merged = {};
+        for (var key in a) merged[key] = a[key];
+        if (!merged.lesionMapJson && existing.lesionMapJson) {
+          merged.lesionMapJson = existing.lesionMapJson;
+        }
+        assessByVisitDate[vd] = merged;
+      } else if (!existing.lesionMapJson && a.lesionMapJson) {
+        // 古い方に画像がなく新しい方にある場合は画像だけ引き継ぐ
+        existing.lesionMapJson = a.lesionMapJson;
       }
-      assessByVisitDate[vd] = merged;
     }
   });
 
