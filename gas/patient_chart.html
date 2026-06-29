@@ -258,6 +258,38 @@ details .detail-body { padding: 8px 0 2px; }
 }
 .mg-bar-p2 { border-left: 2px dashed rgba(0,0,0,0.18); }
 
+/* ===== タイムラインフィルター ===== */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.filter-bar-label {
+  font-size: 12px;
+  color: var(--text2);
+  white-space: nowrap;
+}
+.filter-btn {
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  color: var(--text2);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
+  white-space: nowrap;
+}
+.filter-btn:hover { background: var(--surface2); }
+.filter-btn.active {
+  background: var(--teal);
+  color: white;
+  border-color: var(--teal);
+  font-weight: 700;
+}
 /* ===== 患者選択パネル ===== */
 #patient-switcher-panel {
   display: none;
@@ -408,6 +440,13 @@ details .detail-body { padding: 8px 0 2px; }
   </div>
 
   <!-- 受診タイムライン -->
+  <div class="filter-bar" id="timeline-filter-bar" style="display:none;">
+    <span class="filter-bar-label">表示期間:</span>
+    <button class="filter-btn" data-days="14"  onclick="setTimelineFilter(14)">2週間</button>
+    <button class="filter-btn" data-days="28"  onclick="setTimelineFilter(28)">4週間</button>
+    <button class="filter-btn" data-days="90"  onclick="setTimelineFilter(90)">3ヶ月</button>
+    <button class="filter-btn active" data-days="0" onclick="setTimelineFilter(0)">全期間</button>
+  </div>
   <div class="timeline-header" id="timeline-header"></div>
   <div id="timeline-container"></div>
 
@@ -450,6 +489,7 @@ const EASI_SEVERITY_MAP = [
 
 let chartData    = null;
 let chartInstance = null;
+let timelineFilterDays = 0; // 0 = 全期間
 
 var GANTT_COLORS = [
   { bg: '#5DCAA5', fg: '#04342C' },
@@ -788,34 +828,21 @@ function renderScoreChart(data) {
 }
 
 // ===== タイムライン =====
+function setTimelineFilter(days) {
+  timelineFilterDays = days;
+  // ボタンのアクティブ状態を更新
+  document.querySelectorAll('.filter-btn').forEach(function(btn) {
+    btn.classList.toggle('active', parseInt(btn.dataset.days) === days);
+  });
+  if (chartData) renderTimeline(chartData);
+}
+
 function renderTimeline(data) {
   var container = document.getElementById('timeline-container');
-  var visits     = data.visits || [];
 
-  document.getElementById('timeline-header').textContent =
-    '受診タイムライン（' + visits.length + '件）';
-
-  if (visits.length === 0) {
-    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text2);font-size:14px;">処方履歴がありません</div>';
-    return;
-  }
-
-  // visitDates（昇順）: reportを次の受診日に紐付けるために必要
-  var visitDates = visits.map(function(v) { return v.visitDate; }).slice().sort();
-
-  // report → 次の受診日にマッピング
-  var reportsByVisitDate = {};
-  (data.reports || []).forEach(function(r) {
-    var rd = r.submittedAt ? r.submittedAt.slice(0, 10) : null;
-    if (!rd) return;
-    var targetDate = null;
-    for (var i = 0; i < visitDates.length; i++) {
-      if (visitDates[i] >= rd) { targetDate = visitDates[i]; break; }
-    }
-    if (!targetDate) return; // 対応する受診日なし
-    if (!reportsByVisitDate[targetDate]) reportsByVisitDate[targetDate] = [];
-    reportsByVisitDate[targetDate].push(r);
-  });
+  // VisitHistory を visitDate → visit オブジェクトのマップに
+  var visitMap = {};
+  (data.visits || []).forEach(function(v) { visitMap[v.visitDate] = v; });
 
   // assessment → visitDate にマッピング（assessedAt最新で上書き、ただしlesionMapJsonは引き継ぐ）
   var assessByVisitDate = {};
@@ -826,29 +853,70 @@ function renderTimeline(data) {
     if (!existing) {
       assessByVisitDate[vd] = a;
     } else {
-      // assessedAtが新しい方を採用。ただし新しい方に画像がなく古い方にある場合は古い画像を引き継ぐ
       var aTime = a.assessedAt ? new Date(a.assessedAt).getTime() : 0;
       var existingTime = existing.assessedAt ? new Date(existing.assessedAt).getTime() : 0;
       if (aTime > existingTime) {
         var merged = {};
         for (var key in a) merged[key] = a[key];
-        if (!merged.lesionMapJson && existing.lesionMapJson) {
-          merged.lesionMapJson = existing.lesionMapJson;
-        }
+        if (!merged.lesionMapJson && existing.lesionMapJson) merged.lesionMapJson = existing.lesionMapJson;
         assessByVisitDate[vd] = merged;
       } else if (!existing.lesionMapJson && a.lesionMapJson) {
-        // 古い方に画像がなく新しい方にある場合は画像だけ引き継ぐ
         existing.lesionMapJson = a.lesionMapJson;
       }
     }
   });
 
-  var html = visits.map(function(v) {
-    return buildVisitCard(
-      v,
-      reportsByVisitDate[v.visitDate] || [],
-      assessByVisitDate[v.visitDate]   || null
-    );
+  // 全日付の union（VisitHistory + assessments の visitDate）
+  var allDateSet = {};
+  Object.keys(visitMap).forEach(function(d) { allDateSet[d] = true; });
+  Object.keys(assessByVisitDate).forEach(function(d) { allDateSet[d] = true; });
+
+  // report → 次の受診日にマッピング。対応する受診日がない場合は submittedAt 自身の日付を使う
+  var allVisitDates = Object.keys(allDateSet).sort(); // 昇順
+  var reportsByDate = {};
+  (data.reports || []).forEach(function(r) {
+    var rd = r.submittedAt ? r.submittedAt.slice(0, 10) : null;
+    if (!rd) return;
+    var targetDate = null;
+    for (var i = 0; i < allVisitDates.length; i++) {
+      if (allVisitDates[i] >= rd) { targetDate = allVisitDates[i]; break; }
+    }
+    if (!targetDate) {
+      // 対応する受診日なし → submittedAt 日付そのものをタイムラインに追加
+      targetDate = rd;
+      allDateSet[rd] = true;
+    }
+    if (!reportsByDate[targetDate]) reportsByDate[targetDate] = [];
+    reportsByDate[targetDate].push(r);
+  });
+
+  // 降順ソート済みの日付一覧
+  var allDates = Object.keys(allDateSet).sort().reverse();
+
+  // 日付範囲フィルター
+  if (timelineFilterDays > 0) {
+    var cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - timelineFilterDays);
+    var cutoffStr = cutoff.toISOString().slice(0, 10);
+    allDates = allDates.filter(function(d) { return d >= cutoffStr; });
+  }
+
+  // フィルターバー表示（データが1件以上あるとき）
+  var hasAnyData = (data.visits || []).length > 0 || (data.reports || []).length > 0 || (data.assessments || []).length > 0;
+  document.getElementById('timeline-filter-bar').style.display = hasAnyData ? 'flex' : 'none';
+
+  document.getElementById('timeline-header').textContent =
+    '受診タイムライン（' + allDates.length + '件）';
+
+  if (allDates.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text2);font-size:14px;">' +
+      (hasAnyData ? 'この期間の記録がありません' : '処方履歴がありません') + '</div>';
+    return;
+  }
+
+  var html = allDates.map(function(d) {
+    var visit = visitMap[d] || { visitDate: d, nextVisitDate: null, drugsJson: [], rxSummaryText: '', prescriptionImageBase64: '' };
+    return buildVisitCard(visit, reportsByDate[d] || [], assessByVisitDate[d] || null);
   }).join('');
 
   container.innerHTML = html;
