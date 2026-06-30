@@ -863,7 +863,6 @@ function getPatientChartData_(patientNo) {
     const row    = prData[i];
     if (String(row[1]).trim() !== pno) continue;
     const status = String(row[12] || 'pending');
-    if (status !== 'reviewed' && status !== 'assessed') continue;
     let infectionSigns = [], poemScores = {}, medicationRemain = [], triggers = [], topicalUse = [];
     try { infectionSigns   = row[5]  ? JSON.parse(row[5])  : []; } catch(e) {}
     try { poemScores       = row[7]  ? JSON.parse(row[7])  : {}; } catch(e) {}
