@@ -803,14 +803,14 @@ function buildReportCard(r, type) {
             ${nrs !== null && nrs !== undefined ? `<span class="symptom-score-chip" style="background:${nrsColor.split(';')[0].split(':')[1]};color:${nrsColor.split(';')[1].split(':')[1]};">NRS：${esc(String(nrs))}/10（${nrsSeverity}）</span>` : ''}
             <span class="symptom-score-chip" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">POEM：${poemTotal}/28（${esc(poemSeverity)}）</span>
             ${r.hasCurrentRx ? `<span class="assessed-badge" style="background:#e8f5e9;color:#2e7d32;border-color:#a5d6a7;">✓ 処方入力済み</span>` : ''}
-            ${r.lastAssessment ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）</span>${easiImpBadgesHtml}${easiRateHtml}` : ''}
+            ${r.lastAssessment ? `<span class="assessed-badge">✓ EASI ${r.lastAssessment.easiTotal}（${esc(r.lastAssessment.easiSeverity)}）<span style="font-size:11px;opacity:0.7;margin-left:4px;">${esc(String(r.lastAssessment.visitDate || '').slice(0,10))}</span></span>${easiImpBadgesHtml}${easiRateHtml}` : ''}
             ${r.lastAssessment && r.lastAssessment.iga != null && r.lastAssessment.iga !== ''
-              ? `<span class="assessed-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9;">IGA ${r.lastAssessment.iga}</span>`
+              ? `<span class="assessed-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9;">IGA ${r.lastAssessment.iga}<span style="font-size:11px;opacity:0.7;margin-left:4px;">${esc(String(r.lastAssessment.visitDate || '').slice(0,10))}</span></span>`
               : ''}
             ${r.lastAssessment && r.lastAssessment.lesionMapJson && (r.lastAssessment.lesionMapJson.startsWith('https://') || r.lastAssessment.lesionMapJson.startsWith('data:image/'))
-              ? `<img src="${esc(r.lastAssessment.lesionMapJson)}" alt="病変マップ" title="病変マップ"
-                   style="height:36px;border-radius:4px;border:1px solid var(--border);vertical-align:middle;cursor:pointer;"
-                   onclick="this.style.height=this.style.height==='36px\'?\'auto\':\'36px\'">`
+              ? `<div style="display:inline-block;vertical-align:middle;text-align:center;margin-left:4px;"><img src="${esc(r.lastAssessment.lesionMapJson)}" alt="病変マップ" title="病変マップ"
+                   style="height:36px;border-radius:4px;border:1px solid var(--border);display:block;cursor:pointer;"
+                   onclick="this.style.height=this.style.height==='36px\'?\'auto\':\'36px\'"><span style="font-size:10px;color:var(--text2);">${esc(String(r.lastAssessment.visitDate || '').slice(0,10))}</span></div>`
               : ''}
           </div>
         </div>
