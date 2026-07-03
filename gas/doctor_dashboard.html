@@ -807,11 +807,14 @@ function buildReportCard(r, type) {
             ${r.lastAssessment && r.lastAssessment.iga != null && r.lastAssessment.iga !== ''
               ? `<span class="assessed-badge" style="background:#e3f2fd;color:#1565c0;border-color:#90caf9;">IGA ${r.lastAssessment.iga}<span style="font-size:11px;opacity:0.7;margin-left:4px;">${esc(String(r.lastAssessment.visitDate || '').slice(0,10))}</span></span>`
               : ''}
-            ${r.lastAssessment && r.lastAssessment.lesionMapJson && (r.lastAssessment.lesionMapJson.startsWith('https://') || r.lastAssessment.lesionMapJson.startsWith('data:image/'))
-              ? `<div style="display:inline-block;vertical-align:middle;text-align:center;margin-left:4px;"><img src="${esc(r.lastAssessment.lesionMapJson)}" alt="病変マップ" title="病変マップ"
-                   style="height:36px;border-radius:4px;border:1px solid var(--border);display:block;cursor:pointer;"
-                   onclick="this.style.height=this.style.height==='36px\'?\'auto\':\'36px\'"><span style="font-size:10px;color:var(--text2);">${esc(String(r.lastAssessment.visitDate || '').slice(0,10))}</span></div>`
-              : ''}
+            ${(function() {
+                const imgA = r.lastImageAssessment || (r.lastAssessment && r.lastAssessment.lesionMapJson ? r.lastAssessment : null);
+                if (!imgA || !imgA.lesionMapJson) return '';
+                const src = imgA.lesionMapJson;
+                if (!src.startsWith('https://') && !src.startsWith('data:image/')) return '';
+                const imgDate = esc(String(imgA.visitDate || '').slice(0, 10));
+                return `<div style="display:inline-block;vertical-align:middle;text-align:center;margin-left:4px;"><img src="${esc(src)}" alt="病変マップ" title="病変マップ" style="height:36px;border-radius:4px;border:1px solid var(--border);display:block;cursor:pointer;" onclick="this.style.height=this.style.height==='36px'?'auto':'36px'"><span style="font-size:10px;color:var(--text2);">${imgDate}</span></div>`;
+              })()
           </div>
         </div>
       </div>
@@ -1038,6 +1041,18 @@ function updateEasiDisplay(reportId) {
 function saveAssessment(reportId, patientNo) {
   const state = easiState[reportId];
   if (!state) { showToast('評価データが見つかりません'); return; }
+
+  // 新規作成時: ボタン未操作かつ全スコア0の場合は保存しない（誤保存防止）
+  if (!state.assessmentId && !state.igaTouched && !state.easiTouched) {
+    const hasScore = ['head','trunk','upperLimb','lowerLimb'].some(function(p) {
+      const pt = state[p] || {};
+      return (pt.E||0)+(pt.I||0)+(pt.Ex||0)+(pt.L||0)+(pt.A||0) > 0;
+    });
+    if (!hasScore && (state.iga || 0) === 0) {
+      showToast('EASIまたはIGAスコアを入力してから保存してください');
+      return;
+    }
+  }
 
   // 既存評価を上書きする場合は確認ダイアログ
   if (state.assessmentId) {

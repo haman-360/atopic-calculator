@@ -607,9 +607,10 @@ function getDashboardData(reviewedDays) {
     vhByPatient[pno].sort(function(a, b) { return b.visitDate.localeCompare(a.visitDate); });
   }
 
-  // ClinicalAssessments から最新評価・ベースライン評価をマップ化
+  // ClinicalAssessments から最新評価・ベースライン評価・最新画像評価をマップ化
   const assessmentMap = {};
   const baselineMap = {};
+  const lastImageAssessmentMap = {}; // lesionMapJsonが存在する最新評価
   try {
     const caSheet = getSheet_('ClinicalAssessments');
     if (caSheet) {
@@ -630,6 +631,16 @@ function getDashboardData(reviewedDays) {
           const baseObj = assessmentRowToObj_(caData[i]);
           baseObj._assessedAtMs = assessedAtMs;
           baselineMap[pno] = baseObj;
+        }
+        // lesionMapJsonが存在する最新評価を追跡（画像日付の正確な表示のため）
+        const img = String(caData[i][11] || '');
+        if (img && (img.startsWith('https://') || img.startsWith('data:image/'))) {
+          const iprev = lastImageAssessmentMap[pno];
+          if (!iprev || assessedAtMs > (iprev._assessedAtMs || 0)) {
+            const imgObj = assessmentRowToObj_(caData[i]);
+            imgObj._assessedAtMs = assessedAtMs;
+            lastImageAssessmentMap[pno] = imgObj;
+          }
         }
       }
     }
@@ -692,6 +703,7 @@ function getDashboardData(reviewedDays) {
         })(),
         lastAssessment: assessmentMap[pno] || assessmentMap[pno.replace(/^0+/, '')] || null,
         baselineAssessment: baselineMap[pno] || baselineMap[pno.replace(/^0+/, '')] || null,
+        lastImageAssessment: lastImageAssessmentMap[pno] || lastImageAssessmentMap[pno.replace(/^0+/, '')] || null,
         rowIndex: i + 1
       };
       if (entry.status === 'pending') {
@@ -1410,19 +1422,8 @@ function saveAssessment_(data) {
   }
 
   // ===== 新規 APPEND =====
-  // 画像未送信の場合、同患者の直前評価から画像を引き継ぐ
-  let inheritedLesionMap = lesionMapUrl;
-  if (!inheritedLesionMap) {
-    const rows = sheet.getDataRange().getValues();
-    let latestMs = 0;
-    for (let i = 1; i < rows.length; i++) {
-      if (String(rows[i][1]) !== String(data.patientNo)) continue;
-      const img = String(rows[i][11] || '');
-      if (!img.startsWith('data:image/')) continue;
-      const ms = rows[i][3] ? new Date(rows[i][3]).getTime() : 0;
-      if (ms > latestMs) { latestMs = ms; inheritedLesionMap = img; }
-    }
-  }
+  // 画像は引き継がない（日付ズレ防止のため）。実際に送信された画像のみ保存する
+  const inheritedLesionMap = lesionMapUrl;
   const assessmentId = Utilities.getUuid();
   sheet.appendRow([
     assessmentId,                          // [0]  assessmentId
