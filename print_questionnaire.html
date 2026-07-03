@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>来院前アンケート（印刷用）— はまこどもクリニック</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif;
+      font-size: 13px;
+      color: #222;
+      background: #fff;
+      padding: 16px 20px;
+    }
+    h1 {
+      font-size: 17px;
+      text-align: center;
+      margin-bottom: 2px;
+    }
+    .subtitle {
+      text-align: center;
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 14px;
+    }
+    .patient-info {
+      border: 1.5px solid #333;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .patient-info .field {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .patient-info .field label {
+      font-weight: 700;
+      white-space: nowrap;
+      font-size: 12px;
+    }
+    .patient-info .field .line {
+      border-bottom: 1px solid #333;
+      min-width: 120px;
+      height: 20px;
+    }
+    .patient-info .field .line-wide { min-width: 160px; }
+
+    section {
+      margin-bottom: 14px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .sec-title {
+      background: #f0f0f0;
+      font-weight: 700;
+      font-size: 13px;
+      padding: 6px 12px;
+      border-bottom: 1px solid #ccc;
+    }
+    .sec-body {
+      padding: 10px 12px;
+    }
+
+    /* 選択肢ボタン風 */
+    .choice-row {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .choice {
+      border: 1.5px solid #555;
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 12px;
+      min-width: 52px;
+      text-align: center;
+    }
+
+    /* チェックボックス */
+    .check-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .check-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+    }
+    .checkbox {
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid #444;
+      border-radius: 3px;
+      flex-shrink: 0;
+      display: inline-block;
+    }
+
+    /* POEMテーブル */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11.5px;
+    }
+    th, td {
+      border: 1px solid #bbb;
+      padding: 5px 7px;
+      text-align: center;
+    }
+    th { background: #e8e8e8; font-weight: 700; }
+    td:first-child { text-align: left; }
+
+    /* NRSスケール */
+    .nrs-scale {
+      display: flex;
+      gap: 0;
+      border: 1.5px solid #555;
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 6px 0;
+    }
+    .nrs-cell {
+      flex: 1;
+      text-align: center;
+      padding: 6px 0;
+      border-right: 1px solid #bbb;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .nrs-cell:last-child { border-right: none; }
+    .nrs-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: #555;
+    }
+
+    /* 薬残量テーブル */
+    .med-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .med-table th, .med-table td {
+      border: 1px solid #bbb;
+      padding: 5px 8px;
+    }
+    .med-table th { background: #e8e8e8; }
+
+    /* 自由記述 */
+    .write-area {
+      border: 1px solid #bbb;
+      border-radius: 4px;
+      min-height: 40px;
+      margin-top: 6px;
+    }
+
+    .note-small {
+      font-size: 10.5px;
+      color: #666;
+      margin-bottom: 6px;
+      line-height: 1.5;
+    }
+
+    /* 2カラムレイアウト（感染徴候・悪化因子） */
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 16px;
+    }
+
+    @media print {
+      body { padding: 8px 12px; }
+      section { page-break-inside: avoid; }
+    }
+  </style>
+</head>
+<body>
+
+<h1>🌿 はまこどもクリニック　来院前アンケート</h1>
+<div class="subtitle">記入後、受付にお渡しください</div>
+
+<!-- 患者情報 -->
+<div class="patient-info">
+  <div class="field">
+    <label>受診日</label>
+    <div class="line line-wide"></div>
+  </div>
+  <div class="field">
+    <label>診察券番号</label>
+    <div class="line"></div>
+  </div>
+  <div class="field">
+    <label>お名前</label>
+    <div class="line line-wide"></div>
+  </div>
+</div>
+
+<!-- 1. 全体的な症状 -->
+<section>
+  <div class="sec-title">🩺 1. 全体的な症状（今日の状態）</div>
+  <div class="sec-body">
+    <div class="note-small">当てはまるものを1つ選んで○を付けてください</div>
+    <div class="choice-row">
+      <div class="choice">0: なし</div>
+      <div class="choice">1: 軽度</div>
+      <div class="choice">2: 中等度</div>
+      <div class="choice">3: 高度</div>
+      <div class="choice">4: 最重度</div>
+    </div>
+    <div style="margin-top:8px;font-size:12px;">気になること・症状の詳細（任意）：</div>
+    <div class="write-area"></div>
+  </div>
+</section>
+
+<!-- 2. かゆみNRS -->
+<section>
+  <div class="sec-title">🌡 2. かゆみの強さ（今日）</div>
+  <div class="sec-body">
+    <div class="note-small">0＝全くかゆくない　〜　10＝これ以上ないくらいかゆい。当てはまる数字に○を付けてください</div>
+    <div class="nrs-scale">
+      <div class="nrs-cell">0</div>
+      <div class="nrs-cell">1</div>
+      <div class="nrs-cell">2</div>
+      <div class="nrs-cell">3</div>
+      <div class="nrs-cell">4</div>
+      <div class="nrs-cell">5</div>
+      <div class="nrs-cell">6</div>
+      <div class="nrs-cell">7</div>
+      <div class="nrs-cell">8</div>
+      <div class="nrs-cell">9</div>
+      <div class="nrs-cell">10</div>
+    </div>
+    <div class="nrs-labels">
+      <span>なし</span>
+      <span>中程度</span>
+      <span>最強</span>
+    </div>
+  </div>
+</section>
+
+<!-- 3. 感染徴候 -->
+<section>
+  <div class="sec-title">🔍 3. 皮膚の感染徴候（過去1週間）</div>
+  <div class="sec-body">
+    <div class="note-small">当てはまるものをすべて選んでください。なければ空欄のままで大丈夫です。</div>
+    <div class="two-col">
+      <div class="check-item"><div class="checkbox"></div>とびひのような症状（かさぶた・膿）</div>
+      <div class="check-item"><div class="checkbox"></div>黄色いかさぶた</div>
+      <div class="check-item"><div class="checkbox"></div>じゅくじゅく（浸出液が出ている）</div>
+      <div class="check-item"><div class="checkbox"></div>痛み・熱感がある</div>
+    </div>
+  </div>
+</section>
+
+<!-- 4. 薬の残量 -->
+<section>
+  <div class="sec-title">💊 4. 薬の残量確認</div>
+  <div class="sec-body">
+    <div class="note-small">前回処方された薬ごとに○を付けてください</div>
+    <table class="med-table">
+      <thead>
+        <tr>
+          <th style="width:34%;">薬の名前</th>
+          <th>❌ なし</th>
+          <th>🟠 ほとんどない</th>
+          <th>🟡 少し残ってる</th>
+          <th>💊 たくさん残ってる</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 5. POEMスコア -->
+<section>
+  <div class="sec-title">📋 5. POEMスコア（過去1週間）</div>
+  <div class="sec-body">
+    <div class="note-small">過去1週間の状態を思い出しながら、それぞれの項目について当てはまる日数に○を付けてください</div>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:46%; text-align:left;">質問</th>
+          <th>なし<br><span style="font-weight:400;">(0日)</span></th>
+          <th>1〜2日</th>
+          <th>3〜4日</th>
+          <th>5〜6日</th>
+          <th>毎日</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>かゆみがありましたか？</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>かゆみで眠れない夜がありましたか？</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>皮膚から出血がありましたか？</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>皮膚からじゅくじゅく（液）が出ていましたか？</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>皮膚にひびが入っていましたか？</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>皮膚がむけていましたか？</td><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><td>皮膚が乾燥してあれていましたか？</td><td></td><td></td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- 6. 悪化因子 -->
+<section>
+  <div class="sec-title">🌡️ 6. 悪化因子（過去1週間）</div>
+  <div class="sec-body">
+    <div class="note-small">この1週間で症状が悪化したと思う原因は？（なければスキップ）</div>
+    <div class="two-col">
+      <div class="check-item"><div class="checkbox"></div>汗</div>
+      <div class="check-item"><div class="checkbox"></div>乾燥・空気の乾き</div>
+      <div class="check-item"><div class="checkbox"></div>花粉・ほこり</div>
+      <div class="check-item"><div class="checkbox"></div>プール</div>
+      <div class="check-item"><div class="checkbox"></div>衣類・繊維</div>
+      <div class="check-item"><div class="checkbox"></div>食べ物</div>
+      <div class="check-item"><div class="checkbox"></div>ストレス・疲れ</div>
+      <div class="check-item"><div class="checkbox"></div>その他：<div class="line" style="border-bottom:1px solid #333;min-width:80px;height:16px;display:inline-block;margin-left:4px;"></div></div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
