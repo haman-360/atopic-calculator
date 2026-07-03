@@ -1094,12 +1094,15 @@
     // FTU値: 大塚製薬モイゼルト資料（1FTU=0.35g）に準拠
     // arm = 片腕（腕＆手）統合、leg = 片足（大腿〜足）統合
     const FTU_AGE = {
-      adult:   { face: 2.5, arm: 4.0, trunk_f: 7.0, trunk_b: 7.0, leg: 8.0, elbow: 0.5, knee: 0.5 },
-      child10: { face: 2.0, arm: 2.5, trunk_f: 3.5, trunk_b: 5.0, leg: 4.5, elbow: 0.5, knee: 0.5 },
-      child3:  { face: 1.5, arm: 2.0, trunk_f: 3.0, trunk_b: 3.5, leg: 3.0, elbow: 0.5, knee: 0.5 },
-      child1:  { face: 1.5, arm: 1.5, trunk_f: 2.0, trunk_b: 3.0, leg: 2.0, elbow: 0.5, knee: 0.5 },
-      infant:  { face: 1.0, arm: 1.0, trunk_f: 1.0, trunk_b: 1.5, leg: 1.5, elbow: 0.5, knee: 0.5 },
+      adult:   { face: 2.5, arm: 4.0, trunk_f: 7.0, trunk_b: 7.0, leg: 8.0, elbow: 0.5, wrist: 0.5, knee: 0.5, ankle: 0.5 },
+      child10: { face: 2.0, arm: 2.5, trunk_f: 3.5, trunk_b: 5.0, leg: 4.5, elbow: 0.5, wrist: 0.5, knee: 0.5, ankle: 0.5 },
+      child3:  { face: 1.5, arm: 2.0, trunk_f: 3.0, trunk_b: 3.5, leg: 3.0, elbow: 0.5, wrist: 0.5, knee: 0.5, ankle: 0.5 },
+      child1:  { face: 1.5, arm: 1.5, trunk_f: 2.0, trunk_b: 3.0, leg: 2.0, elbow: 0.5, wrist: 0.5, knee: 0.5, ankle: 0.5 },
+      infant:  { face: 1.0, arm: 1.0, trunk_f: 1.0, trunk_b: 1.5, leg: 1.5, elbow: 0.5, wrist: 0.5, knee: 0.5, ankle: 0.5 },
     };
+
+    // 全身ボタンで選択する部位（関節部位は含めない）
+    const WHOLE_BODY_KEYS = new Set(['face', 'trunk_f', 'trunk_b', 'arm', 'leg']);
 
     const PARTS = [
       { key: "face",    label: "顔・首",          bilateral: false },
@@ -1107,8 +1110,10 @@
       { key: "trunk_b", label: "体幹後面",         bilateral: false },
       { key: "arm",     label: "片腕（腕＆手）",   bilateral: true  },
       { key: "elbow",   label: "肘関節",           bilateral: true  },
+      { key: "wrist",   label: "手関節",           bilateral: true  },
       { key: "leg",     label: "片足（大腿〜足）", bilateral: true  },
       { key: "knee",    label: "膝関節",           bilateral: true  },
+      { key: "ankle",   label: "足関節",           bilateral: true  },
     ];
 
     // カスタム部位管理
@@ -1451,13 +1456,10 @@
         `<button class="drug-pick-btn" onclick="addDrug(${pi})">${p.short || p.name}</button>`
       ).join('');
       el.innerHTML = `
-        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">よく使う（タップで追加）</div>
-        <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
-          <button class="quick-preset-btn" onclick="addDrugWithFreq(6,0)">ロコ/ヘパ<br><span style="font-size:12px;font-weight:400;">1日2回</span></button>
-          <button class="quick-preset-btn" onclick="addDrugWithFreq(7,0)">リン/ヘパ<br><span style="font-size:12px;font-weight:400;">1日2回</span></button>
+        <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;background:var(--surface);">
+          <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">薬を追加</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">${drugBtns}</div>
         </div>
-        <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px;">薬を個別に追加</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">${drugBtns}</div>
       `;
     }
 
@@ -1519,7 +1521,18 @@
       drugs[i].parts[key].customFTU = null;
       renderDrugs(); calc();
     }
-    function setAllParts(i, checked) { getAllParts().forEach(p => { drugs[i].parts[p.key].checked = checked; }); renderDrugs(); calc(); }
+    function setAllParts(i, checked) {
+      getAllParts().forEach(p => {
+        // 全身ボタン（checked=true）では関節部位（肘・手・膝・足関節）はチェックしない
+        // 片腕・片足に含まれるため
+        if (checked && !WHOLE_BODY_KEYS.has(p.key) && !p.isCustom) {
+          drugs[i].parts[p.key].checked = false;
+        } else {
+          drugs[i].parts[p.key].checked = checked;
+        }
+      });
+      renderDrugs(); calc();
+    }
     function addDrug(pi = 0) { drugs.push(newDrug(pi)); renderDrugs(); calc(); }
     function addDrugWithFreq(pi, fi) {
       const d = newDrug(pi);
@@ -4558,13 +4571,21 @@
     const DOW_JA = ['日','月','火','水','木','金','土'];
 
     // 標準部位のみのGantt表示用（カスタム部位は別行なので含めない）
+    // 全身かどうか判定（関節部位は除く）
+    function isWholeBody(p) {
+      return ['trunk_f','trunk_b','arm','leg'].every(k => p[k]?.checked) && p.face?.checked;
+    }
+    function isWholeBodyNoFace(p) {
+      return ['trunk_f','trunk_b','arm','leg'].every(k => p[k]?.checked) && !p.face?.checked;
+    }
+
     // 標準部位が1つもチェックされていなければ null を返す
     function formatStdPartsForGantt(d) {
       const p = d.parts;
       const stdChecked = PARTS.filter(pt => p[pt.key]?.checked);
       if (stdChecked.length === 0) return null;
-      if (stdChecked.length === PARTS.length) return '全身';
-      if (!p.face?.checked && stdChecked.length === PARTS.length - 1) return '全身<br>（顔なし）';
+      if (isWholeBody(p)) return '全身';
+      if (isWholeBodyNoFace(p)) return '全身<br>（顔なし）';
       const parts = [];
       if (p.face?.checked) parts.push('顔・首');
       if (p.trunk_f?.checked && p.trunk_b?.checked) parts.push('体幹（前後）');
@@ -4572,8 +4593,10 @@
       else if (p.trunk_b?.checked) parts.push('体幹後面');
       if (p.arm?.checked)   parts.push(p.arm.sides   === 2 ? '両腕'         : '片腕');
       if (p.elbow?.checked) parts.push(p.elbow.sides === 2 ? '肘関節（両）' : '肘関節（片）');
+      if (p.wrist?.checked) parts.push(p.wrist.sides === 2 ? '手関節（両）' : '手関節（片）');
       if (p.leg?.checked)   parts.push(p.leg.sides   === 2 ? '両足'         : '片足');
       if (p.knee?.checked)  parts.push(p.knee.sides  === 2 ? '膝関節（両）' : '膝関節（片）');
+      if (p.ankle?.checked) parts.push(p.ankle.sides === 2 ? '足関節（両）' : '足関節（片）');
       return parts.join('<br>');
     }
 
@@ -4583,8 +4606,8 @@
       const customCheckedCount = customParts.filter(cp => p[cp.key]?.checked).length;
       const checkedCount = stdCheckedCount + customCheckedCount;
       if (checkedCount === 0) return '—';
-      if (stdCheckedCount === PARTS.length && customCheckedCount === 0) return '全身';
-      if (!p.face?.checked && stdCheckedCount === PARTS.length - 1 && customCheckedCount === 0) return '全身<br>（顔なし）';
+      if (isWholeBody(p) && customCheckedCount === 0) return '全身';
+      if (isWholeBodyNoFace(p) && customCheckedCount === 0) return '全身<br>（顔なし）';
       const parts = [];
       if (p.face?.checked) parts.push('顔・首');
       if (p.trunk_f?.checked && p.trunk_b?.checked) parts.push('体幹（前後）');
@@ -4592,8 +4615,10 @@
       else if (p.trunk_b?.checked) parts.push('体幹後面');
       if (p.arm?.checked)   parts.push(p.arm.sides   === 2 ? '両腕'         : '片腕');
       if (p.elbow?.checked) parts.push(p.elbow.sides === 2 ? '肘関節（両）' : '肘関節（片）');
+      if (p.wrist?.checked) parts.push(p.wrist.sides === 2 ? '手関節（両）' : '手関節（片）');
       if (p.leg?.checked)   parts.push(p.leg.sides   === 2 ? '両足'         : '片足');
       if (p.knee?.checked)  parts.push(p.knee.sides  === 2 ? '膝関節（両）' : '膝関節（片）');
+      if (p.ankle?.checked) parts.push(p.ankle.sides === 2 ? '足関節（両）' : '足関節（片）');
       customParts.forEach(cp => {
         if (p[cp.key]?.checked) {
           const s = cp.bilateral ? (p[cp.key].sides === 2 ? '（両側）' : '（片側）') : '';
@@ -5192,12 +5217,16 @@ ${area.innerHTML}
       { pattern: /体幹/,           parts: [{key:'trunk_f',sides:1},{key:'trunk_b',sides:1}] },
       { pattern: /片腕|右腕|左腕/,  parts: [{key:'arm',sides:1}] },
       { pattern: /両腕|両手|両上肢|腕|手足/,  parts: [{key:'arm',sides:2}] },
-      { pattern: /片肘|右肘|左肘/,  parts: [{key:'elbow',sides:1}] },
-      { pattern: /両肘|肘/,          parts: [{key:'elbow',sides:2}] },
+      { pattern: /片肘|右肘|左肘/,    parts: [{key:'elbow',sides:1}] },
+      { pattern: /両肘|肘/,           parts: [{key:'elbow',sides:2}] },
+      { pattern: /片手首|右手首|左手首/, parts: [{key:'wrist',sides:1}] },
+      { pattern: /両手首|手首/,       parts: [{key:'wrist',sides:2}] },
       { pattern: /片足|右足|左足|片脚|右脚|左脚/, parts: [{key:'leg',sides:1}] },
       { pattern: /両足|両脚|両下肢|足(?!首)|脚/, parts: [{key:'leg',sides:2}] },
-      { pattern: /片膝|右膝|左膝/,  parts: [{key:'knee',sides:1}] },
-      { pattern: /両膝|膝/,          parts: [{key:'knee',sides:2}] },
+      { pattern: /片膝|右膝|左膝/,    parts: [{key:'knee',sides:1}] },
+      { pattern: /両膝|膝/,           parts: [{key:'knee',sides:2}] },
+      { pattern: /片足首|右足首|左足首/, parts: [{key:'ankle',sides:1}] },
+      { pattern: /両足首|足首/,       parts: [{key:'ankle',sides:2}] },
     ];
 
     function _voiceExtractDate(text) {
