@@ -1069,18 +1069,16 @@
 
   <script>
     const PRESETS = [
-      // 0: 1FTU=0.35g: モイゼルト（大塚製薬資料より）
-      { name: "モイゼルト軟膏",              short: "モイゼルト",     tubeg: 28, gPerFTU: 0.35, custom: false },
-      // 1: 1FTU=0.5g: コレクチム10g（鳥居薬品資料より）
-      { name: "コレクチム軟膏",              short: "コレクチム",     tubeg: 10, gPerFTU: 0.5,  custom: false },
-      // 2〜5: ステロイド（1FTU=0.3g）
+      // 0〜5: ステロイド（1FTU=0.3g）＋混合軟膏
       { name: "ロコイド軟膏",                short: "ロコイド",       tubeg: 10, gPerFTU: 0.3,  custom: false },
-      { name: "リンデロンV軟膏",             short: "リンデロンV",    tubeg: 10, gPerFTU: 0.3,  custom: false },
-      { name: "リンデロンVクリーム",         short: "リンデロンVCr",  tubeg: 10, gPerFTU: 0.3,  custom: false },
+      { name: "リンデロン軟膏",              short: "リンデロン",     tubeg: 10, gPerFTU: 0.3,  custom: false },
+      { name: "リンデロンクリーム",          short: "リンデロンCr",   tubeg: 10, gPerFTU: 0.3,  custom: false },
       { name: "アンテベート軟膏",            short: "アンテベート",   tubeg: 10, gPerFTU: 0.3,  custom: false },
-      // 6〜7: 混合軟膏
       { name: "ロコイド/ヘパリン混合軟膏",   short: "ロコ/ヘパ",     tubeg: 10, gPerFTU: 0.5,  custom: false, mixed: true },
       { name: "リンデロン/ヘパリン混合軟膏", short: "リン/ヘパ",     tubeg: 10, gPerFTU: 0.5,  custom: false, mixed: true },
+      // 6〜7: 非ステロイド
+      { name: "モイゼルト軟膏",              short: "モイゼルト",     tubeg: 28, gPerFTU: 0.35, custom: false },
+      { name: "コレクチム軟膏",              short: "コレクチム",     tubeg: 10, gPerFTU: 0.5,  custom: false },
       // 8: 保湿剤
       { name: "ブイタマークリーム",          short: "ブイタマー",     tubeg: 15, gPerFTU: 0.5,  custom: false },
       // 9: 手入力
@@ -1452,13 +1450,19 @@
     function renderAddDrugPanel() {
       const el = document.getElementById('drug-add-panel');
       if (!el) return;
-      const drugBtns = PRESETS.map((p, pi) =>
+      const steroidBtns = PRESETS.slice(0, 6).map((p, pi) =>
         `<button class="drug-pick-btn" onclick="addDrug(${pi})">${p.short || p.name}</button>`
+      ).join('');
+      const nonSteroidBtns = PRESETS.slice(6).map((p, pi) =>
+        `<button class="drug-pick-btn" onclick="addDrug(${pi + 6})">${p.short || p.name}</button>`
       ).join('');
       el.innerHTML = `
         <div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;background:var(--surface);">
           <div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">薬を追加</div>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;">${drugBtns}</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">ステロイド</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">${steroidBtns}</div>
+          <div style="font-size:11px;color:var(--text3);margin-bottom:4px;">非ステロイド</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">${nonSteroidBtns}</div>
         </div>
       `;
     }
@@ -5188,14 +5192,14 @@ ${area.innerHTML}
 
     // ルールベース解析テーブル（PRESETS のインデックスに対応）
     const VOICE_DRUG_MAP = [
-      { pattern: /ロコイド.{0,5}混合|混合.{0,5}ロコイド/,       idx: 6 },  // ロコイド/ヘパリン混合軟膏
-      { pattern: /リンデロン.{0,5}混合|混合.{0,5}リンデロン/,   idx: 7 },  // リンデロン/ヘパリン混合軟膏
-      { pattern: /モイゼルト/,  idx: 0 },
-      { pattern: /コレクチム/,  idx: 1 },
-      { pattern: /ロコイド/,    idx: 2 },
-      { pattern: /リンデロン.{0,3}[Vｖ].{0,3}クリーム/, idx: 4 },  // リンデロンVクリーム
-      { pattern: /リンデロン/,  idx: 3 },  // リンデロンV軟膏
-      { pattern: /アンテベート/, idx: 5 },
+      { pattern: /ロコイド.{0,5}混合|混合.{0,5}ロコイド/,       idx: 4 },  // ロコイド/ヘパリン混合軟膏
+      { pattern: /リンデロン.{0,5}混合|混合.{0,5}リンデロン/,   idx: 5 },  // リンデロン/ヘパリン混合軟膏
+      { pattern: /モイゼルト/,  idx: 6 },
+      { pattern: /コレクチム/,  idx: 7 },
+      { pattern: /ロコイド/,    idx: 0 },
+      { pattern: /リンデロン.{0,3}[Vｖ].{0,3}クリーム/, idx: 2 },  // リンデロンクリーム
+      { pattern: /リンデロン/,  idx: 1 },  // リンデロン軟膏
+      { pattern: /アンテベート/, idx: 3 },
       { pattern: /ブイタマー|VTM|ビタマー/, idx: 8 },
     ];
 
@@ -5435,7 +5439,7 @@ ${area.innerHTML}
         <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:4px;">認識テキスト（修正可）</label>
         <textarea id="voice-transcript" rows="5"
           style="width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid #ccc;border-radius:8px;font-size:14px;line-height:1.7;resize:vertical;"
-          placeholder="録音するか、ここにテキストを直接入力・貼り付けしてください。&#10;例: 再診は2週間後。両腕にリンデロンV軟膏を1日1回。両足にも1日1回。"></textarea>
+          placeholder="録音するか、ここにテキストを直接入力・貼り付けしてください。&#10;例: 再診は2週間後。両腕にリンデロン軟膏を1日1回。両足にも1日1回。"></textarea>
       </div>
 
       <!-- ヒント -->
@@ -5445,7 +5449,7 @@ ${area.innerHTML}
           <b>再診日:</b> 「再診は<u>2週間後</u>」「再診は<u>14日後</u>」<br>
           <b>部位:</b> 顔・首 ／ 両腕・片腕 ／ 体幹前（お腹） ／ 体幹後（背中） ／ 両足・片足 ／ 全身<br>
           <b>頻度:</b> 1日1回 ／ 1日2回 ／ 隔日 ／ 週2回 ／ 週1回<br>
-          <b>例文:</b>「両腕にリンデロンV軟膏を1日1回。両足にも1日1回。」<br>
+          <b>例文:</b>「両腕にリンデロン軟膏を1日1回。両足にも1日1回。」<br>
           「顔にモイゼルト軟膏を1日1回。背中にロコイド軟膏を1日2回。」
         </div>
       </details>
