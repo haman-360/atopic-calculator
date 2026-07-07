@@ -957,10 +957,14 @@
         </div>
         <div>
           <div id="patient-banner"
-               style="display:none;background:#e1f5ee;border:1px solid #1d9e75;border-radius:6px;padding:8px 12px;font-size:13px;margin-bottom:8px;justify-content:space-between;align-items:center;">
-            <span id="patient-banner-text" style="font-weight:700;color:#085041;"></span>
+               style="display:none;background:#e1f5ee;border:1px solid #1d9e75;border-radius:6px;padding:8px 12px;font-size:13px;margin-bottom:8px;justify-content:space-between;align-items:center;gap:8px;">
+            <span id="patient-banner-text" style="font-weight:700;color:#085041;flex:1;"></span>
+            <button id="prev-rx-btn" onclick="applyPrevRx()"
+                    style="display:none;background:#1d9e75;color:white;border:none;border-radius:5px;padding:5px 10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;">
+              📋 前回の塗り方を踏襲
+            </button>
             <button onclick="clearPatientBanner()"
-                    style="background:none;border:none;font-size:16px;cursor:pointer;color:#085041;padding:0 0 0 8px;line-height:1;">✕</button>
+                    style="background:none;border:none;font-size:16px;cursor:pointer;color:#085041;padding:0;line-height:1;">✕</button>
           </div>
           <label>年齢グループ</label>
           <select id="globalAge"
@@ -1206,6 +1210,9 @@
     }
     const drugs = [newDrug(0)];
     drugs[0].givenG = 28 * 1; drugs[0].remainG = 0;
+
+    // ダッシュボードから渡される前回処方データ
+    let prevRxData = null;
 
     // ===== 処方モード =====
     let calcMode = 'ftu'; // 'ftu'（計算モード） | 'direct'（直接入力モード）
@@ -4875,6 +4882,11 @@
       const ageGroupParam = params.get('ageGroup');
       const ageLabelParam = params.get('ageLabel');
       const nextVisitParam = params.get('nextVisit');
+      const prevRxParam = params.get('prevRx');
+
+      if (prevRxParam) {
+        try { prevRxData = JSON.parse(decodeURIComponent(prevRxParam)); } catch (_) {}
+      }
 
       if (!p) return;
 
@@ -4894,6 +4906,9 @@
         document.getElementById('patient-banner-text').textContent =
           `患者番号: ${p} / ${ageLabelParam || ageGroupParam}`;
         document.getElementById('patient-banner').style.display = 'flex';
+        if (prevRxData && prevRxData.length) {
+          document.getElementById('prev-rx-btn').style.display = 'inline-block';
+        }
         return;
       }
 
@@ -4920,6 +4935,59 @@
 
     function clearPatientBanner() {
       document.getElementById('patient-banner').style.display = 'none';
+    }
+
+    function applyPrevRx() {
+      if (!prevRxData || !prevRxData.length) return;
+      if (!confirm('前回の処方内容（塗る部位・頻度）を読み込みます。\n現在の入力内容は上書きされます。よろしいですか？')) return;
+
+      drugs.length = 0;
+
+      prevRxData.forEach(pd => {
+        // 薬剤プリセット検索（名前が一致するもの）
+        let pi = PRESETS.findIndex(p => p.name === pd.name);
+        if (pi < 0) pi = PRESETS.length - 1; // その他（手入力）
+
+        const d = newDrug(pi);
+        if (PRESETS[pi].custom) d.customName = pd.name;
+
+        // 部位設定: "片腕（腕＆手）（両側）" → label="片腕（腕＆手）", sides=2
+        (pd.partNames || []).forEach(pn => {
+          const sidesMatch = pn.match(/（(両側|片側)）$/);
+          const sides = sidesMatch ? (sidesMatch[1] === '片側' ? 1 : 2) : 2;
+          const base = pn.replace(/（(両側|片側)）$/, '');
+          const part = getAllParts().find(p => p.label === base);
+          if (part && d.parts[part.key]) {
+            d.parts[part.key].checked = true;
+            d.parts[part.key].sides = sides;
+          }
+        });
+
+        // 頻度設定: freqVal で最近接を探す
+        if (pd.freqVal !== undefined && pd.freqVal !== null) {
+          let bestIdx = 0, bestDiff = Infinity;
+          FREQS.forEach((f, fi) => {
+            const diff = Math.abs(f.val - pd.freqVal);
+            if (diff < bestDiff) { bestDiff = diff; bestIdx = fi; }
+          });
+          d.freqIdx = bestIdx;
+        }
+
+        // テーパリング設定（日付はクリアして頻度のみコピー）
+        if (pd.taper && pd.taperFreqLabel) {
+          d.taper = true;
+          d.taperDate = '';
+          const tfi = FREQS.findIndex(f => f.label === pd.taperFreqLabel);
+          if (tfi >= 0) d.taperFreqIdx = tfi;
+        }
+
+        drugs.push(d);
+      });
+
+      if (drugs.length === 0) drugs.push(newDrug(0));
+
+      renderDrugs(); calc();
+      showToast('✅ 前回の処方内容を読み込みました');
     }
 
     async function generatePatientFormQR() {
