@@ -1198,9 +1198,7 @@
         preset: pi, tubeg: PRESETS[pi].tubeg, customName: "",
         givenG: PRESETS[pi].tubeg * 4, remainG: 0, freqIdx: 0, parts,
         // 漸減設定
-        taper: false,       // 漸減モードON/OFF
-        taperDate: "",      // 切り替え日
-        taperFreqIdx: 1,    // 後半の頻度インデックス（デフォルト1日1回）
+        tapers: [],         // 多段漸減ステップ配列: [{ date: "", freqIdx: 1 }, ...]
         // 混合軟膏プラン選択
         mixedPlanIdx: 0,    // 選択中のプランインデックス
         // 直接入力モード用
@@ -1422,32 +1420,44 @@
       </div>
       <div class="part-grid">${partsHtml}</div>
       <div style="margin-top:10px;">
-        <label>塗布頻度${d.taper ? '（前半）' : ''}</label>
+        <label>塗布頻度${d.tapers.length > 0 ? '（第1段階）' : ''}</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">${freqPills}</div>
       </div>
-      <div style="margin-top:10px;padding:10px 12px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);">
-        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-bottom:0;">
-          <input type="checkbox" style="width:15px;height:15px;accent-color:var(--amber);"
-            ${d.taper ? 'checked' : ''}
-            onchange="drugs[${i}].taper=this.checked;renderDrugs();calc()">
-          <span style="font-size:13px;font-weight:600;color:var(--amber-text);">途中で頻度を減らす（2段階漸減）</span>
-        </label>
-        ${d.taper ? `<div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-          <div>
-            <label>切り替え日</label>
-            <input type="date" value="${d.taperDate}" min="${document.getElementById('todayDate')?.value || ''}"
-              max="${document.getElementById('nextDate')?.value || ''}"
-              oninput="drugs[${i}].taperDate=this.value;calc()">
-            <div class="input-note" id="taper-days-${i}"></div>
-          </div>
-          <div>
-            <label>後半の塗布頻度</label>
-            <select onchange="drugs[${i}].taperFreqIdx=parseInt(this.value);calc()">
-              ${FREQS.map((f, fi) => `<option value="${fi}"${fi === d.taperFreqIdx ? ' selected' : ''}>${f.label}</option>`).join('')}
-            </select>
-          </div>
-        </div>` : ''}
+      ${(() => {
+        let tapersHtml = '';
+        d.tapers.forEach((t, ti) => {
+          const phaseNum = ti + 2;
+          tapersHtml += `<div style="margin-top:10px;padding:10px 12px;background:var(--amber-bg);border:1px solid var(--amber);border-radius:var(--radius-sm);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <span style="font-size:13px;font-weight:600;color:var(--amber-text);">📉 第${phaseNum}段階（途中で頻度を減らす）</span>
+      <button onclick="drugs[${i}].tapers.splice(${ti},1);renderDrugs();calc()" style="background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:0 4px;">✕</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div>
+        <label>切り替え日</label>
+        <input type="date" value="${t.date}"
+          min="${document.getElementById('todayDate')?.value || ''}"
+          max="${document.getElementById('nextDate')?.value || ''}"
+          oninput="drugs[${i}].tapers[${ti}].date=this.value;calc()">
+        <div class="input-note" id="taper-days-${i}-${ti}"></div>
       </div>
+      <div>
+        <label>この日から塗布頻度</label>
+        <select onchange="drugs[${i}].tapers[${ti}].freqIdx=parseInt(this.value);renderDrugs();calc()">
+          ${FREQS.map((f, fi) => `<option value="${fi}"${fi === t.freqIdx ? ' selected' : ''}>${f.label}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+  </div>`;
+        });
+        const addTaperBtn = `<div style="margin-top:10px;">
+  <button onclick="drugs[${i}].tapers.push({date:'',freqIdx:Math.max(0,${d.tapers.length > 0 ? d.tapers[d.tapers.length-1].freqIdx : d.freqIdx}-1)});renderDrugs();calc()"
+    style="background:none;border:1px dashed var(--amber);color:var(--amber-text);border-radius:var(--radius-sm);padding:6px 14px;cursor:pointer;font-size:12px;width:100%;">
+    ＋ 途中で頻度を減らす
+  </button>
+</div>`;
+        return tapersHtml + addTaperBtn;
+      })()}
     </div>`;
       });
       renderAddDrugPanel();
@@ -1569,32 +1579,43 @@
       });
       return parts;
     }
-    // 総必要g数を返す（nextDays分）。2段階漸減対応
+    // 総必要g数を返す（nextDays分）。多段漸減対応
     function calcFTU(d, ageKey, nd, tv, nv) {
       const parts = calcPartDetails(d, ageKey);
       const onceTotalG = parts.reduce((s, p) => s + p.gOnce, 0);
-      if (d.taper && d.taperDate && tv && nv) {
-        const d1 = dateDiff(tv, d.taperDate);   // 前半日数
-        const d2 = dateDiff(d.taperDate, nv);   // 後半日数
-        if (d1 > 0 && d2 > 0) {
-          const fr1 = FREQS[d.freqIdx].val;
-          const fr2 = FREQS[d.taperFreqIdx].val;
-          return onceTotalG * (fr1 * d1 + fr2 * d2);
+      if (d.tapers && d.tapers.length > 0 && tv && nv) {
+        const dates = [tv, ...d.tapers.map(t => t.date), nv];
+        const freqs = [d.freqIdx, ...d.tapers.map(t => t.freqIdx)];
+        let total = 0;
+        let valid = true;
+        for (let k = 0; k < freqs.length; k++) {
+          const dk = dateDiff(dates[k], dates[k+1]);
+          if (!dates[k] || !dates[k+1] || dk <= 0) { valid = false; break; }
+          total += FREQS[freqs[k]].val * dk;
         }
+        if (valid) return onceTotalG * total;
       }
       return onceTotalG * FREQS[d.freqIdx].val * nd;
     }
 
-    // 2段階の内訳を返す（患者向け表示用）
+    // 多段漸減の内訳を配列で返す（患者向け表示用）
     function calcTaperPhases(d, ageKey, tv, nv) {
-      if (!d.taper || !d.taperDate || !tv || !nv) return null;
-      const d1 = dateDiff(tv, d.taperDate);
-      const d2 = dateDiff(d.taperDate, nv);
-      if (d1 <= 0 || d2 <= 0) return null;
-      return {
-        phase1: { startDate: tv, endDate: d.taperDate, days: d1, freqLabel: FREQS[d.freqIdx].label, freqVal: FREQS[d.freqIdx].val },
-        phase2: { startDate: d.taperDate, endDate: nv, days: d2, freqLabel: FREQS[d.taperFreqIdx].label, freqVal: FREQS[d.taperFreqIdx].val },
-      };
+      if (!d.tapers || d.tapers.length === 0 || !tv || !nv) return null;
+      const dates = [tv, ...d.tapers.map(t => t.date), nv];
+      const freqIdxs = [d.freqIdx, ...d.tapers.map(t => t.freqIdx)];
+      const phases = [];
+      for (let k = 0; k < freqIdxs.length; k++) {
+        const start = dates[k], end = dates[k+1];
+        if (!start || !end) return null;
+        const days = dateDiff(start, end);
+        if (days <= 0) return null;
+        phases.push({
+          startDate: start, endDate: end, days,
+          freqLabel: FREQS[freqIdxs[k]].label,
+          freqVal: FREQS[freqIdxs[k]].val
+        });
+      }
+      return phases.length > 0 ? phases : null;
     }
     function dateDiff(a, b) { if (!a || !b) return null; return Math.round((new Date(b) - new Date(a)) / 86400000); }
 
@@ -1699,9 +1720,8 @@
         }).join('');
         const taperHtml = taperPhases
           ? `<div style="margin-top:5px;font-size:11px;background:var(--amber-bg);border-radius:4px;padding:5px 8px;line-height:1.9;">
-              <span style="font-weight:600;color:var(--amber-text);">2段階漸減：</span><br>
-              前半 ${taperPhases.phase1.days}日（〜${taperPhases.phase1.endDate}）：${taperPhases.phase1.freqLabel}<br>
-              後半 ${taperPhases.phase2.days}日（${taperPhases.phase2.startDate}〜）：${taperPhases.phase2.freqLabel}
+              <span style="font-weight:600;color:var(--amber-text);">多段漸減：</span><br>
+              ${taperPhases.map((p, pi) => `第${pi+1}段階 ${p.days}日（${p.startDate}〜${p.endDate}）：${p.freqLabel}`).join('<br>')}
              </div>` : '';
         const ftuCell = hasFTU
           ? `<div>${ptags}</div>` +
@@ -1718,7 +1738,7 @@
         if (isMixed(d) && hasFTU) {
           const avgDayG = (() => {
             if (taperPhases) {
-              return (taperPhases.phase1.freqVal * taperPhases.phase1.days + taperPhases.phase2.freqVal * taperPhases.phase2.days) / nextDays * calcPartDetails(d, ak).reduce((s, p) => s + p.gOnce, 0);
+              return taperPhases.reduce((s, p) => s + p.freqVal * p.days, 0) / nextDays * calcPartDetails(d, ak).reduce((s, p) => s + p.gOnce, 0);
             }
             return calcPartDetails(d, ak).reduce((s, p) => s + p.gOnce, 0) * FREQS[d.freqIdx].val;
           })();
@@ -1832,10 +1852,10 @@
         if (r.hasFTU) {
           txt += `塗布部位: ${r.partNames.join('、')}。\n`;
           if (r.taperPhases) {
-            const p1 = r.taperPhases.phase1, p2 = r.taperPhases.phase2;
-            txt += `【2段階漸減】\n`;
-            txt += `  前半 ${p1.days}日（${p1.startDate}〜${p1.endDate}）：${p1.freqLabel}\n`;
-            txt += `  後半 ${p2.days}日（${p2.startDate}〜${p2.endDate}）：${p2.freqLabel}\n`;
+            txt += `【多段漸減】\n`;
+            r.taperPhases.forEach((p, pi) => {
+              txt += `  第${pi+1}段階（${p.startDate}〜${p.endDate}、${p.days}日間）：${p.freqLabel}\n`;
+            });
             txt += `次回${nextDays}日後再診のため、合計 ${r.ftuG.toFixed(1)}g 必要。\n`;
           } else {
             txt += `次回${nextDays}日後再診のため、${r.freq}で ${r.ftuG.toFixed(1)}g 必要。\n`;
@@ -1872,8 +1892,8 @@
         // 消費ペースの目安（非混合のみ）
         if (!r.isMixed && r.tubeg > 0 && r.hasFTU) {
           const onceTotalG = calcPartDetails(r.drugRef, document.getElementById('globalAge').value).reduce((s, p) => s + p.gOnce, 0);
-          const avgFreqVal = r.taperPhases
-            ? (r.taperPhases.phase1.freqVal * r.taperPhases.phase1.days + r.taperPhases.phase2.freqVal * r.taperPhases.phase2.days) / nextDays
+          const avgFreqVal = taperPhases && nextDays > 0
+            ? taperPhases.reduce((s, p) => s + p.freqVal * p.days, 0) / nextDays
             : r.freqVal;
           const daysPerTube = onceTotalG > 0 ? r.tubeg / (onceTotalG * avgFreqVal) : 0;
           if (daysPerTube > 0) {
@@ -1884,17 +1904,21 @@
       });
       document.getElementById('text-output').value = txt;
 
-      // 切り替え日の「前半◯日/後半◯日」バッジ更新
+      // 切り替え日の段階日数バッジ更新
       drugs.forEach((d, i) => {
-        const el = document.getElementById(`taper-days-${i}`);
-        if (!el) return;
-        if (d.taperDate && tv && nv) {
-          const d1 = dateDiff(tv, d.taperDate), d2 = dateDiff(d.taperDate, nv);
-          if (d1 > 0 && d2 > 0) el.textContent = `前半 ${d1}日 ／ 後半 ${d2}日`;
-          else el.textContent = '日付を確認してください';
-        } else {
-          el.textContent = '';
-        }
+        (d.tapers || []).forEach((t, ti) => {
+          const el = document.getElementById(`taper-days-${i}-${ti}`);
+          if (!el) return;
+          if (t.date && tv && nv) {
+            const prevDate = ti === 0 ? tv : d.tapers[ti-1].date;
+            const nextDate = ti === d.tapers.length - 1 ? nv : d.tapers[ti+1].date;
+            const d1 = dateDiff(prevDate, t.date), d2 = dateDiff(t.date, nextDate);
+            if (d1 > 0 && d2 > 0) el.textContent = `前段階 ${d1}日 ／ 次段階 ${d2}日`;
+            else el.textContent = '日付を確認してください';
+          } else {
+            el.textContent = '';
+          }
+        });
       });
     }
 
@@ -2059,16 +2083,12 @@
           ? `<div style="margin-top:10px;border:1px solid #f0c060;border-radius:6px;overflow:hidden;">
               <div style="background:#faeeda;padding:5px 10px;font-size:11px;font-weight:600;color:#633806;">📅 塗布スケジュール（途中で頻度が変わります）</div>
               <div style="padding:8px 10px;background:#fffdf5;">
-                <div style="display:flex;align-items:center;gap:10px;padding:5px 0;border-bottom:1px solid #f0ddb0;">
-                  <span style="font-size:11px;color:#9b9890;min-width:80px;">${taperPhases.phase1.startDate}〜</span>
-                  <span style="font-size:14px;font-weight:700;color:#0f6e56;">${taperPhases.phase1.freqLabel}</span>
-                  <span style="font-size:11px;color:#9b9890;">（${taperPhases.phase1.days}日間）</span>
-                </div>
-                <div style="display:flex;align-items:center;gap:10px;padding:5px 0;">
-                  <span style="font-size:11px;color:#9b9890;min-width:80px;">${taperPhases.phase2.startDate}〜</span>
-                  <span style="font-size:14px;font-weight:700;color:#b87515;">${taperPhases.phase2.freqLabel}　に減らす</span>
-                  <span style="font-size:11px;color:#9b9890;">（${taperPhases.phase2.days}日間）</span>
-                </div>
+                ${taperPhases.map((p, pi) => `
+                <div style="display:flex;align-items:center;gap:10px;padding:5px 0;${pi < taperPhases.length-1 ? 'border-bottom:1px solid #f0ddb0;' : ''}">
+                  <span style="font-size:11px;color:#9b9890;min-width:80px;">${p.startDate}〜</span>
+                  <span style="font-size:14px;font-weight:700;color:${pi===0?'#0f6e56':'#b87515'};">${p.freqLabel}${pi>0 ? '　に減らす' : ''}</span>
+                  <span style="font-size:11px;color:#9b9890;">（${p.days}日間）</span>
+                </div>`).join('')}
               </div>
             </div>`
           : '';
@@ -2077,7 +2097,7 @@
         let tubeRateHtml = '';
         if (onceTotal > 0) {
           const avgFreq = taperPhases && nextDays > 0
-            ? (taperPhases.phase1.freqVal * taperPhases.phase1.days + taperPhases.phase2.freqVal * taperPhases.phase2.days) / nextDays
+            ? taperPhases.reduce((s, p) => s + p.freqVal * p.days, 0) / nextDays
             : freqVal;
           if (isMixed(d)) {
             // 混合軟膏：選択中プランの容器サイズと日数を表示
@@ -2092,7 +2112,7 @@
               } else {
                 tubeRateHtml = `<div style="margin-top:8px;background:#faeeda;border:1px solid #f0c060;border-radius:6px;padding:8px 12px;font-size:12px;color:#633806;">
                   🧪 <strong style="font-size:14px;color:#0f6e56;">${p.containerG}g入り容器</strong>を<strong style="font-size:14px;color:#0f6e56;">${p.count}個</strong>お渡しします<br>
-                  <span style="color:#6b6760;font-size:12px;">${p.days}日ごとに1個使い切るペースです（1日 ${(onceTotal * (taperPhases ? taperPhases.phase1.freqVal : freqVal)).toFixed(1)}g）</span>
+                  <span style="color:#6b6760;font-size:12px;">${p.days}日ごとに1個使い切るペースです（1日 ${(onceTotal * (taperPhases ? taperPhases[0].freqVal : freqVal)).toFixed(1)}g）</span>
                 </div>`;
               }
             }
@@ -2124,7 +2144,7 @@
         <div style="margin-bottom:4px;">
           ${checkedParts.map(p => { const s = p.bilateral ? (d.parts[p.key].sides === 2 ? '（両側）' : '（片側）') : ''; return `<span class="pt-pill">${p.label}${s}</span>`; }).join('')}
         </div>
-        <span class="pt-freq">${taperPhases ? taperPhases.phase1.freqLabel : freq}</span>　塗布してください
+        <span class="pt-freq">${taperPhases ? taperPhases[0].freqLabel : freq}</span>　塗布してください
         ${summaryHtml}
       </div>
     </div>`;
@@ -2147,8 +2167,9 @@
         const taperPhases = calcTaperPhases(d, ageKey, tv, nv);
         txt += `${i + 1}. ${name}\n`;
         if (taperPhases) {
-          txt += `   ${taperPhases.phase1.startDate}〜${taperPhases.phase1.endDate}：${taperPhases.phase1.freqLabel}（${taperPhases.phase1.days}日間）\n`;
-          txt += `   ${taperPhases.phase2.startDate}〜：${taperPhases.phase2.freqLabel}　に減らす（${taperPhases.phase2.days}日間）\n`;
+          taperPhases.forEach((p, pi) => {
+            txt += `   第${pi+1}段階（${p.startDate}〜${p.endDate}、${p.days}日間）：${p.freqLabel}\n`;
+          });
         } else {
           txt += `   ${freq}\n`;
         }
@@ -2162,10 +2183,10 @@
         if (ptDeets.length) {
           const nd = dateDiff(tv, nv) || 0;
           const avgFreq = taperPhases && nd > 0
-            ? (taperPhases.phase1.freqVal * taperPhases.phase1.days + taperPhases.phase2.freqVal * taperPhases.phase2.days) / nd
+            ? taperPhases.reduce((s, p) => s + p.freqVal * p.days, 0) / nd
             : freqVal;
-          const dayTotal = onceTotal * (taperPhases ? taperPhases.phase1.freqVal : freqVal);
-          txt += `   → 1回合計 ${onceTotal.toFixed(2)}g、1日合計 ${dayTotal.toFixed(2)}g（前半）\n`;
+          const dayTotal = onceTotal * (taperPhases ? taperPhases[0].freqVal : freqVal);
+          txt += `   → 1回合計 ${onceTotal.toFixed(2)}g、1日合計 ${dayTotal.toFixed(2)}g${taperPhases ? '（第1段階）' : ''}\n`;
           if (isMixed(d) && onceTotal > 0) {
             const avgDayG = onceTotal * avgFreq;
             const neededG = nd > 0 ? calcFTU(d, ageKey, nd, tv, nv) : 0;
@@ -4656,9 +4677,9 @@
         return `${dt.getMonth()+1}/${dt.getDate()}`;
       };
       if (r.taperPhases) {
-        const p1 = r.taperPhases.phase1, p2 = r.taperPhases.phase2;
-        txt += `、${fmtDate(p1.startDate)}〜${fmtDate(p1.endDate)}（${p1.days}日間）${p1.freqLabel}`;
-        txt += `、${fmtDate(p2.startDate)}〜${fmtDate(p2.endDate)}（${p2.days}日間）${p2.freqLabel}`;
+        r.taperPhases.forEach(p => {
+          txt += `、${fmtDate(p.startDate)}〜${fmtDate(p.endDate)}（${p.days}日間）${p.freqLabel}`;
+        });
       } else {
         const nd = Math.round((new Date(nextVisitDate) - new Date(visitDate)) / 86400000);
         txt += `、${fmtDate(visitDate)}〜${fmtDate(nextVisitDate)}（${nd}日間）${r.freq}`;
@@ -4694,7 +4715,7 @@
         legendHtml += `<div class="gantt-legend-item"><div class="gantt-legend-swatch" style="background:${col.bg};"></div><span>${r.name}</span></div>`;
 
         const freqLabel = r.taperPhases
-          ? `${r.taperPhases.phase1.freqLabel}→${r.taperPhases.phase2.freqLabel}`
+          ? r.taperPhases.map(p => p.freqLabel).join('→')
           : r.freq;
 
         let cells = '';
@@ -4702,19 +4723,33 @@
           let freqVal, fillRatio;
           // phase境界チェック
           let isPhBorder = false;
+          let offset = i;
           if (r.taperPhases) {
-            const p1days = r.taperPhases.phase1.days;
-            isPhBorder = (i === p1days);
-            freqVal = i < p1days ? r.taperPhases.phase1.freqVal : r.taperPhases.phase2.freqVal;
+            // 多段漸減：どのフェーズに属するか計算
+            let runningTotal = 0;
+            let phaseIdx = r.taperPhases.length - 1;
+            let phaseOffset = i;
+            for (let k = 0; k < r.taperPhases.length; k++) {
+              if (i < runningTotal + r.taperPhases[k].days) {
+                phaseIdx = k;
+                phaseOffset = i - runningTotal;
+                break;
+              }
+              runningTotal += r.taperPhases[k].days;
+            }
+            freqVal = r.taperPhases[phaseIdx].freqVal;
+            offset = phaseOffset;
+            // フェーズ境界判定
+            isPhBorder = (() => {
+              let cum = 0;
+              for (let k = 0; k < r.taperPhases.length - 1; k++) {
+                cum += r.taperPhases[k].days;
+                if (i === cum) return true;
+              }
+              return false;
+            })();
           } else {
             freqVal = r.freqVal;
-          }
-          fillRatio = freqVal >= 2 ? 1.0 : 0.5;
-          const showEvery = freqValToShowEvery(freqVal);
-          // phase1内のoffset vs phase2内のoffset
-          let offset = i;
-          if (r.taperPhases && i >= r.taperPhases.phase1.days) {
-            offset = i - r.taperPhases.phase1.days;
           }
           const show = offset % showEvery === 0;
           const cellH = 36;
@@ -4847,14 +4882,16 @@
           name: r.name,
           partLabel: r.partNames.join('・'),
           freqLabel: r.taperPhases
-            ? `${r.taperPhases.phase1.freqLabel}→${r.taperPhases.phase2.freqLabel}`
+            ? r.taperPhases.map(p => p.freqLabel).join('→')
             : r.freq,
           scheduleText: buildScheduleText(r, visitDate, nextVisitDate),
           freqVal: r.freqVal,
           taperPhases: r.taperPhases || null,
+          taper: r.taperPhases ? true : false,
+          taperFreqLabel: r.taperPhases ? r.taperPhases[r.taperPhases.length-1].freqLabel : null,
           partNames: r.partNames,
           startDate: visitDate,
-          endDate: r.taperPhases ? r.taperPhases.phase2.endDate : nextVisitDate,
+          endDate: r.taperPhases ? r.taperPhases[r.taperPhases.length-1].endDate : nextVisitDate,
           prescribedG: r.prescribeG
         }));
         rxSummaryText = rxItems.map(r => buildScheduleText(r, visitDate, nextVisitDate)).join('\n');
@@ -4974,11 +5011,16 @@
         }
 
         // テーパリング設定（日付はクリアして頻度のみコピー）
-        if (pd.taper && pd.taperFreqLabel) {
-          d.taper = true;
-          d.taperDate = '';
+        if (pd.taperPhases && pd.taperPhases.length > 0) {
+          // 新形式: フェーズ配列（フェーズ0は初期頻度なのでスキップ）
+          d.tapers = pd.taperPhases.slice(1).map(p => {
+            const fi = FREQS.findIndex(f => f.label === p.freqLabel);
+            return { date: '', freqIdx: fi >= 0 ? fi : 1 };
+          });
+        } else if (pd.taper && pd.taperFreqLabel) {
+          // 旧形式: 単一漸減
           const tfi = FREQS.findIndex(f => f.label === pd.taperFreqLabel);
-          if (tfi >= 0) d.taperFreqIdx = tfi;
+          d.tapers = [{ date: '', freqIdx: tfi >= 0 ? tfi : 1 }];
         }
 
         drugs.push(d);
