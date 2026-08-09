@@ -4901,6 +4901,7 @@
           partNames: r.partNames,
           startDate: visitDate,
           category: categoryOfPreset(r.drugRef.preset),
+          mixed: isMixed(r.drugRef),
           partNamesFace: r.partNames.filter(n => n.startsWith('顔')),
           partNamesOther: r.partNames.filter(n => !n.startsWith('顔')),
           scheduleText: `${r.name}を${r.partNames.length ? r.partNames.join('・') : '指定部位'}に塗布してください`
@@ -4923,6 +4924,7 @@
           taperFreqLabel: r.taperPhases ? r.taperPhases[r.taperPhases.length-1].freqLabel : null,
           partNames: r.partNames,
           category: categoryOfPreset(r.drugRef.preset),
+          mixed: isMixed(r.drugRef),
           partNamesFace: r.partNames.filter(n => n.startsWith('顔')),
           partNamesOther: r.partNames.filter(n => !n.startsWith('顔')),
           startDate: visitDate,

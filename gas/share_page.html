@@ -36,36 +36,47 @@
       margin-bottom: 10px;
       -webkit-tap-highlight-color: transparent;
     }
-    .group-title {
-      font-size: 13px;
+    .area-card { padding: 4px 16px; }
+    .area-title {
+      font-size: 15px;
       font-weight: 700;
-      padding: 4px 2px;
-      margin-bottom: 8px;
+      padding: 12px 0 10px;
       display: flex;
       align-items: center;
       gap: 6px;
     }
-    .group-title.steroid { color: var(--red-text); }
-    .group-title.nonsteroid { color: var(--blue-text); }
-    .group-title.moisturizer { color: var(--green-text); }
-    .group-title.other { color: var(--text2); }
-    .drug-row {
+    .cat-row {
       padding: 10px 0;
-      border-bottom: 1px solid var(--border);
+      border-top: 1px solid var(--border);
     }
-    .drug-row:last-child { border-bottom: none; }
-    .drug-row .dname { font-size: 15px; font-weight: 700; }
-    .drug-row .dparts { font-size: 12px; color: var(--text2); margin-top: 3px; }
-    .drug-row .dfreq {
-      display: inline-block;
-      margin-top: 5px;
+    .cat-label {
       font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 6px;
+    }
+    .cat-row.steroid .cat-label { color: var(--red-text); }
+    .cat-row.nonsteroid .cat-label { color: var(--blue-text); }
+    .cat-row.moisturizer .cat-label { color: var(--green-text); }
+    .cat-row.other .cat-label { color: var(--text2); }
+    .cat-content { padding-left: 2px; }
+    .cat-empty { font-size: 13px; color: var(--text3); padding: 2px 0; }
+    .cat-drug { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+    .cat-drug + .cdparts { margin-bottom: 8px; }
+    .cat-drug:last-child, .cdparts:last-child { margin-bottom: 0; }
+    .cdname { font-size: 15px; font-weight: 700; }
+    .cdfreq {
+      display: inline-block;
+      font-size: 11px;
       font-weight: 600;
       color: var(--green-text);
       background: var(--green-bg);
       border-radius: 20px;
-      padding: 2px 10px;
+      padding: 1px 9px;
     }
+    .cdparts { font-size: 12px; color: var(--text2); margin-top: 2px; }
     .sched-card .dname { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
     .sched-card .stext { font-size: 13px; line-height: 1.7; color: var(--text); }
     /* ===== Ganttスケジュール（atopic_calculator.htmlのスケジュール画面と同じ見た目） ===== */
@@ -173,10 +184,19 @@
     const visitDate = '<?= visitDate ?>';
     const drugs = <?!= drugsJson ?>;
 
-    const CATEGORY_LABELS = { steroid: 'ステロイド', nonsteroid: '非ステロイド', moisturizer: '保湿剤', other: 'その他の外用薬' };
-    const CATEGORY_ICONS  = { steroid: '🔴', nonsteroid: '🔵', moisturizer: '💧', other: '🧴' };
+    const CATEGORY_LABELS = { moisturizer: '保湿剤', steroid: 'ステロイド', nonsteroid: '非ステロイド', other: 'その他の外用薬' };
+    const CATEGORY_ICONS  = { moisturizer: '💧', steroid: '🔴', nonsteroid: '🔵', other: '🧴' };
     const AREA_LABELS = { face: '顔', other: '顔以外' };
-    const CATEGORY_ORDER = ['steroid', 'nonsteroid', 'moisturizer', 'other'];
+    const AREA_ICONS  = { face: '🙂', other: '🧍' };
+    // 表示順は「保湿→ステロイド→非ステロイド」で固定。その他（手入力薬）は該当があれば末尾に追加
+    const CATEGORY_ORDER = ['moisturizer', 'steroid', 'nonsteroid'];
+
+    // 混合軟膏（例:「リンデロン/ヘパリン混合軟膏」）は1本でステロイドと保湿を兼ねるため、
+    // 「◯◯/△△混合軟膏 の◯◯」の形でステロイド行・保湿行の両方に表示する
+    function mixedParts(name) {
+      const m = String(name || '').match(/^(.+)\/(.+)混合軟膏$/);
+      return m ? { steroidName: m[1], moistName: m[2] } : null;
+    }
 
     function showView(name) {
       ['menu', 'bydrug', 'schedule'].forEach(v => {
@@ -192,28 +212,62 @@
       document.getElementById('header-sub').textContent = parts.join('　') || 'お薬の使い方';
     }
 
+    function drugEntryHtml(e) {
+      return `<div class="cat-drug">
+          <span class="cdname">${escapeHtml(e.label)}</span>
+          ${e.freq ? `<span class="cdfreq">${escapeHtml(e.freq)}</span>` : ''}
+        </div>
+        <div class="cdparts">塗る場所：${escapeHtml(e.parts.join('・'))}</div>`;
+    }
+
     function renderByDrug() {
       const wrap = document.getElementById('bydrug-groups');
       let html = '';
       ['face', 'other'].forEach(area => {
-        CATEGORY_ORDER.forEach(cat => {
-          const rows = drugs.filter(d => {
-            const partsInArea = area === 'face' ? (d.partNamesFace || []) : (d.partNamesOther || []);
-            return (d.category || 'other') === cat && partsInArea.length > 0;
-          });
-          if (!rows.length) return;
-          html += `<div class="card">
-            <div class="group-title ${cat}">${CATEGORY_ICONS[cat]} ${AREA_LABELS[area]}の${CATEGORY_LABELS[cat]}</div>`;
-          rows.forEach(d => {
-            const partsInArea = area === 'face' ? d.partNamesFace : d.partNamesOther;
-            html += `<div class="drug-row">
-              <div class="dname">${escapeHtml(d.name)}</div>
-              <div class="dparts">塗る場所：${escapeHtml(partsInArea.join('・'))}</div>
-              <div class="dfreq">${escapeHtml(d.freqLabel || '')}</div>
-            </div>`;
-          });
-          html += `</div>`;
+        const partsKey = area === 'face' ? 'partNamesFace' : 'partNamesOther';
+        const areaDrugs = drugs.filter(d => (d[partsKey] || []).length > 0);
+        if (!areaDrugs.length) return;
+
+        const entries = { moisturizer: [], steroid: [], nonsteroid: [], other: [] };
+        areaDrugs.forEach(d => {
+          const parts = d[partsKey];
+          const freq = d.freqLabel || '';
+          const mp = d.mixed ? mixedParts(d.name) : null;
+          if (mp) {
+            entries.steroid.push({ label: `${d.name} の${mp.steroidName}`, parts, freq });
+            entries.moisturizer.push({ label: `${d.name} の${mp.moistName}`, parts, freq });
+            return;
+          }
+          const cat = ['moisturizer', 'steroid', 'nonsteroid'].includes(d.category) ? d.category : 'other';
+          entries[cat].push({ label: d.name, parts, freq });
         });
+
+        let rowsHtml = CATEGORY_ORDER.map(cat => {
+          let content;
+          if (entries[cat].length) {
+            content = entries[cat].map(drugEntryHtml).join('');
+          } else if (cat === 'moisturizer') {
+            content = `<div class="cat-empty">好きなものでOK</div>`;
+          } else {
+            content = `<div class="cat-empty">なし</div>`;
+          }
+          return `<div class="cat-row ${cat}">
+            <div class="cat-label">${CATEGORY_ICONS[cat]} ${CATEGORY_LABELS[cat]}</div>
+            <div class="cat-content">${content}</div>
+          </div>`;
+        }).join('');
+
+        if (entries.other.length) {
+          rowsHtml += `<div class="cat-row other">
+            <div class="cat-label">${CATEGORY_ICONS.other} ${CATEGORY_LABELS.other}</div>
+            <div class="cat-content">${entries.other.map(drugEntryHtml).join('')}</div>
+          </div>`;
+        }
+
+        html += `<div class="card area-card">
+          <div class="area-title">${AREA_ICONS[area]} ${AREA_LABELS[area]}</div>
+          ${rowsHtml}
+        </div>`;
       });
       wrap.innerHTML = html || '<p style="font-size:13px;color:var(--text2);">表示できるお薬がありません。</p>';
     }
