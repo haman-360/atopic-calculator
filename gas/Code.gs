@@ -126,11 +126,28 @@ function doGet(e) {
     const tmpl = HtmlService.createTemplateFromFile('share_page');
     tmpl.patientNo = p;
     tmpl.visitDate = visit.visitDate;
+    tmpl.token = t;
+    tmpl.execUrl = ScriptApp.getService().getUrl();
     tmpl.drugsJson = JSON.stringify(visit.drugsJson);
+    // リーディングリスト／ブックマークの一覧では受診日ごとに見分けられるようタイトルに日付を含める
+    const shareTitle = visit.visitDate ? `${visit.visitDate} お薬の使い方` : 'お薬の使い方 — はまこどもクリニック';
     return tmpl.evaluate()
-      .setTitle('お薬の使い方 — はまこどもクリニック')
+      .setTitle(shareTitle)
       .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
       .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
+  }
+
+  // 週1回の塗り方チェックリマインダー（.icsカレンダーファイル）。共有ページと同じトークンで認証
+  if (page === 'reminderIcs') {
+    const p = (e && e.parameter && e.parameter.p) || '';
+    const t = (e && e.parameter && e.parameter.t) || '';
+    const visit = findVisitByShareToken_(p, t);
+    if (!visit.valid) {
+      return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">リンクが無効か、有効期限が切れています。クリニックにお問い合わせください。</p>');
+    }
+    const shareUrl = ScriptApp.getService().getUrl() + '?page=share&p=' + encodeURIComponent(p) + '&t=' + encodeURIComponent(t);
+    const ics = buildReminderIcs_(visit.nextVisitDate, shareUrl);
+    return ContentService.createTextOutput(ics).setMimeType(ContentService.MimeType.ICAL);
   }
 
   return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">ページが見つかりません</p>');
@@ -630,9 +647,65 @@ function findVisitByShareToken_(patientNo, token) {
     if (hashToken_(String(salt), token) !== String(hash)) continue;
     let drugsJson = [];
     try { drugsJson = data[i][3] ? JSON.parse(data[i][3]) : []; } catch (e) {}
-    return { valid: true, visitDate: dateToStr_(data[i][1]), drugsJson: drugsJson };
+    return { valid: true, visitDate: dateToStr_(data[i][1]), nextVisitDate: dateToStr_(data[i][2]), drugsJson: drugsJson };
   }
   return { valid: false };
+}
+
+// ===== 週1回リマインダー用 .ics 生成 =====
+// 共有トークン（発行から14日間有効）が切れる前にリンクを確認できるよう、
+// 繰り返しの終了日は「次回受診日」と「発行から14日後」の早い方に丸める
+function buildReminderIcs_(nextVisitDate, shareUrl) {
+  const now = new Date();
+  const todayJst = Utilities.formatDate(now, 'Asia/Tokyo', 'yyyy-MM-dd');
+  const start = new Date(todayJst + 'T10:00:00Z'); // 19:00 JST
+  start.setUTCDate(start.getUTCDate() + 7);
+
+  let until = new Date(now.getTime() + 14 * 86400000); // トークン有効期限に合わせた上限
+  if (nextVisitDate) {
+    const nv = new Date(nextVisitDate + 'T14:59:59Z'); // 23:59 JST
+    if (!isNaN(nv.getTime()) && nv < until) until = nv;
+  }
+  if (until <= start) until = new Date(start.getTime() + 60000); // 最低1回は届くようにする
+
+  const uid = Utilities.getUuid() + '@hamakodomo-clinic';
+  const desc = escapeIcsText_('治療頑張っていますね。塗り方がわからなくなったら共有ページで確認しましょう。\n' + shareUrl);
+
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//hamakodomo-clinic//atopic-calculator//JA',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    'UID:' + uid,
+    'DTSTAMP:' + icsUtc_(now),
+    'DTSTART:' + icsUtc_(start),
+    'RRULE:FREQ=WEEKLY;INTERVAL=1;UNTIL=' + icsUtc_(until),
+    'SUMMARY:🌿 お薬の塗り方チェック（はまこどもクリニック）',
+    'DESCRIPTION:' + desc,
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:塗り方を確認しましょう',
+    'TRIGGER:-PT0M',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ];
+  return lines.join('\r\n');
+}
+
+function icsUtc_(dt) {
+  const p = n => String(n).padStart(2, '0');
+  return dt.getUTCFullYear() + p(dt.getUTCMonth() + 1) + p(dt.getUTCDate()) + 'T' +
+    p(dt.getUTCHours()) + p(dt.getUTCMinutes()) + p(dt.getUTCSeconds()) + 'Z';
+}
+
+function escapeIcsText_(s) {
+  return String(s || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n');
 }
 
 // ===== 医師ダッシュボード: データ取得 =====

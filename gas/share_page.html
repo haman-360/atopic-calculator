@@ -36,6 +36,17 @@
       margin-bottom: 10px;
       -webkit-tap-highlight-color: transparent;
     }
+    .save-tip {
+      background: var(--amber-bg);
+      border: 1px solid var(--amber);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      font-size: 13px;
+      line-height: 1.7;
+      color: var(--amber-text);
+    }
+    .save-tip .tip-title { font-weight: 700; margin-bottom: 4px; }
     .area-card { padding: 4px 16px; }
     .area-title {
       font-size: 15px;
@@ -125,6 +136,7 @@
 
     <!-- メニュー -->
     <div id="view-menu">
+      <div class="save-tip" id="save-tip"></div>
       <div class="card" style="padding:0;overflow:hidden;">
         <div class="menu-link" onclick="showView('bydrug')">
           <div class="icon">💊</div>
@@ -144,6 +156,16 @@
           </div>
           <div class="arrow">›</div>
         </div>
+      </div>
+      <div class="card" id="reminder-card" style="padding:0;overflow:hidden;display:none;">
+        <a class="menu-link" id="reminder-link" href="#" style="text-decoration:none;color:inherit;">
+          <div class="icon">🔔</div>
+          <div>
+            <div class="title">毎週リマインダーを設定</div>
+            <div class="sub">カレンダーに追加すると毎週通知が届きます</div>
+          </div>
+          <div class="arrow">›</div>
+        </a>
       </div>
     </div>
 
@@ -182,6 +204,8 @@
   <script>
     const patientNo = '<?= patientNo ?>';
     const visitDate = '<?= visitDate ?>';
+    const token = '<?= token ?>';
+    const EXEC_URL = '<?= execUrl ?>';
     const drugs = <?!= drugsJson ?>;
 
     const CATEGORY_LABELS = { moisturizer: '保湿剤', steroid: 'ステロイド', nonsteroid: '非ステロイド', other: 'その他の外用薬' };
@@ -203,6 +227,34 @@
         document.getElementById('view-' + v).style.display = (v === name) ? 'block' : 'none';
       });
       window.scrollTo(0, 0);
+    }
+
+    // iPhoneで左上の✕を押して閉じてしまうと再アクセスできなくなるため、
+    // 最初の画面でリーディングリスト／ブックマークへの保存を案内する
+    function renderSaveTip() {
+      const el = document.getElementById('save-tip');
+      const ua = navigator.userAgent || '';
+      const isIOS = /iPhone|iPad|iPod/.test(ua);
+      const isAndroid = /Android/.test(ua);
+      let body;
+      if (isIOS) {
+        body = '共有ボタン（<b>□↑</b>）をタップして「<b>リーディングリストに追加</b>」を選んでください。誤って閉じてしまっても、リーディングリストからいつでも開き直せます。';
+      } else if (isAndroid) {
+        body = '画面右上のメニュー（<b>⋮</b>）から「<b>ブックマークに追加</b>」（☆マーク）を選んでください。閉じてしまっても、ブックマークからいつでも開き直せます。';
+      } else {
+        body = 'このページのURLをブックマークなどに保存しておくと、閉じてしまっても後から見返せます。';
+      }
+      el.innerHTML = `<div class="tip-title">📌 このページを保存しておきましょう</div><div class="tip-body">${body}</div>`;
+    }
+
+    // 「毎週リマインダーを設定」→ タップするとカレンダーアプリに毎週の繰り返し予定（.ics）を追加できる
+    // トークンが有効な場合のみ表示（電話の代わりに軽い声かけをする目的。塗り方を忘れがちな慢性疾患向け）
+    function renderReminderLink() {
+      const card = document.getElementById('reminder-card');
+      const a = document.getElementById('reminder-link');
+      if (!token || !EXEC_URL) { return; }
+      a.href = `${EXEC_URL}?page=reminderIcs&p=${encodeURIComponent(patientNo)}&t=${encodeURIComponent(token)}`;
+      card.style.display = '';
     }
 
     function renderHeader() {
@@ -484,6 +536,8 @@
     }
 
     renderHeader();
+    renderSaveTip();
+    renderReminderLink();
     renderByDrug();
     renderSchedule();
     renderGantt();
