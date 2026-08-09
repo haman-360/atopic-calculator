@@ -353,7 +353,25 @@
 
     async function captureGanttPng() {
       const el = document.getElementById('gantt-capture');
-      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+      const table = el.querySelector('table.gantt');
+      // gantt-outer は overflow-x:auto でスマホ幅に収まるようスクロールさせているため、
+      // そのまま html2canvas に渡すと画面に表示されている範囲しか撮影されない。
+      // テーブルの実幅（scrollWidth）まで capture 対象を広げてから撮影する。
+      const targetWidth = table ? table.scrollWidth + 40 : el.scrollWidth;
+      const canvas = await html2canvas(el, {
+        scale: 2,
+        backgroundColor: '#ffffff',
+        useCORS: true,
+        logging: false,
+        width: targetWidth,
+        windowWidth: targetWidth + 40,
+        onclone: (clonedDoc, clonedEl) => {
+          clonedDoc.querySelectorAll('.container').forEach(c => { c.style.maxWidth = 'none'; });
+          clonedEl.style.width = targetWidth + 'px';
+          const clonedOuter = clonedEl.querySelector('.gantt-outer');
+          if (clonedOuter) clonedOuter.style.overflow = 'visible';
+        }
+      });
       return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
     }
 

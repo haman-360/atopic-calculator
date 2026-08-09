@@ -419,6 +419,7 @@ clasp push
 | 2026-08-09 | 共有ページに「薬と部位別」ビューを追加（顔／顔以外 × ステロイド／非ステロイドの4分割表示）。atopic_calculator.htmlの`saveVisit()`でdrugsJsonに`category`/`partNamesFace`/`partNamesOther`/`scheduleText`を追加保存 |
 | 2026-08-09 | 共有ページの「毎日のスケジュール」にatopic_calculator.htmlと同じ見た目のガントチャートを追加し、html2canvasで「画像として保存」「画像として共有」ボタンを実装。患者自身でPNG保存でき、AirDropが不要に |
 | 2026-08-09 | fix: 多段漸減の処方でスケジュールGanttの`showEvery`未定義エラーによりテキスト出力・スケジュールタブが空になっていた不具合を修正（前日`a9e5a21`の多段対応リファクタで再計算処理が2行欠落していたのが原因） |
+| 2026-08-09 | fix: 患者向け共有ページ・処方計算アプリの「毎日のスケジュール」画像保存/共有で、スマホ幅では横スクロール分のガントチャートが切れて保存される不具合を修正（`html2canvas`撮影時に`overflow-x:auto`コンテナの全幅を展開するよう`captureGanttPng()`/`_captureSchedule()`を修正） |
 
 ---
 
@@ -468,3 +469,7 @@ feat: 疾患固定QRルートと初診患者フローを追加
 ### 多段漸減の処方でテキスト出力・スケジュールタブが空になる（2026-08-09発見）
 - **原因：** `renderScheduleGantt()` 内で日ごとの `showEvery`/`fillRatio` を再計算する2行が、`a9e5a21`（漸減の多段対応リファクタ）の際に削除され、`showEvery is not defined` の例外が発生していた。`calc()` は「①結果テーブル描画 → ②`renderScheduleGantt()` → ③テキスト出力」の順で同期実行されるため、②で例外が起きると③以降が実行されず、テキスト出力とスケジュールタブが空のままになる。「患者向け共有」タブは別関数（タブ切り替え時に個別実行）なので影響を受けず表示されていた
 - **対策：** `freqVal` 確定後に `fillRatio = freqVal >= 2 ? 1.0 : 0.5;` と `const showEvery = freqValToShowEvery(freqVal);` を復元。ロジックを変更するリファクタ時は、削除した変数が後続処理で参照されていないか（特にローカル変数の再計算部分）を確認する
+
+### 「毎日のスケジュール」の画像保存/共有で一部の日付列しか写らない（2026-08-09発見）
+- **原因：** ガントチャートは `.gantt-outer { overflow-x: auto; }` で画面幅に収まるよう横スクロールさせているが、`html2canvas` はデフォルトでは要素の見た目上の表示範囲（コンテナのclientWidth）しか撮影せず、横スクロールで隠れている列は画像に含まれない。PCではウィンドウ幅が広く全列が一度に見えていたため発覚しなかったが、iPhoneでは画面に収まらない日付列のほとんどが切れて保存された（`gas/share_page.html`の患者向け共有ページ、`atopic_calculator.html`のスケジュールタブ双方で同じ実装ミス）
+- **対策：** `captureGanttPng()`（share_page.html）／`_captureSchedule()`（atopic_calculator.html）で、テーブルの実幅（`table.gantt`の`scrollWidth`）を計算して`html2canvas`の`width`/`windowWidth`オプションに渡し、`onclone`コールバックで複製DOM内の`.gantt-outer`の`overflow`を`visible`に（share_page.htmlはさらに`.container`の`max-width`制限も解除）してから撮影するよう修正。`overflow-x:auto`な要素をhtml2canvasで撮影する場合、常に「実際に表示されている範囲＝撮影範囲」になる点に注意する
