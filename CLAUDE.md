@@ -438,6 +438,7 @@ clasp push
 | 2026-08-09 | feat: 共有ページ「薬と部位別の塗り方」のUIを`顔`／`顔以外`エリア別カードに再構成し、各カード内を`保湿剤`→`ステロイド`→`非ステロイド`の3行固定表示に変更。混合軟膏（`mixed: true`）はステロイド行・保湿剤行の両方に「◯◯/△△混合軟膏 の◯◯」形式で表示するよう対応（`saveVisit()`の`drugsJson`に`mixed`フィールド追加） |
 | 2026-08-09 | feat: 共有ページのメニュー冒頭に、iPhoneで✕を押して閉じても再アクセスできるようiOS/Android別の保存案内バナー（リーディングリスト/ブックマーク誘導）を追加。リーディングリストのタイトルに受診日を追加（`${visitDate} お薬の使い方`） |
 | 2026-08-09 | feat: 共有ページに「毎週リマインダーを設定」機能を追加。`?page=reminderIcs`から.icsカレンダーファイル（週次繰り返し予定・共有ページへの戻りリンク付き）をダウンロードできる。繰り返し終了日は次回受診日と共有トークン有効期限（14日後）の早い方に丸める |
+| 2026-08-09 | fix: 「毎週リマインダーを設定」タップでiPhoneのGoogleカレンダー/Driveアプリに横取りされ「アクセス権が必要です」画面が出る不具合を回避。`reminder-link`に`target="_blank" rel="noopener"`を追加してSafari自身に処理させるよう修正 |
 
 ---
 
@@ -491,3 +492,7 @@ feat: 疾患固定QRルートと初診患者フローを追加
 ### 「毎日のスケジュール」の画像保存/共有で一部の日付列しか写らない（2026-08-09発見）
 - **原因：** ガントチャートは `.gantt-outer { overflow-x: auto; }` で画面幅に収まるよう横スクロールさせているが、`html2canvas` はデフォルトでは要素の見た目上の表示範囲（コンテナのclientWidth）しか撮影せず、横スクロールで隠れている列は画像に含まれない。PCではウィンドウ幅が広く全列が一度に見えていたため発覚しなかったが、iPhoneでは画面に収まらない日付列のほとんどが切れて保存された（`gas/share_page.html`の患者向け共有ページ、`atopic_calculator.html`のスケジュールタブ双方で同じ実装ミス）
 - **対策：** `captureGanttPng()`（share_page.html）／`_captureSchedule()`（atopic_calculator.html）で、テーブルの実幅（`table.gantt`の`scrollWidth`）を計算して`html2canvas`の`width`/`windowWidth`オプションに渡し、`onclone`コールバックで複製DOM内の`.gantt-outer`の`overflow`を`visible`に（share_page.htmlはさらに`.container`の`max-width`制限も解除）してから撮影するよう修正。`overflow-x:auto`な要素をhtml2canvasで撮影する場合、常に「実際に表示されている範囲＝撮影範囲」になる点に注意する
+
+### 「毎週リマインダーを設定」タップでGoogleドライブの「アクセス権が必要です」画面が出る（2026-08-09発見）
+- **原因：** GAS側（`?page=reminderIcs`）は`curl`での検証で認証なしに正常応答することを確認済みで、デプロイ設定やコードの問題ではなかった。iPhoneにGoogleカレンダー／Google Driveアプリが入っている環境では、`.ics`（`text/calendar`）へのリンクを同一ウィンドウ内で遷移させると、iOSのユニバーサルリンク機能によりSafariではなくGoogleカレンダーアプリの「URLからインポート」機能に横取りされ、そちらの処理がGoogle Drive経由のドキュメントとして扱おうとしてアクセス権エラーを出していたと推定される
+- **対策：** `share_page.html`の`reminder-link`（`<a id="reminder-link">`）に`target="_blank" rel="noopener"`を追加。iOSは新規タブでの遷移に対してはユニバーサルリンクの横取りを基本的に行わないため、Safari自身に処理させることで回避しつつ、Safari本来の「カレンダーに追加」シート表示は維持できる
