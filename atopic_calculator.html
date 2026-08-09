@@ -1024,7 +1024,7 @@
         <div style="display:flex;gap:10px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
           <button id="schedule-share-btn" onclick="shareScheduleOnly()" style="padding:9px 18px;border-radius:8px;border:none;background:var(--green);color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">📤 画像として共有</button>
           <button id="schedule-save-btn" onclick="saveScheduleImage()" style="padding:9px 18px;border-radius:8px;border:none;background:#4a7c6f;color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">💾 画像として保存</button>
-          <button id="schedule-html-btn" onclick="exportScheduleHtml()" style="padding:9px 18px;border-radius:8px;border:none;background:#185fa5;color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">📄 HTMLとして書き出す</button>
+          <button id="schedule-html-btn" onclick="generateShareLink()" style="padding:9px 18px;border-radius:8px;border:none;background:#185fa5;color:white;font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;">🔗 共有リンクを発行</button>
           <span id="schedule-share-notice" style="font-size:12px;color:var(--teal);display:none;"></span>
         </div>
         <div id="schedule-area">
@@ -1068,6 +1068,25 @@
     </div>
   </div>
 
+  <!-- ===== モーダル：処方共有リンクQRコード ===== -->
+  <div id="modal-qr-share" class="modal-overlay" onclick="if(event.target===this)closeQRShareModal()">
+    <div class="modal-box" style="text-align:center;">
+      <div class="modal-title">🔗 お薬の使い方 共有QRコード</div>
+      <p style="font-size:13px;color:var(--text2);margin-bottom:16px;">診察室で患者さんのスマートフォンに読み取ってもらってください。</p>
+      <div id="qr-share-canvas" style="display:inline-block;padding:12px;background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);"></div>
+      <div style="margin-top:16px;padding:12px;background:var(--surface2);border-radius:var(--radius-sm);">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">QRコードが読めない場合はこのURLを直接お伝えください</div>
+        <div id="qr-share-url" style="font-size:11px;word-break:break-all;color:var(--text);"></div>
+      </div>
+      <div style="margin-top:14px;padding:12px;background:var(--amber-bg);border-radius:var(--radius-sm);">
+        <div style="font-size:12px;color:var(--amber-text);font-weight:600;">有効期限：14日間（今回受診分の処方内容）</div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeQRShareModal()">閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- トースト -->
   <div id="toast"></div>
 
@@ -1088,6 +1107,13 @@
       // 9: 手入力
       { name: "その他（手入力）",             short: "手入力",         tubeg: 10, gPerFTU: 0.5,  custom: true },
     ];
+    // 患者向け共有リンクの「薬と部位別」表示で使う区分（idx 0-5:ステロイド／6-7:非ステロイド／8:保湿剤／9:その他）
+    function categoryOfPreset(idx) {
+      if (idx <= 5) return 'steroid';
+      if (idx <= 7) return 'nonsteroid';
+      if (idx === 8) return 'moisturizer';
+      return 'other';
+    }
     const FREQS = [
       { label: "1日2回", val: 2 }, { label: "1日1回", val: 1 },
       { label: "2日に1回", val: 0.5 }, { label: "週3回", val: 3 / 7 },
@@ -4751,6 +4777,8 @@
           } else {
             freqVal = r.freqVal;
           }
+          fillRatio = freqVal >= 2 ? 1.0 : 0.5;
+          const showEvery = freqValToShowEvery(freqVal);
           const show = offset % showEvery === 0;
           const cellH = 36;
           const fillH = Math.round((cellH - 4) * fillRatio);
@@ -4871,7 +4899,11 @@
           freqLabel: '（安定期・直接入力）',
           prescribedG: r.prescribeG,
           partNames: r.partNames,
-          startDate: visitDate
+          startDate: visitDate,
+          category: categoryOfPreset(r.drugRef.preset),
+          partNamesFace: r.partNames.filter(n => n.startsWith('顔')),
+          partNamesOther: r.partNames.filter(n => !n.startsWith('顔')),
+          scheduleText: `${r.name}を${r.partNames.length ? r.partNames.join('・') : '指定部位'}に塗布してください`
         }));
         rxSummaryText = rxItems.map(r => {
           const parts = r.partNames.length ? r.partNames.join('・') : '部位未設定';
@@ -4890,6 +4922,9 @@
           taper: r.taperPhases ? true : false,
           taperFreqLabel: r.taperPhases ? r.taperPhases[r.taperPhases.length-1].freqLabel : null,
           partNames: r.partNames,
+          category: categoryOfPreset(r.drugRef.preset),
+          partNamesFace: r.partNames.filter(n => n.startsWith('顔')),
+          partNamesOther: r.partNames.filter(n => !n.startsWith('顔')),
           startDate: visitDate,
           endDate: r.taperPhases ? r.taperPhases[r.taperPhases.length-1].endDate : nextVisitDate,
           prescribedG: r.prescribeG
@@ -5053,9 +5088,7 @@
       showQRFormModal(url);
     }
 
-    function showQRFormModal(url) {
-      document.getElementById('qr-form-url').textContent = url;
-      const wrap = document.getElementById('qr-form-canvas');
+    function drawQrInto(wrap, url) {
       wrap.innerHTML = '';
       try {
         const qr = qrcode(0, 'M');
@@ -5076,10 +5109,50 @@
       } catch (e) {
         wrap.innerHTML = '<p style="font-size:12px;color:var(--text2);padding:8px;">QR生成に失敗しました</p>';
       }
+    }
+
+    function showQRFormModal(url) {
+      document.getElementById('qr-form-url').textContent = url;
+      drawQrInto(document.getElementById('qr-form-canvas'), url);
       document.getElementById('modal-qr-form').classList.add('active');
     }
 
     function closeQRFormModal() { document.getElementById('modal-qr-form').classList.remove('active'); }
+
+    function showQRShareModal(url) {
+      document.getElementById('qr-share-url').textContent = url;
+      drawQrInto(document.getElementById('qr-share-canvas'), url);
+      document.getElementById('modal-qr-share').classList.add('active');
+    }
+
+    function closeQRShareModal() { document.getElementById('modal-qr-share').classList.remove('active'); }
+
+    async function generateShareLink() {
+      const snap = currentRxSnapshot;
+      if (!snap || !snap.rxItems || !snap.rxItems.length) {
+        showToast('処方量計算後に実行してください');
+        return;
+      }
+      if (!snap.patientNo) { showToast('患者IDを入力してください'); return; }
+      if (!snap.visitDate) { showToast('受診日を入力してください'); return; }
+
+      const btn = document.getElementById('schedule-html-btn');
+      btn.disabled = true;
+      btn.textContent = '⏳ 発行中…';
+      try {
+        await saveVisit(); // 共有ページはVisitHistoryの保存済みdrugsJsonを参照するため、先に保存
+        const res = await fetch(`${GAS_URL}?page=generateShareLink&p=${encodeURIComponent(snap.patientNo)}&d=${encodeURIComponent(snap.visitDate)}`);
+        const json = await res.json();
+        if (!json.ok) { showToast('リンク発行に失敗しました'); return; }
+        showQRShareModal(json.url);
+      } catch (err) {
+        showToast('リンク発行に失敗しました');
+        console.error(err);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔗 共有リンクを発行';
+      }
+    }
 
     let _toastTimer = null;
     function showToast(msg) {
@@ -5178,43 +5251,6 @@
       setTimeout(() => URL.revokeObjectURL(url), 3000);
     }
 
-    function exportScheduleHtml() {
-      if (!currentRxSnapshot || !currentRxSnapshot.rxItems.length) {
-        showToast('処方量計算後に実行してください');
-        return;
-      }
-      const area = document.getElementById('schedule-area');
-      if (!area) return;
-      const snap = currentRxSnapshot;
-      const today = snap.visitDate || new Date().toISOString().slice(0, 10);
-      const fname = `塗布スケジュール_${today}.html`;
-
-      // ページ内のすべてのCSSを収集（Gantt・変数含む）
-      const allCss = Array.from(document.querySelectorAll('style'))
-        .map(s => s.textContent).join('\n');
-
-      const patientLabel = snap.patientNo ? `患者ID: ${snap.patientNo}　` : '';
-      const html = `<!DOCTYPE html>
-<html lang="ja">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>処方スケジュール ${today}</title>
-<style>${allCss}</style>
-</head>
-<body style="background:#f5f4f0;padding:16px;">
-<h2 style="font-size:15px;font-weight:700;margin-bottom:12px;color:#1a1916;">📅 塗布スケジュール（${patientLabel}${today}）</h2>
-${area.innerHTML}
-</body>
-</html>`;
-
-      const blob = new Blob([html], { type: 'text/html; charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = fname; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 3000);
-      showToast('HTMLを書き出しました');
-    }
 
     // ===== 音声入力 =====
     let _voiceRecognition = null;

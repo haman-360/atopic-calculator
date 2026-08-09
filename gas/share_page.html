@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>お薬の使い方</title>
+  <?!= include('shared_styles'); ?>
+  <style>
+    .menu-link {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 20px 16px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .menu-link:active { background: var(--surface2); }
+    .menu-link .icon { font-size: 30px; flex-shrink: 0; }
+    .menu-link .title { font-size: 16px; font-weight: 700; }
+    .menu-link .sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+    .menu-link .arrow { margin-left: auto; color: var(--text3); font-size: 18px; }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: none;
+      border: none;
+      color: var(--teal);
+      font-size: 14px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 6px 0;
+      margin-bottom: 10px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .group-title {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 2px;
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .group-title.steroid { color: var(--red-text); }
+    .group-title.nonsteroid { color: var(--blue-text); }
+    .group-title.moisturizer { color: var(--green-text); }
+    .group-title.other { color: var(--text2); }
+    .drug-row {
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .drug-row:last-child { border-bottom: none; }
+    .drug-row .dname { font-size: 15px; font-weight: 700; }
+    .drug-row .dparts { font-size: 12px; color: var(--text2); margin-top: 3px; }
+    .drug-row .dfreq {
+      display: inline-block;
+      margin-top: 5px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--green-text);
+      background: var(--green-bg);
+      border-radius: 20px;
+      padding: 2px 10px;
+    }
+    .sched-card .dname { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
+    .sched-card .stext { font-size: 13px; line-height: 1.7; color: var(--text); }
+  </style>
+</head>
+
+<body>
+
+  <div class="page-header">
+    <h1>🌿 はまこどもクリニック</h1>
+    <div class="sub" id="header-sub">お薬の使い方</div>
+  </div>
+
+  <div class="container">
+
+    <!-- メニュー -->
+    <div id="view-menu">
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="menu-link" onclick="showView('bydrug')">
+          <div class="icon">💊</div>
+          <div>
+            <div class="title">薬と部位別の塗り方</div>
+            <div class="sub">顔／顔以外 × ステロイド／非ステロイドで確認</div>
+          </div>
+          <div class="arrow">›</div>
+        </div>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="menu-link" onclick="showView('schedule')">
+          <div class="icon">📅</div>
+          <div>
+            <div class="title">毎日のスケジュール</div>
+            <div class="sub">いつ・どのくらいの頻度で塗るか</div>
+          </div>
+          <div class="arrow">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 薬と部位別 -->
+    <div id="view-bydrug" style="display:none;">
+      <button class="back-btn" onclick="showView('menu')">‹ メニューに戻る</button>
+      <div class="card">
+        <p style="font-size:12px;color:var(--text2);line-height:1.6;">
+          ステロイドと非ステロイドは効き方や使い方が異なるお薬です。<br>
+          部位ごとに指示されたお薬を塗ってください。
+        </p>
+      </div>
+      <div id="bydrug-groups"></div>
+    </div>
+
+    <!-- 毎日のスケジュール -->
+    <div id="view-schedule" style="display:none;">
+      <button class="back-btn" onclick="showView('menu')">‹ メニューに戻る</button>
+      <div id="schedule-list"></div>
+    </div>
+
+  </div>
+
+  <script>
+    const patientNo = '<?= patientNo ?>';
+    const visitDate = '<?= visitDate ?>';
+    const drugs = <?!= drugsJson ?>;
+
+    const CATEGORY_LABELS = { steroid: 'ステロイド', nonsteroid: '非ステロイド', moisturizer: '保湿剤', other: 'その他の外用薬' };
+    const CATEGORY_ICONS  = { steroid: '🔴', nonsteroid: '🔵', moisturizer: '💧', other: '🧴' };
+    const AREA_LABELS = { face: '顔', other: '顔以外' };
+    const CATEGORY_ORDER = ['steroid', 'nonsteroid', 'moisturizer', 'other'];
+
+    function showView(name) {
+      ['menu', 'bydrug', 'schedule'].forEach(v => {
+        document.getElementById('view-' + v).style.display = (v === name) ? 'block' : 'none';
+      });
+      window.scrollTo(0, 0);
+    }
+
+    function renderHeader() {
+      const parts = [];
+      if (patientNo) parts.push('患者ID: ' + patientNo);
+      if (visitDate) parts.push('受診日: ' + visitDate);
+      document.getElementById('header-sub').textContent = parts.join('　') || 'お薬の使い方';
+    }
+
+    function renderByDrug() {
+      const wrap = document.getElementById('bydrug-groups');
+      let html = '';
+      ['face', 'other'].forEach(area => {
+        CATEGORY_ORDER.forEach(cat => {
+          const rows = drugs.filter(d => {
+            const partsInArea = area === 'face' ? (d.partNamesFace || []) : (d.partNamesOther || []);
+            return (d.category || 'other') === cat && partsInArea.length > 0;
+          });
+          if (!rows.length) return;
+          html += `<div class="card">
+            <div class="group-title ${cat}">${CATEGORY_ICONS[cat]} ${AREA_LABELS[area]}の${CATEGORY_LABELS[cat]}</div>`;
+          rows.forEach(d => {
+            const partsInArea = area === 'face' ? d.partNamesFace : d.partNamesOther;
+            html += `<div class="drug-row">
+              <div class="dname">${escapeHtml(d.name)}</div>
+              <div class="dparts">塗る場所：${escapeHtml(partsInArea.join('・'))}</div>
+              <div class="dfreq">${escapeHtml(d.freqLabel || '')}</div>
+            </div>`;
+          });
+          html += `</div>`;
+        });
+      });
+      wrap.innerHTML = html || '<p style="font-size:13px;color:var(--text2);">表示できるお薬がありません。</p>';
+    }
+
+    function renderSchedule() {
+      const wrap = document.getElementById('schedule-list');
+      if (!drugs.length) {
+        wrap.innerHTML = '<p style="font-size:13px;color:var(--text2);">表示できるお薬がありません。</p>';
+        return;
+      }
+      wrap.innerHTML = drugs.map(d => `
+        <div class="card sched-card">
+          <div class="dname">${escapeHtml(d.name)}</div>
+          <div class="stext">${escapeHtml(d.scheduleText || '')}</div>
+        </div>
+      `).join('');
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    renderHeader();
+    renderByDrug();
+    renderSchedule();
+  </script>
+
+</body>
+</html>

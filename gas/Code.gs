@@ -10,6 +10,11 @@ const CLINIC_SECRET = PROPS.getProperty('CLINIC_SECRET');
 // [0] patientNo  [1] birthdate  [2] notes
 // [3] tokenHash  [4] tokenSalt  [5] tokenExpiresAt  [6] isActive
 
+// ===== VisitHistory 列定義（0始まり） =====
+// [0] patientNo  [1] visitDate  [2] nextVisitDate  [3] drugsJson
+// [4] rxSummaryText  [5] prescriptionImageBase64
+// [6] shareTokenHash  [7] shareTokenSalt  [8] shareTokenExpiresAt（患者向け処方共有リンク用。受診ごとに発行）
+
 // ===== ルーティング =====
 function doGet(e) {
   const page = (e && e.parameter && e.parameter.page) || 'form';
@@ -100,6 +105,32 @@ function doGet(e) {
     const p = (e && e.parameter && e.parameter.p) || '';
     const result = getAssessmentList_(p);
     return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(MimeType.JSON);
+  }
+
+  // 処方共有リンク発行（atopic_calculator.html から呼ばれる。GETなのはクロスオリジンfetchでレスポンスを読むため）
+  if (page === 'generateShareLink') {
+    const p = (e && e.parameter && e.parameter.p) || '';
+    const d = (e && e.parameter && e.parameter.d) || '';
+    const result = generateShareLink_(p, d);
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(MimeType.JSON);
+  }
+
+  // 処方共有ページ（患者がQRコードから開く）
+  if (page === 'share') {
+    const p = (e && e.parameter && e.parameter.p) || '';
+    const t = (e && e.parameter && e.parameter.t) || '';
+    const visit = findVisitByShareToken_(p, t);
+    if (!visit.valid) {
+      return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">リンクが無効か、有効期限が切れています。クリニックにお問い合わせください。</p>');
+    }
+    const tmpl = HtmlService.createTemplateFromFile('share_page');
+    tmpl.patientNo = p;
+    tmpl.visitDate = visit.visitDate;
+    tmpl.drugsJson = JSON.stringify(visit.drugsJson);
+    return tmpl.evaluate()
+      .setTitle('お薬の使い方 — はまこどもクリニック')
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .addMetaTag('viewport', 'width=device-width, initial-scale=1.0');
   }
 
   return HtmlService.createHtmlOutput('<p style="font-family:sans-serif;padding:40px;">ページが見つかりません</p>');
@@ -564,6 +595,44 @@ function saveVisit_(patientNo, visitDate, nextVisitDate, drugsJson, rxSummaryTex
   const newRow = sheet.getLastRow();
   sheet.getRange(newRow, 1).setNumberFormat('@');
   sheet.getRange(newRow, 1).setValue(String(patientNo));
+}
+
+// ===== 処方共有リンク発行: 受診ごとに新しいトークンをVisitHistory行に書き込む =====
+function generateShareLink_(patientNo, visitDate) {
+  if (!patientNo || !visitDate) return { ok: false, reason: 'missing_params' };
+  const sheet = getSheet_('VisitHistory');
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    const rowDate = dateToStr_(data[i][1]);
+    if (String(data[i][0]) !== String(patientNo) || rowDate !== String(visitDate)) continue;
+    const token = Utilities.getUuid().replace(/-/g, '');
+    const salt = Utilities.getUuid().replace(/-/g, '');
+    const hash = hashToken_(salt, token);
+    const expiresAt = new Date(Date.now() + 14 * 86400000).toISOString(); // 14日間有効
+    sheet.getRange(i + 1, 7, 1, 3).setValues([[hash, salt, expiresAt]]);
+    const url = ScriptApp.getService().getUrl() + '?page=share&p=' + encodeURIComponent(patientNo) + '&t=' + token;
+    return { ok: true, url: url };
+  }
+  return { ok: false, reason: 'visit_not_found' };
+}
+
+// ===== 処方共有トークン検証: 患者番号内の全受診行からトークン一致・有効期限内のものを探す =====
+function findVisitByShareToken_(patientNo, token) {
+  if (!patientNo || !token) return { valid: false };
+  const sheet = getSheet_('VisitHistory');
+  const data = sheet.getDataRange().getValues();
+  const now = new Date();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) !== String(patientNo)) continue;
+    const hash = data[i][6], salt = data[i][7], expiresAt = data[i][8];
+    if (!hash || !salt || !expiresAt) continue;
+    if (now > new Date(expiresAt)) continue;
+    if (hashToken_(String(salt), token) !== String(hash)) continue;
+    let drugsJson = [];
+    try { drugsJson = data[i][3] ? JSON.parse(data[i][3]) : []; } catch (e) {}
+    return { valid: true, visitDate: dateToStr_(data[i][1]), drugsJson: drugsJson };
+  }
+  return { valid: false };
 }
 
 // ===== 医師ダッシュボード: データ取得 =====
@@ -1064,7 +1133,7 @@ function setupSheets() {
 
   const sheets = {
     'PatientRegistry': ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'],
-    'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText', 'prescriptionImageBase64'],
+    'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText', 'prescriptionImageBase64', 'shareTokenHash', 'shareTokenSalt', 'shareTokenExpiresAt'],
     'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status', 'triggersJson', 'triggerNote', 'topicalUseJson'],
     'AuditLog':              ['timestamp', 'patientNo', 'action'],
     'ClinicalAssessments':   ['assessmentId', 'patientNo', 'visitDate', 'assessedAt', 'easiHead', 'easiTrunk', 'easiUpperLimb', 'easiLowerLimb', 'easiTotal', 'easiSeverity', 'iga', 'lesionMapJson', 'notes', 'easiRawJson'],
@@ -1088,6 +1157,21 @@ function setupSheets() {
   }
 
   Logger.log('シート初期設定が完了しました');
+}
+
+// ===== VisitHistory に処方共有リンク用の列を追加（既存デプロイ用・1回のみ実行） =====
+function addShareTokenColumnsToVisitHistory() {
+  const sheet = getSheet_('VisitHistory');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (headers.indexOf('shareTokenHash') >= 0) {
+    Logger.log('shareToken列はすでに存在します');
+    return;
+  }
+  const startCol = sheet.getLastColumn() + 1;
+  const newHeaders = ['shareTokenHash', 'shareTokenSalt', 'shareTokenExpiresAt'];
+  sheet.getRange(1, startCol, 1, newHeaders.length).setValues([newHeaders]);
+  sheet.getRange(1, startCol, 1, newHeaders.length).setFontWeight('bold').setBackground('#e8f5e9');
+  Logger.log('shareToken列を追加しました: ' + newHeaders.join(', '));
 }
 
 // ===== DailyPIN シート追加（既存デプロイ用・1回のみ実行） =====
