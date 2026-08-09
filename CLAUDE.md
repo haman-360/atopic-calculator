@@ -14,6 +14,7 @@ atopic-calculator/
     ├── Code.gs              # GASサーバー本体（API・バリデーション）
     ├── patient_form.html    # 患者アンケートフォーム（QRスキャン後）
     ├── doctor_dashboard.html # 医師確認ダッシュボード（iPad用）
+    ├── share_page.html      # 患者向け処方共有ページ（薬と部位別・ガントチャート）
     └── shared_styles.html   # 共通CSS
 ```
 
@@ -85,8 +86,12 @@ atopic-calculator/
 | patientNo | 患者番号 |
 | visitDate | 受診日 |
 | nextVisitDate | 次回受診予定日 |
-| drugsJson | 処方内容JSON（薬名・部位・頻度・g数） |
+| drugsJson | 処方内容JSON（薬名・部位・頻度・g数・category・taperPhases等） |
 | rxSummaryText | テキスト要約 |
+| prescriptionImageBase64 | 処方画像（45000文字以内のみ保存） |
+| shareTokenHash | 患者向け処方共有リンク用トークンのSHA256ハッシュ（受診ごとに発行） |
+| shareTokenSalt | ランダムソルト |
+| shareTokenExpiresAt | 有効期限（14日間） |
 
 ### PatientReports（患者アンケート回答）
 | 列 | 内容 |
@@ -141,6 +146,8 @@ atopic-calculator/
 | `?page=getAssessment&id={assessmentId}` | 評価1件をJSON返却 |
 | `?page=getAssessmentByVisit&p={patientNo}&d={visitDate}` | 指定受診日の評価一覧をJSON返却 |
 | `?page=getAssessmentList&p={patientNo}` | 患者の評価全履歴をJSON返却（降順） |
+| `?page=generateShareLink&p={patientNo}&d={visitDate}` | 処方共有リンクを新規発行（VisitHistory行にトークン書き込み）・URLをJSON返却。GETなのはatopic_calculator.html（GitHub Pages・クロスオリジン）からfetchでレスポンスを読むため |
+| `?page=share&p={patientNo}&t={shareToken}` | 患者向け処方共有ページを表示（share_page.html） |
 
 ### doPost — データ操作
 | action | 呼び出し元 | 処理 |
@@ -222,24 +229,23 @@ atopic-calculator/
 ### 薬剤データ（PRESETS）
 ```javascript
 [
-  // idx 0
-  { name: "モイゼルト軟膏",              tubeg: 28, gPerFTU: 0.35, mixed: false },
-  // idx 1
-  { name: "コレクチム軟膏",              tubeg: 10, gPerFTU: 0.5,  mixed: false },
-  // idx 2〜5: ステロイド
-  { name: "ロコイド軟膏",                tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  { name: "リンデロンV軟膏",             tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  { name: "リンデロンVクリーム",         tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  { name: "アンテベート軟膏",            tubeg: 10, gPerFTU: 0.3,  mixed: false },
-  // idx 6〜7: 混合軟膏
-  { name: "ロコイド/ヘパリン混合軟膏",   tubeg: 10, gPerFTU: 0.5,  mixed: true  },
-  { name: "リンデロン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5,  mixed: true  },
+  // idx 0〜5: ステロイド（idx4,5はヘパリン混合）
+  { name: "ロコイド軟膏",                tubeg: 10, gPerFTU: 0.3, custom: false },
+  { name: "リンデロン軟膏",              tubeg: 10, gPerFTU: 0.3, custom: false },
+  { name: "リンデロンクリーム",          tubeg: 10, gPerFTU: 0.3, custom: false },
+  { name: "アンテベート軟膏",            tubeg: 10, gPerFTU: 0.3, custom: false },
+  { name: "ロコイド/ヘパリン混合軟膏",   tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
+  { name: "リンデロン/ヘパリン混合軟膏", tubeg: 10, gPerFTU: 0.5, custom: false, mixed: true },
+  // idx 6〜7: 非ステロイド
+  { name: "モイゼルト軟膏",              tubeg: 28, gPerFTU: 0.35, custom: false },
+  { name: "コレクチム軟膏",              tubeg: 10, gPerFTU: 0.5,  custom: false },
   // idx 8: 保湿剤
-  { name: "ブイタマークリーム",          tubeg: 15, gPerFTU: 0.5,  mixed: false },
+  { name: "ブイタマークリーム",          tubeg: 15, gPerFTU: 0.5,  custom: false },
   // idx 9: 手入力
   { name: "その他（手入力）",             tubeg: 10, gPerFTU: 0.5,  custom: true },
 ]
 ```
+`categoryOfPreset(idx)`（idx 0-5:steroid／6-7:nonsteroid／8:moisturizer／9:other）で「8. 患者向け処方共有ページ」の薬と部位別表示の区分に使用。
 
 ### FTU値（年齢グループ別 × 部位別）
 | 部位 | 乳児 | 1-2歳 | 3-5歳 | 6-10歳 | 成人 |
@@ -262,7 +268,7 @@ prescribedG = チューブ単位に切り上げ(netG)
 1. **処方量計算結果** — 計算表（必要量・残量・処方量）
 2. **テキスト出力** — カルテ貼り付け用テキスト
 3. **患者向け共有** — 印刷・QR用患者向け説明カード
-4. **スケジュール** — Ganttチャート + 画像共有（html2canvas）
+4. **スケジュール** — Ganttチャート + 画像共有（html2canvas） + 「🔗 共有リンクを発行」（患者向け処方共有ページのQR発行。旧「HTMLとして書き出す」ボタンを置き換え）
 
 ---
 
@@ -287,7 +293,36 @@ prescribedG = チューブ単位に切り上げ(netG)
 
 ---
 
-## 8. デプロイ情報
+## 8. 患者向け処方共有ページ（gas/share_page.html）
+
+### 目的
+処方計算後、患者が自分のスマホで「薬と部位別の塗り方」「毎日のスケジュール（ガントチャート）」を確認できるページ。従来はPNG画像をAirDropで共有していたが、iOSでしか使えず（Android患者に渡せない）、HTMLファイルのダウンロード共有も「iOSにウイルスと誤認される・保存場所が分からなくなる」リスクがあるため、**GAS上にホストしたURLをQRコードで読み取ってもらう方式**に変更した。
+
+### 発行フロー
+1. 医師が atopic_calculator.html で処方計算・保存
+2. 「🔗 共有リンクを発行」ボタン（旧「HTMLとして書き出す」を置き換え）→ `saveVisit()` 実行後、`?page=generateShareLink&p={patientNo}&d={visitDate}` をGETで呼び出し
+3. GASが該当VisitHistory行に新規トークンを発行（受診ごとに新規発行。14日間有効）
+4. 発行されたURLをQRコードでモーダル表示 → 診察室でその場に患者が自分のスマホで読み取る（iOS/Android共通、AirDrop不要）
+
+### トークン設計
+- アンケート用トークン（PatientRegistry）とは**別のトークン**。VisitHistory行に`shareTokenHash`/`shareTokenSalt`/`shareTokenExpiresAt`として保存する
+- 目的（アンケート回答 vs 処方内容閲覧）とタイミング（受診前 vs 受診後）が異なるため分離。同じトークンを使い回すと、受付で見せたアンケートQRから処方内容まで見られる目的外アクセスの穴になる
+- 受診ごとに新規トークンを発行（PatientRegistryのトークンのように上書きではなく、VisitHistory行ごとに個別発行）
+
+### ページ構成（1ページ内でJSによりビュー切り替え、GASの追加ラウンドトリップなし）
+1. **メニュー**：「薬と部位別の塗り方」「毎日のスケジュール」の2リンク
+2. **薬と部位別**：`顔のステロイド`／`顔の非ステロイド`／`顔以外のステロイド`／`顔以外の非ステロイド`（該当があれば保湿剤・その他も）に分けて薬剤名・部位・頻度を表示。ステロイドと非ステロイドの違いが分かりにくい患者向けの整理
+3. **毎日のスケジュール**：atopic_calculator.htmlのスケジュールタブと同じ見た目のガントチャート（日ごとの塗布有無を色分け）＋薬ごとのスケジュールテキスト。html2canvasでその場でPNG化し「画像として保存」「画像として共有」が可能（医師のAirDrop操作を患者自身が行える）
+
+薬の区分は `atopic_calculator.html` の `categoryOfPreset(idx)` で判定し、`saveVisit()` の `drugsJson` に `category`・`partNamesFace`・`partNamesOther`・`scheduleText` を追加して保存したものを共有ページがそのまま利用する。
+
+### 既知の制約
+- `generateShareLink` は認証なし（`registerToken` と同じ運用レベル）。patientNo・visitDateが分かれば誰でもリンクを発行できる
+- 計算アプリの「塗り方の詳細」（部位別FTU・グラム数の内訳）は共有ページには未移植（年齢別FTU計算の生データを渡す必要があり範囲が広がるため）
+
+---
+
+## 9. デプロイ情報
 
 - **GASデプロイID:** `AKfycbyYlP8b_E-X4tDYZQm6uDn3cbsaAcAezMjsJw4coN_nW-QCTbLqMtz0tkNShej1gLApYw`
 - **ベースURL:** `https://script.google.com/macros/s/AKfycbyYlP8b_E-X4tDYZQm6uDn3cbsaAcAezMjsJw4coN_nW-QCTbLqMtz0tkNShej1gLApYw/exec`
@@ -309,7 +344,7 @@ clasp push
 
 ---
 
-## 9. 注意事項
+## 10. 注意事項
 
 - `CLINIC_SECRET` はソースコードに書かず、スクリプトプロパティで管理
 - `patient_form.html` のパラメータ取得は `<?= patientNo ?>` テンプレート変数方式（URLSearchParamsは使えない）
@@ -319,7 +354,7 @@ clasp push
 
 ---
 
-## 10. アンケート強化計画（2026-05 設計）
+## 11. アンケート強化計画（2026-05 設計）
 
 ### 追加する項目（優先順）
 1. **かゆみNRS**（0〜10）← 最優先・1ファイル変更のみ
@@ -349,12 +384,14 @@ clasp push
 
 ---
 
-## 11. TODO
+## 12. TODO
 
 - [ ] 患者フォームE2Eテスト（QR生成→スキャン→認証→送信→Sheets反映確認）
 - [ ] 医師ダッシュボードの動作確認
 - [ ] POEMスコアの推移グラフ・経過観察機能
 - [ ] VisitHistoryへの処方履歴の自動同期
+- [ ] 患者向け処方共有ページの実機動作確認（QR発行→スキャン→薬と部位別／ガントチャート表示→画像保存）
+- [ ] 必要であれば共有ページに「塗り方の詳細」（部位別FTU・グラム数）も追加
 
 ---
 
@@ -378,10 +415,14 @@ clasp push
 | 2026-05-28 | カルテビューにミニGanttチャート・処方量チップ・スケジュールHTML書き出しボタン追加 |
 | 2026-05-28 | 処方量計算スケジュールタブに「HTMLとして書き出す」ボタン追加 |
 | 2026-08-08 | 処方計算アプリの漸減機能を多段対応に改修（`taper/taperDate/taperFreqIdx` → `tapers[]` 配列）。「途中で頻度を減らす」ボタンを複数回押せるようにし、3段階・4段階漸減が可能に。旧形式の保存データとの後方互換性を維持（applyPrevRx） |
+| 2026-08-09 | 患者向け処方共有ページ（gas/share_page.html）を新規作成。VisitHistoryに共有トークン列（shareTokenHash/Salt/ExpiresAt）を追加し、doGetに`generateShareLink`/`share`ルートを追加。「HTMLとして書き出す」ボタンを「共有リンクを発行」に置き換え、QRコード読み取りでiOS/Android問わず患者のスマホから閲覧できる方式に変更 |
+| 2026-08-09 | 共有ページに「薬と部位別」ビューを追加（顔／顔以外 × ステロイド／非ステロイドの4分割表示）。atopic_calculator.htmlの`saveVisit()`でdrugsJsonに`category`/`partNamesFace`/`partNamesOther`/`scheduleText`を追加保存 |
+| 2026-08-09 | 共有ページの「毎日のスケジュール」にatopic_calculator.htmlと同じ見た目のガントチャートを追加し、html2canvasで「画像として保存」「画像として共有」ボタンを実装。患者自身でPNG保存でき、AirDropが不要に |
+| 2026-08-09 | fix: 多段漸減の処方でスケジュールGanttの`showEvery`未定義エラーによりテキスト出力・スケジュールタブが空になっていた不具合を修正（前日`a9e5a21`の多段対応リファクタで再計算処理が2行欠落していたのが原因） |
 
 ---
 
-## 12. コミットルール
+## 13. コミットルール
 
 - コミット前に必ずメッセージ案を提示し、承認を得てからコミットすること
 - **conventional commits形式** で日本語で書くこと
@@ -414,7 +455,7 @@ feat: 疾患固定QRルートと初診患者フローを追加
 
 ---
 
-## 13. トラブルシューティング実績
+## 14. トラブルシューティング実績
 
 ### GASのURLパラメータが届かない
 - **原因：** `clasp push` 後に新バージョンのデプロイを作成していなかった。`/exec` URL はバージョン指定されたデプロイを実行するため、push だけでは反映されない
@@ -423,3 +464,7 @@ feat: 疾患固定QRルートと初診患者フローを追加
 ### google.script.run でシリアライズエラー（`Uncaught jtUnderstand this error`）
 - **原因：** `getValues()` が返す Sheets の日付セルが Date オブジェクトのまま `google.script.run` の戻り値に含まれ、クライアント側のシリアライズに失敗した
 - **対策：** `google.script.run` で返すオブジェクトに Date を含めない。`Utilities.formatDate(v, 'Asia/Tokyo', 'yyyy-MM-dd')` で必ず文字列変換してから返す
+
+### 多段漸減の処方でテキスト出力・スケジュールタブが空になる（2026-08-09発見）
+- **原因：** `renderScheduleGantt()` 内で日ごとの `showEvery`/`fillRatio` を再計算する2行が、`a9e5a21`（漸減の多段対応リファクタ）の際に削除され、`showEvery is not defined` の例外が発生していた。`calc()` は「①結果テーブル描画 → ②`renderScheduleGantt()` → ③テキスト出力」の順で同期実行されるため、②で例外が起きると③以降が実行されず、テキスト出力とスケジュールタブが空のままになる。「患者向け共有」タブは別関数（タブ切り替え時に個別実行）なので影響を受けず表示されていた
+- **対策：** `freqVal` 確定後に `fillRatio = freqVal >= 2 ? 1.0 : 0.5;` と `const showEvery = freqValToShowEvery(freqVal);` を復元。ロジックを変更するリファクタ時は、削除した変数が後続処理で参照されていないか（特にローカル変数の再計算部分）を確認する
