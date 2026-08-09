@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>お薬の使い方</title>
   <?!= include('shared_styles'); ?>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <style>
     .menu-link {
       display: flex;
@@ -67,6 +68,38 @@
     }
     .sched-card .dname { font-size: 15px; font-weight: 700; margin-bottom: 6px; }
     .sched-card .stext { font-size: 13px; line-height: 1.7; color: var(--text); }
+    /* ===== Ganttスケジュール（atopic_calculator.htmlのスケジュール画面と同じ見た目） ===== */
+    .gantt-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .gantt-actions button {
+      flex: 1;
+      min-width: 130px;
+      padding: 11px 14px;
+      border-radius: var(--radius-sm);
+      border: none;
+      font-size: 13px;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .gantt-save-btn { background: var(--teal); color: white; }
+    .gantt-share-btn { background: #4a7c6f; color: white; }
+    #gantt-capture { background: var(--surface); padding: 4px 2px 10px; }
+    .gantt-outer { overflow-x: auto; margin-top: 4px; }
+    table.gantt { border-collapse: collapse; font-size: 11px; white-space: nowrap; }
+    table.gantt th, table.gantt td { border: 1px solid var(--border); text-align: center; }
+    table.gantt th { background: var(--surface2); font-weight: 600; padding: 4px 6px; font-size: 10px; }
+    .gantt-part { min-width: 70px; max-width: 90px; font-size: 11px; padding: 4px 6px; text-align: left !important; word-break: break-all; white-space: normal; }
+    .gantt-drug { min-width: 100px; font-size: 11px; padding: 4px 6px; text-align: left !important; }
+    .gantt-freq { min-width: 60px; font-size: 10px; padding: 4px 5px; color: var(--text2); }
+    .gantt-day  { width: 28px; }
+    .day-cell   { width: 28px; height: 36px; position: relative; padding: 0 !important; }
+    .fill-block { position: absolute; left: 2px; right: 2px; bottom: 2px; border-radius: 2px; }
+    .phase-border { border-left: 2px dashed #c0392b !important; }
+    .gantt-legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+    .gantt-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+    .gantt-legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
+    .gantt-notice { font-size: 12px; color: var(--teal); display: none; margin-bottom: 8px; }
   </style>
 </head>
 
@@ -96,7 +129,7 @@
           <div class="icon">📅</div>
           <div>
             <div class="title">毎日のスケジュール</div>
-            <div class="sub">いつ・どのくらいの頻度で塗るか</div>
+            <div class="sub">ガントチャートで確認・画像として保存できます</div>
           </div>
           <div class="arrow">›</div>
         </div>
@@ -118,6 +151,18 @@
     <!-- 毎日のスケジュール -->
     <div id="view-schedule" style="display:none;">
       <button class="back-btn" onclick="showView('menu')">‹ メニューに戻る</button>
+
+      <div class="gantt-actions">
+        <button class="gantt-save-btn" id="gantt-save-btn" onclick="saveGanttImage()">💾 画像として保存</button>
+        <button class="gantt-share-btn" id="gantt-share-btn" onclick="shareGanttImage()">📤 画像として共有</button>
+      </div>
+      <div class="gantt-notice" id="gantt-notice"></div>
+
+      <div class="card" id="gantt-capture">
+        <div id="gantt-header" style="font-size:13px;font-weight:700;margin-bottom:8px;"></div>
+        <div id="gantt-area"></div>
+      </div>
+
       <div id="schedule-list"></div>
     </div>
 
@@ -192,9 +237,184 @@
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     }
 
+    // ===== Ganttスケジュール（atopic_calculator.htmlのスケジュール画面を再現） =====
+    const GANTT_COLORS = [
+      { bg: '#5DCAA5', fg: '#04342C' },
+      { bg: '#85B7EB', fg: '#042C53' },
+      { bg: '#FAC775', fg: '#412402' },
+      { bg: '#AFA9EC', fg: '#26215C' },
+      { bg: '#F0997B', fg: '#4A1B0C' },
+      { bg: '#B4B2A9', fg: '#2C2C2A' },
+    ];
+    const DOW_JA = ['日', '月', '火', '水', '木', '金', '土'];
+
+    function freqValToShowEvery(v) {
+      if (v >= 2) return 1;
+      if (v >= 1) return 1;
+      if (v >= 0.5) return 2;
+      if (v >= 3 / 7 - 0.01) return 2;
+      if (v >= 2 / 7 - 0.01) return 4;
+      return 7;
+    }
+
+    function renderGantt() {
+      const headerEl = document.getElementById('gantt-header');
+      const areaEl = document.getElementById('gantt-area');
+
+      // 日ごとのスケジュールを組み立てられる薬剤のみ対象（taperPhasesまたはfreqValが必要）
+      const items = drugs.filter(d => d.taperPhases || d.freqVal !== undefined);
+      if (!items.length) {
+        headerEl.textContent = '';
+        areaEl.innerHTML = '<p style="font-size:13px;color:var(--text2);">表示できるスケジュールがありません。</p>';
+        document.getElementById('gantt-save-btn').style.display = 'none';
+        document.getElementById('gantt-share-btn').style.display = 'none';
+        return;
+      }
+
+      const allDates = items.flatMap(d => [d.startDate, d.endDate]).filter(Boolean);
+      const rangeStart = allDates.reduce((a, b) => (a < b ? a : b));
+      const rangeEnd = allDates.reduce((a, b) => (a > b ? a : b));
+      const startDt = new Date(rangeStart);
+      const nd = Math.round((new Date(rangeEnd) - startDt) / 86400000);
+      if (nd <= 0) {
+        areaEl.innerHTML = '<p style="font-size:13px;color:var(--text2);">日付を確認してください。</p>';
+        return;
+      }
+
+      const metaParts = [];
+      if (patientNo) metaParts.push('患者ID: ' + patientNo);
+      metaParts.push(`${rangeStart} 〜 ${rangeEnd}`);
+      headerEl.textContent = '📅 塗布スケジュール（' + metaParts.join('　') + '）';
+
+      let hdr = '<tr><th class="gantt-part">部位</th><th class="gantt-drug">薬剤</th><th class="gantt-freq">頻度</th>';
+      for (let i = 0; i < nd; i++) {
+        const dt = new Date(startDt); dt.setDate(dt.getDate() + i);
+        hdr += `<th class="gantt-day"><div>${dt.getMonth() + 1}/${dt.getDate()}</div><div style="font-size:9px;color:var(--text3);">${DOW_JA[dt.getDay()]}</div></th>`;
+      }
+      hdr += '</tr>';
+
+      let rows = '';
+      let legendHtml = '<div class="gantt-legend">';
+      items.forEach((d, idx) => {
+        const col = GANTT_COLORS[idx % GANTT_COLORS.length];
+        legendHtml += `<div class="gantt-legend-item"><div class="gantt-legend-swatch" style="background:${col.bg};"></div><span>${escapeHtml(d.name)}</span></div>`;
+
+        let cells = '';
+        for (let i = 0; i < nd; i++) {
+          let freqVal, fillRatio;
+          let isPhBorder = false;
+          let offset = i;
+          if (d.taperPhases) {
+            let runningTotal = 0;
+            let phaseIdx = d.taperPhases.length - 1;
+            let phaseOffset = i;
+            for (let k = 0; k < d.taperPhases.length; k++) {
+              if (i < runningTotal + d.taperPhases[k].days) {
+                phaseIdx = k;
+                phaseOffset = i - runningTotal;
+                break;
+              }
+              runningTotal += d.taperPhases[k].days;
+            }
+            freqVal = d.taperPhases[phaseIdx].freqVal;
+            offset = phaseOffset;
+            isPhBorder = (() => {
+              let cum = 0;
+              for (let k = 0; k < d.taperPhases.length - 1; k++) {
+                cum += d.taperPhases[k].days;
+                if (i === cum) return true;
+              }
+              return false;
+            })();
+          } else {
+            freqVal = d.freqVal;
+          }
+          fillRatio = freqVal >= 2 ? 1.0 : 0.5;
+          const showEvery = freqValToShowEvery(freqVal);
+          const show = offset % showEvery === 0;
+          const cellH = 36;
+          const fillH = Math.round((cellH - 4) * fillRatio);
+          const borderClass = isPhBorder ? ' phase-border' : '';
+          cells += `<td class="day-cell${borderClass}">${show ? `<div class="fill-block" style="height:${fillH}px;background:${col.bg};"></div>` : ''}</td>`;
+        }
+
+        const partLabel = (d.partNames && d.partNames.length) ? d.partNames.join('・') : '—';
+        rows += `<tr>
+          <td class="gantt-part" style="color:${col.fg};background:${col.bg}22;">${escapeHtml(partLabel)}</td>
+          <td class="gantt-drug">${escapeHtml(d.name)}</td>
+          <td class="gantt-freq">${escapeHtml(d.freqLabel || '')}</td>
+          ${cells}
+        </tr>`;
+      });
+      legendHtml += '</div>';
+
+      areaEl.innerHTML = `<div class="gantt-outer"><table class="gantt">${hdr}${rows}</table></div>${legendHtml}`;
+    }
+
+    async function captureGanttPng() {
+      const el = document.getElementById('gantt-capture');
+      const canvas = await html2canvas(el, { scale: 2, backgroundColor: '#ffffff', useCORS: true, logging: false });
+      return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+    }
+
+    function ganttFilename() {
+      return `塗布スケジュール_${visitDate || 'share'}.png`;
+    }
+
+    function showGanttNotice(msg, ms) {
+      const n = document.getElementById('gantt-notice');
+      n.textContent = msg;
+      n.style.display = 'inline';
+      if (ms) setTimeout(() => { n.style.display = 'none'; }, ms);
+    }
+
+    async function saveGanttImage() {
+      const btn = document.getElementById('gantt-save-btn');
+      btn.disabled = true; btn.textContent = '⏳ 生成中…';
+      try {
+        const blob = await captureGanttPng();
+        const filename = ganttFilename();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+        showGanttNotice('💾 画像を保存しました', 3000);
+      } catch (err) {
+        showGanttNotice('⚠ 生成に失敗しました');
+        console.error(err);
+      } finally {
+        btn.disabled = false; btn.textContent = '💾 画像として保存';
+      }
+    }
+
+    async function shareGanttImage() {
+      const btn = document.getElementById('gantt-share-btn');
+      btn.disabled = true; btn.textContent = '⏳ 生成中…';
+      try {
+        const blob = await captureGanttPng();
+        const filename = ganttFilename();
+        const file = new File([blob], filename, { type: 'image/png' });
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+          try {
+            await navigator.share({ files: [file], title: '軟膏 塗布スケジュール', text: '塗布スケジュールです。' });
+          } catch (e) {
+            if (e.name !== 'AbortError') showGanttNotice('⚠ 共有がキャンセルされました', 3000);
+          }
+        } else {
+          showGanttNotice('⚠ この端末は画像共有に対応していません。「画像として保存」をお使いください。', 5000);
+        }
+      } catch (err) {
+        showGanttNotice('⚠ 生成に失敗しました');
+        console.error(err);
+      } finally {
+        btn.disabled = false; btn.textContent = '📤 画像として共有';
+      }
+    }
+
     renderHeader();
     renderByDrug();
     renderSchedule();
+    renderGantt();
   </script>
 
 </body>
