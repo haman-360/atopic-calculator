@@ -803,7 +803,11 @@ function buildReportCard(r, type) {
       <div class="report-header">
         <div>
           <div class="report-patient-name">診察券 ${esc(r.patientNo)}<span style="font-size:14px;font-weight:400;color:var(--text2);margin-left:10px;white-space:nowrap;">${esc(r.ageLabel)}</span></div>
-          <div class="report-meta">送信：${esc(dateStr)}${r.patientNotes ? '　' + esc(r.patientNotes) : ''}${r.profile && r.profile.foodAllergyText ? `　🥚 <span style="color:#b71c1c;">${esc(r.profile.foodAllergyText)}</span>` : ''}</div>
+          <div class="report-meta">送信：${esc(dateStr)}${r.patientNotes ? '　' + esc(r.patientNotes) : ''}${(function() {
+            const fa = r.profile && r.profile.foodAllergyText ? r.profile.foodAllergyText.trim() : '';
+            const isNone = !fa || /^(なし|ない|none|no|-)$/i.test(fa);
+            return isNone ? '' : `　⚠️ アレルギー: <span style="color:#b71c1c;font-weight:600;">${esc(fa)}</span>`;
+          })()}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
