@@ -440,6 +440,7 @@ clasp push
 | 2026-08-09 | feat: 共有ページに「毎週リマインダーを設定」機能を追加。`?page=reminderIcs`から.icsカレンダーファイル（週次繰り返し予定・共有ページへの戻りリンク付き）をダウンロードできる。繰り返し終了日は次回受診日と共有トークン有効期限（14日後）の早い方に丸める |
 | 2026-08-09 | fix: 「毎週リマインダーを設定」タップでiPhoneのGoogleカレンダー/Driveアプリに横取りされ「アクセス権が必要です」画面が出る不具合を回避。`reminder-link`に`target="_blank" rel="noopener"`を追加してSafari自身に処理させるよう修正 |
 | 2026-08-17 | fix: ダッシュボードのスコア推移グラフでPOEMが直近14日分しか表示されない不具合を修正。`getDashboardData`のreviewed取得が14日に限定されるため古いPOEMが欠落していた。`getPatientScoreHistory(patientNo)`を`Code.gs`に追加し患者別全件のPOEM/NRSを返すAPIを新設。`loadPatientChart()`を`dashboardData`参照から`getPatientScoreHistory`非同期呼び出し（`getAssessmentList`と並列）に変更。ページ読み込みへの影響なし |
+| 2026-08-17 | fix: ダッシュボードの食物アレルギー表示で「🥚 なし」が出る不具合を修正。`foodAllergyText`が「なし」「ない」等の場合は非表示、実際のアレルゲン名がある場合のみ「⚠️ アレルギー: ○○」形式で表示。絵文字を卵を連想させる🥚から⚠️に変更 |
 | 2026-08-17 | feat: ダッシュボード・カルテビューに年齢帯別回答とプロフィールデータを反映。`getDashboardData`にProfileMapとageSpecific取得を追加。ダッシュボードカードに思春期自由記述「患者の声」（常時展開）・年齢帯別チップ・食物アレルギー表示を追加。`getPatientChartData_`にageSpecific/profileを追加。カルテビューにプロフィールセクション（食物アレルギー/家族歴/合併症/治療歴/環境因子）と受診カード内年齢帯別回答を追加 |
 | 2026-08-17 | feat: QRアンケートに年齢帯別分岐とプロフィール項目分離を追加。`calcAgeGroup_()`に`teen`(132〜155か月, 11〜12歳)を追加しadultを13歳〜に変更。`PatientProfile`シートを新設し食物アレルギー・家族歴・合併症・治療歴・環境因子を管理。`patient_form.html`に年齢帯別セクション（乳幼児期・幼児期・学童期・思春期）とプロフィール確認UI（未登録→全展開、登録済み→変更なし/変更あり切り替え、1年超→自動展開）を追加。`PatientReports`に`ageSpecificJson`列を追加 |
 
