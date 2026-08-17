@@ -479,6 +479,23 @@ const TRIGGER_LABELS = {
   pool: 'プール', clothes: '衣類・繊維', food: '食べ物',
   stress: 'ストレス・疲れ', other: 'その他'
 };
+const COMORBIDITY_LABELS = {
+  asthma: '喘息', rhinitis: 'アレルギー性鼻炎', conjunctivitis: 'アレルギー性結膜炎',
+  foodAllergy: '食物アレルギー', urticaria: 'じんましん'
+};
+const ENV_FACTOR_LABELS = {
+  pet: 'ペット', dustMite: 'ダニ・ほこり', smoking: '室内喫煙',
+  plant: '観葉植物（カビ）', carpet: 'カーペット'
+};
+const AGE_SPECIFIC_LABELS = {
+  infant_breastfeedingImpact: { options: ['影響なし', '飲みが悪くなる', '授乳中に掻く'] },
+  infant_weightGain:          { options: ['普通', 'やや少ない', '心配あり'] },
+  infant_groupCareSituation:  { options: ['通っていない', '悪化なし', '悪化あり'] },
+  school_swimmingImpact:      { options: ['水泳なし', '影響なし', '軽度悪化', '強く悪化'] },
+  school_exerciseSweating:    { options: ['なし', 'あり'] },
+  school_scratchStress:       { options: ['特に気にならない', '少し気になる', 'とても気になる'] },
+  infant_scratchPrevention:   { map: { mittens: 'ミトン', gloves: '手袋', bandage: '包帯', nailcut: '爪切り徹底', none: '特になし' } }
+};
 const EASI_SEVERITY_MAP = [
   { max: 0,        label: 'Clear',       bg: '#f5f5f5',   color: '#9e9e9e' },
   { max: 6,        label: 'Mild',        bg: '#e8f5e9',   color: '#2e7d32' },
@@ -719,6 +736,39 @@ function renderPatientSummary(data) {
   var assessCount = (data.assessments || []).length;
   var bdStr = pi.birthdate ? ' · 生年月日 ' + esc(pi.birthdate) : '';
 
+  // プロフィールセクション
+  var profileHtml = '';
+  var prof = data.profile;
+  if (prof) {
+    var comorbText = (prof.comorbiditiesJson || []).map(function(k) {
+      if (k && k.indexOf('other:') === 0) return k.slice(6);
+      return COMORBIDITY_LABELS[k] || k;
+    }).join('、') || 'なし';
+    var envText = (prof.envFactorsJson || []).map(function(k) {
+      return ENV_FACTOR_LABELS[k] || k;
+    }).join('、') || 'なし';
+    var profDate = prof.updatedAt ? prof.updatedAt.slice(0, 10) : '';
+    var daysSince = profDate ? Math.floor((Date.now() - new Date(profDate).getTime()) / 86400000) : 0;
+    var staleWarning = daysSince >= 365
+      ? '<div style="font-size:11px;color:#c62828;margin-bottom:6px;">⚠️ 前回記録から1年以上経過（' + esc(profDate) + '時点）</div>'
+      : '';
+    var row = function(label, val) {
+      return '<div style="display:flex;gap:8px;font-size:13px;margin-bottom:3px;">' +
+        '<span style="font-weight:600;color:var(--text2);min-width:88px;flex-shrink:0;">' + label + '</span>' +
+        '<span style="color:var(--text);">' + esc(val || 'なし') + '</span></div>';
+    };
+    profileHtml = '<details style="margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;" open>' +
+      '<summary style="font-size:13px;font-weight:700;color:var(--teal);cursor:pointer;">📋 患者プロフィール（' + esc(profDate) + '時点）</summary>' +
+      '<div style="margin-top:10px;">' +
+      staleWarning +
+      row('食物アレルギー', prof.foodAllergyText) +
+      row('家族歴', prof.familyHistoryText) +
+      row('合併症', comorbText) +
+      row('過去の治療歴', prof.txHistoryText) +
+      row('環境因子', envText) +
+      '</div></details>';
+  }
+
   document.getElementById('patient-summary').innerHTML = [
     '<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px;">',
       '<div>',
@@ -734,7 +784,8 @@ function renderPatientSummary(data) {
           ? '<div class="stat-box"><div class="s-val">' + data.baselineAssessment.easiTotal + '</div><div class="s-lbl">ベースラインEASI</div></div>'
           : ''),
       '</div>',
-    '</div>'
+    '</div>',
+    profileHtml
   ].join('');
 }
 
@@ -1127,6 +1178,57 @@ function buildVisitCard(visit, reports, assessment) {
         '</div>';
     }).join('');
     collapsibleInner += '<div class="section-title" style="margin-top:6px;">部位別外用頻度</div>' + topRows;
+  }
+
+  // --- 年齢帯別追加回答 ---
+  if (report && report.ageSpecific) {
+    var as = report.ageSpecific;
+    var ageChips = '';
+    var chip = function(text, color) {
+      return '<span style="display:inline-block;background:' + color + '18;color:' + color + ';border:1px solid ' + color + '40;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;margin:2px 3px 2px 0;">' + esc(text) + '</span>';
+    };
+    if ((as.uiAgeGroup === 'infant' || as.uiAgeGroup === 'toddler') && as.uiAgeGroup !== undefined) {
+      if (as.uiAgeGroup === 'infant' && as.infant_breastfeedingImpact !== null && as.infant_breastfeedingImpact !== undefined) {
+        var bfOpts = AGE_SPECIFIC_LABELS.infant_breastfeedingImpact.options;
+        ageChips += chip('授乳: ' + (bfOpts[as.infant_breastfeedingImpact] || '—'), as.infant_breastfeedingImpact > 0 ? '#e65100' : '#2e7d32');
+      }
+      if (as.uiAgeGroup === 'infant' && as.infant_weightGain !== null && as.infant_weightGain !== undefined) {
+        var wgOpts = AGE_SPECIFIC_LABELS.infant_weightGain.options;
+        ageChips += chip('体重: ' + (wgOpts[as.infant_weightGain] || '—'), as.infant_weightGain > 0 ? '#e65100' : '#2e7d32');
+      }
+      if (as.infant_scratchPrevention && as.infant_scratchPrevention.length > 0) {
+        var scrMap = AGE_SPECIFIC_LABELS.infant_scratchPrevention.map;
+        ageChips += chip('掻破対策: ' + as.infant_scratchPrevention.map(function(k) { return scrMap[k] || k; }).join('・'), '#5c6bc0');
+      }
+      if (as.infant_groupCareSituation !== null && as.infant_groupCareSituation !== undefined) {
+        var gcOpts = AGE_SPECIFIC_LABELS.infant_groupCareSituation.options;
+        ageChips += chip('集団生活: ' + (gcOpts[as.infant_groupCareSituation] || '—'), as.infant_groupCareSituation === 2 ? '#e65100' : '#607d8b');
+      }
+    }
+    if (as.uiAgeGroup === 'school') {
+      if (as.school_swimmingImpact !== null && as.school_swimmingImpact !== undefined) {
+        var swOpts = AGE_SPECIFIC_LABELS.school_swimmingImpact.options;
+        var swColor = as.school_swimmingImpact >= 2 ? '#e65100' : as.school_swimmingImpact === 1 ? '#2e7d32' : '#607d8b';
+        ageChips += chip('🏊 水泳: ' + (swOpts[as.school_swimmingImpact] || '—'), swColor);
+      }
+      if (as.school_exerciseSweating !== null && as.school_exerciseSweating !== undefined) {
+        ageChips += chip('🏃 体育後悪化: ' + (as.school_exerciseSweating === 1 ? 'あり' : 'なし'), as.school_exerciseSweating === 1 ? '#e65100' : '#2e7d32');
+      }
+      if (as.school_scratchStress !== null && as.school_scratchStress !== undefined) {
+        var ssOpts = AGE_SPECIFIC_LABELS.school_scratchStress.options;
+        var ssColor = as.school_scratchStress === 2 ? '#c62828' : as.school_scratchStress === 1 ? '#e65100' : '#607d8b';
+        ageChips += chip('学校での負担: ' + (ssOpts[as.school_scratchStress] || '—'), ssColor);
+      }
+    }
+    if (as.uiAgeGroup === 'adolescent' && as.teen_psychologicalBurden && as.teen_psychologicalBurden.trim()) {
+      collapsibleInner += '<div style="margin-top:8px;background:#fce4ec;border-left:3px solid #e91e63;padding:8px 12px;border-radius:0 4px 4px 0;">' +
+        '<div style="font-size:12px;font-weight:700;color:#880e4f;margin-bottom:2px;">💬 患者の声（見た目・対人関係）</div>' +
+        '<div style="font-size:12px;color:#4a0020;line-height:1.5;">' + esc(as.teen_psychologicalBurden) + '</div></div>';
+    }
+    if (ageChips) {
+      collapsibleInner += '<div class="section-title" style="margin-top:6px;">年齢帯別の状態</div>' +
+        '<div style="display:flex;flex-wrap:wrap;">' + ageChips + '</div>';
+    }
   }
 
   var collapsibleHtml = (collapsibleInner)

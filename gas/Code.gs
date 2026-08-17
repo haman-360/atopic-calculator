@@ -785,6 +785,32 @@ function getDashboardData(reviewedDays) {
     };
   }
 
+  // PatientProfile を患者ごとの最新1件にマップ化
+  const profileMap = {};
+  try {
+    const ppSheet = getSheet_('PatientProfile');
+    if (ppSheet) {
+      const ppData = ppSheet.getDataRange().getValues();
+      for (let i = 1; i < ppData.length; i++) {
+        const pno = String(ppData[i][1]);
+        const updatedAt = String(ppData[i][2]);
+        if (!profileMap[pno] || updatedAt > profileMap[pno].updatedAt) {
+          let comorbiditiesJson = [], envFactorsJson = [];
+          try { comorbiditiesJson = ppData[i][5] ? JSON.parse(ppData[i][5]) : []; } catch(e) {}
+          try { envFactorsJson    = ppData[i][7] ? JSON.parse(ppData[i][7]) : []; } catch(e) {}
+          profileMap[pno] = {
+            updatedAt:        updatedAt,
+            foodAllergyText:  String(ppData[i][3] || ''),
+            familyHistoryText:String(ppData[i][4] || ''),
+            comorbiditiesJson:comorbiditiesJson,
+            txHistoryText:    String(ppData[i][6] || ''),
+            envFactorsJson:   envFactorsJson
+          };
+        }
+      }
+    }
+  } catch(e) {}
+
   // VisitHistory を患者ごとに整理（visitDate 降順）
   const vhByPatient = {};
   for (let i = 1; i < vhData.length; i++) {
@@ -855,11 +881,13 @@ function getDashboardData(reviewedDays) {
       const pno = String(row[1]).trim();
       const reg = patientMap[pno] || patientMap[pno.replace(/^0+/, '')] || {};
       let infectionSigns = [], poemScores = {}, medicationRemain = [], triggers = [], topicalUse = [];
+      let ageSpecific = null;
       try { infectionSigns   = row[5]  ? JSON.parse(row[5])  : []; } catch(e) {} // F infectionSignsJson
       try { poemScores       = row[7]  ? JSON.parse(row[7])  : {}; } catch(e) {} // H poemJson
       try { medicationRemain = row[8]  ? JSON.parse(row[8])  : []; } catch(e) {} // I medicationJson
       try { triggers         = row[13] ? JSON.parse(row[13]) : []; } catch(e) {} // N triggersJson
       try { topicalUse       = row[15] ? JSON.parse(row[15]) : []; } catch(e) {} // P topicalUseJson
+      try { ageSpecific      = row[16] ? JSON.parse(row[16]) : null; } catch(e) {} // Q ageSpecificJson
       const entry = {
         reportId: row[0],
         patientNo: pno,
@@ -903,6 +931,8 @@ function getDashboardData(reviewedDays) {
         lastAssessment: assessmentMap[pno] || assessmentMap[pno.replace(/^0+/, '')] || null,
         baselineAssessment: baselineMap[pno] || baselineMap[pno.replace(/^0+/, '')] || null,
         lastImageAssessment: lastImageAssessmentMap[pno] || lastImageAssessmentMap[pno.replace(/^0+/, '')] || null,
+        ageSpecific: ageSpecific,                                 // Q
+        profile: profileMap[pno] || profileMap[pno.replace(/^0+/, '')] || null,
         rowIndex: i + 1
       };
       if (entry.status === 'pending') {
@@ -1100,11 +1130,13 @@ function getPatientChartData_(patientNo) {
     if (String(row[1]).trim() !== pno) continue;
     const status = String(row[12] || 'pending');
     let infectionSigns = [], poemScores = {}, medicationRemain = [], triggers = [], topicalUse = [];
+    let ageSpecific = null;
     try { infectionSigns   = row[5]  ? JSON.parse(row[5])  : []; } catch(e) {}
     try { poemScores       = row[7]  ? JSON.parse(row[7])  : {}; } catch(e) {}
     try { medicationRemain = row[8]  ? JSON.parse(row[8])  : []; } catch(e) {}
     try { triggers         = row[13] ? JSON.parse(row[13]) : []; } catch(e) {}
     try { topicalUse       = row[15] ? JSON.parse(row[15]) : []; } catch(e) {}
+    try { ageSpecific      = row[16] ? JSON.parse(row[16]) : null; } catch(e) {}
     reports.push({
       reportId:         String(row[0]),
       submittedAt:      row[2] ? new Date(row[2]).toISOString() : '',
@@ -1119,7 +1151,8 @@ function getPatientChartData_(patientNo) {
       status:           status,
       triggers:         triggers,
       triggerNote:      String(row[14] || ''),
-      topicalUse:       topicalUse
+      topicalUse:       topicalUse,
+      ageSpecific:      ageSpecific
     });
   }
   reports.sort(function(a, b) { return b.submittedAt.localeCompare(a.submittedAt); });
@@ -1149,7 +1182,8 @@ function getPatientChartData_(patientNo) {
     visits:      visits,
     reports:     reports,
     assessments: assessments,
-    baselineAssessment: baselineAssessment
+    baselineAssessment: baselineAssessment,
+    profile:     getPatientProfile_(pno)
   };
 }
 

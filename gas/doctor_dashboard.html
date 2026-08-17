@@ -496,6 +496,20 @@ const REMAIN_LABELS = ['なし', 'ほとんどない', '少し残ってる', '�
 const SYMPTOM_LABELS = ['なし', '軽度', '中等度', '高度', '最重度'];
 const SYMPTOM_COLORS = ['var(--green)', '#81c784', 'var(--amber)', '#e57373', 'var(--red)'];
 
+// 年齢帯別質問ラベル
+const AGE_SPECIFIC_LABELS = {
+  infant_breastfeedingImpact: { label: '授乳・哺乳', options: ['影響なし', '飲みが悪くなる', '授乳中に掻く'] },
+  infant_weightGain:          { label: '体重増加', options: ['普通', 'やや少ない', '心配あり'] },
+  infant_groupCareSituation:  { label: '集団生活', options: ['通っていない', '悪化なし', '悪化あり'] },
+  school_swimmingImpact:      { label: '水泳授業', options: ['水泳なし', '影響なし', '軽度悪化', '強く悪化'] },
+  school_exerciseSweating:    { label: '体育・発汗悪化', options: ['なし', 'あり'] },
+  school_scratchStress:       { label: '学校での皮膚症状の負担', options: ['特に気にならない', '少し気になる', 'とても気になる'] },
+  infant_scratchPrevention: {
+    label: '掻破対策',
+    map: { mittens: 'ミトン', gloves: '手袋', bandage: '包帯', nailcut: '爪切り徹底', none: '特になし' }
+  }
+};
+
 // EASI定数（年齢による部位重み：8歳未満=小児、8歳以上=成人）
 const EASI_WEIGHT_ADULT = { head: 0.1, trunk: 0.3, upperLimb: 0.2, lowerLimb: 0.4 };
 const EASI_WEIGHT_CHILD = { head: 0.2, trunk: 0.3, upperLimb: 0.2, lowerLimb: 0.3 };
@@ -789,7 +803,7 @@ function buildReportCard(r, type) {
       <div class="report-header">
         <div>
           <div class="report-patient-name">診察券 ${esc(r.patientNo)}<span style="font-size:14px;font-weight:400;color:var(--text2);margin-left:10px;white-space:nowrap;">${esc(r.ageLabel)}</span></div>
-          <div class="report-meta">送信：${esc(dateStr)}${r.patientNotes ? '　' + esc(r.patientNotes) : ''}</div>
+          <div class="report-meta">送信：${esc(dateStr)}${r.patientNotes ? '　' + esc(r.patientNotes) : ''}${r.profile && r.profile.foodAllergyText ? `　🥚 <span style="color:#b71c1c;">${esc(r.profile.foodAllergyText)}</span>` : ''}</div>
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-start;">
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
@@ -848,6 +862,9 @@ function buildReportCard(r, type) {
         </div>
       </div>` : ''}
 
+      ${buildTeenBurdenHtml(r)}
+      ${buildAgeSpecificHtml(r)}
+
       <div class="section-title">POEMスコア</div>
       <span class="poem-total" style="background:${poemColor.split(';')[0].split(':')[1]};color:${poemColor.split(';')[1].split(':')[1]};">合計 ${poemTotal}/28（${esc(poemSeverity)}）</span>
       <div class="poem-grid">${poemGrid}</div>
@@ -858,6 +875,85 @@ function buildReportCard(r, type) {
       ${rxHtml}
       ${buildEasiSection(r, type)}
       ${commentHtml}
+    </div>`;
+}
+
+// ===== 年齢帯別追加質問の表示 =====
+function buildAgeSpecificHtml(r) {
+  const as = r.ageSpecific;
+  if (!as || !as.uiAgeGroup) return '';
+
+  const chip = (text, color) =>
+    `<span style="display:inline-block;background:${color}18;color:${color};border:1px solid ${color}40;border-radius:20px;padding:3px 10px;font-size:12px;font-weight:600;margin:2px 3px 2px 0;">${esc(text)}</span>`;
+
+  let chipsHtml = '';
+
+  if (as.uiAgeGroup === 'infant' || as.uiAgeGroup === 'toddler') {
+    // 授乳・哺乳（乳幼児期のみ）
+    if (as.uiAgeGroup === 'infant' && as.infant_breastfeedingImpact !== null && as.infant_breastfeedingImpact !== undefined) {
+      const opts = AGE_SPECIFIC_LABELS.infant_breastfeedingImpact.options;
+      const color = as.infant_breastfeedingImpact > 0 ? '#e65100' : '#2e7d32';
+      chipsHtml += chip('授乳: ' + (opts[as.infant_breastfeedingImpact] || '—'), color);
+    }
+    // 体重増加（乳幼児期のみ）
+    if (as.uiAgeGroup === 'infant' && as.infant_weightGain !== null && as.infant_weightGain !== undefined) {
+      const opts = AGE_SPECIFIC_LABELS.infant_weightGain.options;
+      const color = as.infant_weightGain > 0 ? '#e65100' : '#2e7d32';
+      chipsHtml += chip('体重: ' + (opts[as.infant_weightGain] || '—'), color);
+    }
+    // 掻破対策
+    if (as.infant_scratchPrevention && as.infant_scratchPrevention.length > 0) {
+      const map = AGE_SPECIFIC_LABELS.infant_scratchPrevention.map;
+      const items = as.infant_scratchPrevention.map(k => map[k] || k).join('・');
+      chipsHtml += chip('掻破対策: ' + items, '#5c6bc0');
+    }
+    // 集団生活
+    if (as.infant_groupCareSituation !== null && as.infant_groupCareSituation !== undefined) {
+      const opts = AGE_SPECIFIC_LABELS.infant_groupCareSituation.options;
+      const color = as.infant_groupCareSituation === 2 ? '#e65100' : '#607d8b';
+      chipsHtml += chip('集団生活: ' + (opts[as.infant_groupCareSituation] || '—'), color);
+    }
+  }
+
+  if (as.uiAgeGroup === 'school') {
+    // 水泳授業
+    if (as.school_swimmingImpact !== null && as.school_swimmingImpact !== undefined) {
+      const opts = AGE_SPECIFIC_LABELS.school_swimmingImpact.options;
+      const color = as.school_swimmingImpact >= 2 ? '#e65100' : as.school_swimmingImpact === 1 ? '#2e7d32' : '#607d8b';
+      chipsHtml += chip('🏊 水泳: ' + (opts[as.school_swimmingImpact] || '—'), color);
+    }
+    // 体育発汗
+    if (as.school_exerciseSweating !== null && as.school_exerciseSweating !== undefined) {
+      const color = as.school_exerciseSweating === 1 ? '#e65100' : '#2e7d32';
+      chipsHtml += chip('🏃 体育後悪化: ' + (as.school_exerciseSweating === 1 ? 'あり' : 'なし'), color);
+    }
+    // 学校での負担（任意）
+    if (as.school_scratchStress !== null && as.school_scratchStress !== undefined) {
+      const opts = AGE_SPECIFIC_LABELS.school_scratchStress.options;
+      const color = as.school_scratchStress === 2 ? '#c62828' : as.school_scratchStress === 1 ? '#e65100' : '#607d8b';
+      chipsHtml += chip('学校での負担: ' + (opts[as.school_scratchStress] || '—'), color);
+    }
+  }
+
+  if (!chipsHtml) return '';
+
+  return `
+    <details class="collapsible-section" open>
+      <summary>年齢帯別の状態</summary>
+      <div style="display:flex;flex-wrap:wrap;padding-top:4px;">${chipsHtml}</div>
+    </details>`;
+}
+
+// ===== 思春期の自由記述（診療前確認用・常時展開） =====
+function buildTeenBurdenHtml(r) {
+  const as = r.ageSpecific;
+  if (!as || as.uiAgeGroup !== 'adolescent') return '';
+  const text = as.teen_psychologicalBurden;
+  if (!text || !text.trim()) return '';
+  return `
+    <div style="background:#fce4ec;border-left:4px solid #e91e63;border-radius:0 var(--radius-sm) var(--radius-sm) 0;padding:10px 14px;margin-bottom:12px;">
+      <div style="font-size:12px;font-weight:700;color:#880e4f;margin-bottom:4px;">💬 患者の声（見た目・対人関係について）</div>
+      <div style="font-size:13px;color:#4a0020;line-height:1.6;">${esc(text)}</div>
     </div>`;
 }
 
