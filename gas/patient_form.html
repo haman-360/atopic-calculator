@@ -21,6 +21,29 @@
     }
     .infection-check { font-size: 18px; flex-shrink: 0; color: var(--teal); }
     .infection-label { font-size: 14px; line-height: 1.4; }
+    .profile-summary { font-size: 12px; color: var(--text2); line-height: 1.7; margin-bottom: 12px; }
+    .profile-summary strong { color: var(--text1); font-weight: 600; }
+    .profile-warning { background: #fff8e1; border: 1px solid #ffe082; border-radius: var(--radius-sm); padding: 10px 12px; font-size: 12px; color: #795548; margin-bottom: 12px; }
+    .profile-toggle-row { display: flex; gap: 8px; margin-bottom: 4px; }
+    .profile-toggle-btn { flex: 1; padding: 10px; border: 1.5px solid var(--border); border-radius: var(--radius-sm); background: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: background .15s, border-color .15s; }
+    .profile-toggle-btn.active { background: var(--green-bg); border-color: var(--teal); color: var(--teal); }
+    .profile-fields { margin-top: 14px; }
+    .profile-field { margin-bottom: 14px; }
+    .profile-field label { font-size: 13px; font-weight: 600; display: block; margin-bottom: 6px; }
+    .profile-field textarea, .profile-field input[type=text] {
+      width: 100%; padding: 10px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 14px; font-family: inherit; resize: vertical; min-height: 56px; box-sizing: border-box;
+    }
+    .profile-check-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+    .profile-check-item { display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer;
+      font-size: 13px; transition: background .15s, border-color .15s; user-select: none; }
+    .profile-check-item.checked { background: var(--green-bg); border-color: var(--teal); }
+    .age-section { display: none; }
+    .age-section.visible { display: block; }
+    .age-q { margin-bottom: 16px; }
+    .age-q-label { font-size: 14px; font-weight: 500; margin-bottom: 8px; }
+    .age-q-optional { font-size: 11px; color: var(--text3); margin-left: 6px; }
   </style>
 </head>
 
@@ -133,6 +156,200 @@
       <div class="card" id="prev-rx-card" style="display:none;">
         <div class="card-title">💊 前回の処方</div>
         <div id="prev-rx-content"></div>
+      </div>
+
+      <!-- プロフィールカード（毎回確認・初回は全展開） -->
+      <div class="card" id="profile-card">
+        <div class="card-title">📋 お子さんについて</div>
+        <div id="profile-summary-area"></div>
+        <div id="profile-toggle-area" style="display:none;">
+          <div class="profile-toggle-row">
+            <button class="profile-toggle-btn active" id="btn-profile-no-change" onclick="setProfileChanged(false)">変更なし</button>
+            <button class="profile-toggle-btn" id="btn-profile-change" onclick="setProfileChanged(true)">変更あり ▼</button>
+          </div>
+        </div>
+        <div id="profile-fields" class="profile-fields" style="display:none;">
+          <div class="profile-field">
+            <label>食物アレルギー（アレルゲン食品名）</label>
+            <textarea id="pf-food-allergy" placeholder="例：卵、小麦、牛乳" rows="2"></textarea>
+          </div>
+          <div class="profile-field">
+            <label>家族歴（アトピー・喘息・花粉症など）</label>
+            <textarea id="pf-family-history" placeholder="例：父がアトピー性皮膚炎" rows="2"></textarea>
+          </div>
+          <div class="profile-field">
+            <label>現在の合併症（複数選択可）</label>
+            <div class="profile-check-grid" id="pf-comorbidities-grid">
+              <label class="profile-check-item" onclick="toggleProfileCheck('comorbidity','asthma',this)">
+                <span class="pf-chk">☐</span> 喘息
+              </label>
+              <label class="profile-check-item" onclick="toggleProfileCheck('comorbidity','rhinitis',this)">
+                <span class="pf-chk">☐</span> アレルギー性鼻炎
+              </label>
+              <label class="profile-check-item" onclick="toggleProfileCheck('comorbidity','conjunctivitis',this)">
+                <span class="pf-chk">☐</span> アレルギー性結膜炎
+              </label>
+              <label class="profile-check-item" onclick="toggleProfileCheck('comorbidity','foodAllergy',this)">
+                <span class="pf-chk">☐</span> 食物アレルギー
+              </label>
+              <label class="profile-check-item" onclick="toggleProfileCheck('comorbidity','urticaria',this)">
+                <span class="pf-chk">☐</span> じんましん
+              </label>
+            </div>
+            <div style="margin-top:8px;">
+              <input type="text" id="pf-comorbidities-other" placeholder="その他（自由記述）" style="min-height:unset;resize:none;">
+            </div>
+          </div>
+          <div class="profile-field">
+            <label>過去の治療歴（外用薬・内服など）</label>
+            <textarea id="pf-tx-history" placeholder="例：ステロイド外用3年、プロトピック使用歴あり" rows="2"></textarea>
+          </div>
+          <div class="profile-field">
+            <label>環境因子（複数選択可）</label>
+            <div class="profile-check-grid" id="pf-env-factors-grid">
+              <label class="profile-check-item" onclick="toggleProfileCheck('env','pet',this)">
+                <span class="pf-chk">☐</span> ペット
+              </label>
+              <label class="profile-check-item" onclick="toggleProfileCheck('env','dustMite',this)">
+                <span class="pf-chk">☐</span> ダニ・ほこり
+              </label>
+              <label class="profile-check-item" onclick="toggleProfileCheck('env','smoking',this)">
+                <span class="pf-chk">☐</span> 室内喫煙
+              </label>
+              <label class="profile-check-item" onclick="toggleProfileCheck('env','plant',this)">
+                <span class="pf-chk">☐</span> 観葉植物（カビ）
+              </label>
+              <label class="profile-check-item" onclick="toggleProfileCheck('env','carpet',this)">
+                <span class="pf-chk">☐</span> カーペット
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 年齢帯別追加質問（共通項目の後、POEM前に表示） -->
+      <!-- 乳幼児期（0〜2歳）セクション -->
+      <div class="card age-section" id="age-section-infant">
+        <div class="card-title">👶 乳幼児の状態（保護者の方へ）</div>
+        <div class="age-q">
+          <div class="age-q-label">授乳・哺乳への影響はありますか？</div>
+          <div class="score-group" id="age-infant-breastfeeding">
+            <button class="score-btn" onclick="selectAgeQ('infant_breastfeedingImpact',0,this)">影響なし</button>
+            <button class="score-btn" onclick="selectAgeQ('infant_breastfeedingImpact',1,this)">飲みが悪くなる</button>
+            <button class="score-btn" onclick="selectAgeQ('infant_breastfeedingImpact',2,this)">授乳中に掻く</button>
+          </div>
+        </div>
+        <div class="age-q">
+          <div class="age-q-label">体重増加の様子はいかがですか？</div>
+          <div class="score-group" id="age-infant-weightgain">
+            <button class="score-btn" onclick="selectAgeQ('infant_weightGain',0,this)">普通</button>
+            <button class="score-btn" onclick="selectAgeQ('infant_weightGain',1,this)">やや少ない</button>
+            <button class="score-btn" onclick="selectAgeQ('infant_weightGain',2,this)">心配あり</button>
+          </div>
+        </div>
+        <div class="age-q">
+          <div class="age-q-label">掻破対策として行っていることは？（複数選択可）</div>
+          <div class="profile-check-grid" id="age-infant-scratch-grid">
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','mittens',this)">
+              <span class="pf-chk">☐</span> ミトン
+            </label>
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','gloves',this)">
+              <span class="pf-chk">☐</span> 手袋
+            </label>
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','bandage',this)">
+              <span class="pf-chk">☐</span> 包帯
+            </label>
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','nailcut',this)">
+              <span class="pf-chk">☐</span> 爪切り徹底
+            </label>
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','none',this)">
+              <span class="pf-chk">☐</span> 特になし
+            </label>
+          </div>
+        </div>
+        <div class="age-q">
+          <div class="age-q-label">保育園・幼稚園での状況は？</div>
+          <div class="score-group" id="age-infant-groupcare">
+            <button class="score-btn" onclick="selectAgeQ('infant_groupCareSituation',0,this)">通っていない</button>
+            <button class="score-btn" onclick="selectAgeQ('infant_groupCareSituation',1,this)">悪化なし</button>
+            <button class="score-btn" onclick="selectAgeQ('infant_groupCareSituation',2,this)">悪化あり</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 幼児期（3〜5歳）セクション -->
+      <div class="card age-section" id="age-section-toddler">
+        <div class="card-title">🧒 幼児期の状態（保護者の方へ）</div>
+        <div class="age-q">
+          <div class="age-q-label">掻破対策として行っていることは？（複数選択可）</div>
+          <div class="profile-check-grid" id="age-toddler-scratch-grid">
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','mittens',this)">
+              <span class="pf-chk">☐</span> ミトン
+            </label>
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','gloves',this)">
+              <span class="pf-chk">☐</span> 手袋
+            </label>
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','bandage',this)">
+              <span class="pf-chk">☐</span> 包帯
+            </label>
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','nailcut',this)">
+              <span class="pf-chk">☐</span> 爪切り徹底
+            </label>
+            <label class="profile-check-item" onclick="toggleAgeCheck('infant_scratchPrevention','none',this)">
+              <span class="pf-chk">☐</span> 特になし
+            </label>
+          </div>
+        </div>
+        <div class="age-q">
+          <div class="age-q-label">保育園・幼稚園での状況は？</div>
+          <div class="score-group" id="age-toddler-groupcare">
+            <button class="score-btn" onclick="selectAgeQ('infant_groupCareSituation',0,this)">通っていない</button>
+            <button class="score-btn" onclick="selectAgeQ('infant_groupCareSituation',1,this)">悪化なし</button>
+            <button class="score-btn" onclick="selectAgeQ('infant_groupCareSituation',2,this)">悪化あり</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 学童期（6〜12歳）セクション -->
+      <div class="card age-section" id="age-section-school">
+        <div class="card-title">🎒 学校生活の状態</div>
+        <div class="age-q">
+          <div class="age-q-label">水泳授業は受けましたか？受けた場合の影響は？</div>
+          <div class="score-group" id="age-school-swimming">
+            <button class="score-btn" onclick="selectAgeQ('school_swimmingImpact',0,this)">水泳なし</button>
+            <button class="score-btn" onclick="selectAgeQ('school_swimmingImpact',1,this)">影響なし</button>
+            <button class="score-btn" onclick="selectAgeQ('school_swimmingImpact',2,this)">軽度悪化</button>
+            <button class="score-btn" onclick="selectAgeQ('school_swimmingImpact',3,this)">強く悪化</button>
+          </div>
+        </div>
+        <div class="age-q">
+          <div class="age-q-label">体育や運動後に汗で悪化しましたか？</div>
+          <div class="score-group" id="age-school-exercise">
+            <button class="score-btn" onclick="selectAgeQ('school_exerciseSweating',0,this)">なし</button>
+            <button class="score-btn" onclick="selectAgeQ('school_exerciseSweating',1,this)">あり</button>
+          </div>
+        </div>
+        <div class="age-q">
+          <div class="age-q-label">学校で皮膚症状を指摘されて気になることは？<span class="age-q-optional">（任意）</span></div>
+          <div class="score-group" id="age-school-stress">
+            <button class="score-btn" onclick="selectAgeQ('school_scratchStress',0,this)">特に気にならない</button>
+            <button class="score-btn" onclick="selectAgeQ('school_scratchStress',1,this)">少し気になる</button>
+            <button class="score-btn" onclick="selectAgeQ('school_scratchStress',2,this)">とても気になる</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 思春期（13歳〜）セクション -->
+      <div class="card age-section" id="age-section-adolescent">
+        <div class="card-title">💬 気になっていることがあれば</div>
+        <div class="age-q">
+          <div class="age-q-label" style="margin-bottom:8px;">
+            皮膚の見た目や対人関係で気になっていること<span class="age-q-optional">（任意）</span>
+          </div>
+          <textarea id="age-adolescent-burden" rows="3"
+            placeholder="例：友達に聞かれることが気になる、夏に肌を出しにくい、など。担当医のみが確認します。"
+            style="width:100%;padding:10px;border:1.5px solid var(--border);border-radius:var(--radius-sm);font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
+        </div>
       </div>
 
       <!-- 全体的な症状スコア -->
@@ -325,6 +542,22 @@
     const topicalUseMap = {}; // topicalUseMap[drugName][part] = freq
     let patientContext = null;
 
+    // プロフィール状態
+    let profileChanged = false; // true: 変更あり → 送信時に保存
+    const profileComorbidities = []; // 選択済み合併症
+    const profileEnvFactors   = []; // 選択済み環境因子
+
+    // 年齢帯別質問の回答（キー: フィールド名, 値: 数値 or null）
+    const ageAnswers = {
+      infant_breastfeedingImpact: null,
+      infant_weightGain:          null,
+      infant_scratchPrevention:   [],
+      infant_groupCareSituation:  null,
+      school_swimmingImpact:      null,
+      school_exerciseSweating:    null,
+      school_scratchStress:       null
+    };
+
     const patientNo  = '<?= patientNo ?>';
     const token      = '<?= token ?>';
     const FIXED_MODE = <?= fixedMode ? 'true' : 'false' ?>;
@@ -470,6 +703,12 @@
           }
         }
 
+        // プロフィールカード初期化
+        renderProfileCard(ctx.profile);
+
+        // 年齢帯別セクション表示
+        renderAgeSpecificSection(ctx.ageGroup);
+
         // POEM フォーム構築
         buildPoemItems();
 
@@ -561,6 +800,168 @@
         <div class="score-group">${btns}</div>
       </div>`;
       });
+    }
+
+    // ===== プロフィールカード =====
+    function renderProfileCard(profile) {
+      const summaryArea  = document.getElementById('profile-summary-area');
+      const toggleArea   = document.getElementById('profile-toggle-area');
+      const fieldsDiv    = document.getElementById('profile-fields');
+
+      if (!profile) {
+        // 未登録: フォームを全展開・変更フラグ=true
+        profileChanged = true;
+        summaryArea.innerHTML = '<p style="font-size:13px;color:var(--text2);margin-bottom:12px;">初めてご利用いただきます。お子さんの情報を教えてください。</p>';
+        fieldsDiv.style.display = 'block';
+        return;
+      }
+
+      // 記録日表示
+      const updatedDate = profile.updatedAt ? profile.updatedAt.substring(0, 10) : '';
+      const daysSince   = updatedDate ? Math.floor((Date.now() - new Date(updatedDate).getTime()) / 86400000) : 0;
+      const isOld       = daysSince >= 365;
+
+      // サマリー表示
+      const comorbLabels = {
+        asthma:'喘息', rhinitis:'アレルギー性鼻炎', conjunctivitis:'アレルギー性結膜炎',
+        foodAllergy:'食物アレルギー', urticaria:'じんましん'
+      };
+      const comorbText = (profile.comorbiditiesJson || []).map(k => comorbLabels[k] || k).join('、') || 'なし';
+      const envLabels  = { pet:'ペット', dustMite:'ダニ・ほこり', smoking:'室内喫煙', plant:'観葉植物（カビ）', carpet:'カーペット' };
+      const envText    = (profile.envFactorsJson || []).map(k => envLabels[k] || k).join('、') || 'なし';
+
+      let summaryHtml = '';
+      if (isOld) {
+        summaryHtml += `<div class="profile-warning">⚠️ 前回記録から1年以上経ちました（${esc(updatedDate)}時点）。内容を確認・更新してください。</div>`;
+      } else {
+        summaryHtml += `<div class="profile-summary">前回記録（${esc(updatedDate)}）</div>`;
+      }
+      summaryHtml += `<div class="profile-summary">
+        <strong>食物アレルギー：</strong>${esc(profile.foodAllergyText || 'なし')}<br>
+        <strong>家族歴：</strong>${esc(profile.familyHistoryText || 'なし')}<br>
+        <strong>合併症：</strong>${esc(comorbText)}<br>
+        <strong>環境因子：</strong>${esc(envText)}
+      </div>`;
+      summaryArea.innerHTML = summaryHtml;
+
+      // 既存値をフォームに反映
+      document.getElementById('pf-food-allergy').value    = profile.foodAllergyText   || '';
+      document.getElementById('pf-family-history').value  = profile.familyHistoryText || '';
+      document.getElementById('pf-tx-history').value      = profile.txHistoryText      || '';
+
+      (profile.comorbiditiesJson || []).forEach(k => profileComorbidities.push(k));
+      (profile.comorbiditiesJson || []).forEach(k => {
+        const items = document.querySelectorAll('#pf-comorbidities-grid .profile-check-item');
+        items.forEach(el => { if (el.dataset.key === k || el.textContent.trim() === (comorbLabels[k] || k)) { markProfileCheck(el, true); } });
+      });
+      (profile.envFactorsJson || []).forEach(k => profileEnvFactors.push(k));
+      (profile.envFactorsJson || []).forEach(k => {
+        const items = document.querySelectorAll('#pf-env-factors-grid .profile-check-item');
+        items.forEach(el => { if (el.dataset.key === k || el.textContent.trim() === (envLabels[k] || k)) { markProfileCheck(el, true); } });
+      });
+
+      // トグル表示（1年以上経過の場合は自動展開）
+      toggleArea.style.display = 'block';
+      if (isOld) {
+        setProfileChanged(true);
+      } else {
+        profileChanged = false;
+        fieldsDiv.style.display = 'none';
+      }
+    }
+
+    function setProfileChanged(changed) {
+      profileChanged = changed;
+      document.getElementById('btn-profile-no-change').className = 'profile-toggle-btn' + (changed ? '' : ' active');
+      document.getElementById('btn-profile-change').className    = 'profile-toggle-btn' + (changed ? ' active' : '');
+      document.getElementById('profile-fields').style.display    = changed ? 'block' : 'none';
+    }
+
+    function toggleProfileCheck(type, key, el) {
+      const arr = (type === 'comorbidity') ? profileComorbidities : profileEnvFactors;
+      const idx = arr.indexOf(key);
+      if (idx >= 0) {
+        arr.splice(idx, 1);
+        markProfileCheck(el, false);
+      } else {
+        arr.push(key);
+        markProfileCheck(el, true);
+      }
+    }
+
+    function markProfileCheck(el, on) {
+      const chk = el.querySelector('.pf-chk');
+      if (on) { el.classList.add('checked'); if(chk) chk.textContent = '☑'; }
+      else    { el.classList.remove('checked'); if(chk) chk.textContent = '☐'; }
+    }
+
+    function collectProfileData() {
+      const other = document.getElementById('pf-comorbidities-other').value.trim();
+      const comorbFull = other ? [...profileComorbidities, 'other:' + other] : [...profileComorbidities];
+      return {
+        foodAllergyText:   document.getElementById('pf-food-allergy').value.trim(),
+        familyHistoryText: document.getElementById('pf-family-history').value.trim(),
+        comorbiditiesJson: comorbFull,
+        txHistoryText:     document.getElementById('pf-tx-history').value.trim(),
+        envFactorsJson:    [...profileEnvFactors]
+      };
+    }
+
+    // ===== 年齢帯別セクション =====
+    function getUiAgeGroup(ageGroup) {
+      if (['infant','child1'].includes(ageGroup)) return 'infant';
+      if (ageGroup === 'child3')                  return 'toddler';
+      if (['child10','teen'].includes(ageGroup))  return 'school';
+      return 'adolescent';
+    }
+
+    function renderAgeSpecificSection(ageGroup) {
+      if (!ageGroup) return;
+      const uiGroup = getUiAgeGroup(ageGroup);
+      const sectionId = 'age-section-' + uiGroup;
+      const el = document.getElementById(sectionId);
+      if (el) el.classList.add('visible');
+    }
+
+    function selectAgeQ(key, val, btn) {
+      ageAnswers[key] = val;
+      const group = btn.closest('.score-group');
+      group.querySelectorAll('.score-btn').forEach(b => {
+        b.className = 'score-btn' + (b === btn ? ' sel-0' : '');
+      });
+    }
+
+    function toggleAgeCheck(key, val, el) {
+      const arr = ageAnswers[key];
+      if (!Array.isArray(arr)) return;
+      const idx = arr.indexOf(val);
+      if (idx >= 0) {
+        arr.splice(idx, 1);
+        markProfileCheck(el, false);
+      } else {
+        arr.push(val);
+        markProfileCheck(el, true);
+      }
+    }
+
+    function collectAgeSpecificData() {
+      const ageGroup = patientContext ? patientContext.ageGroup : '';
+      const uiGroup  = getUiAgeGroup(ageGroup);
+      const result   = { uiAgeGroup: uiGroup, ageGroup: ageGroup };
+      if (uiGroup === 'infant' || uiGroup === 'toddler') {
+        if (uiGroup === 'infant') result.infant_breastfeedingImpact = ageAnswers.infant_breastfeedingImpact;
+        if (uiGroup === 'infant') result.infant_weightGain          = ageAnswers.infant_weightGain;
+        result.infant_scratchPrevention  = [...ageAnswers.infant_scratchPrevention];
+        result.infant_groupCareSituation = ageAnswers.infant_groupCareSituation;
+      } else if (uiGroup === 'school') {
+        result.school_swimmingImpact  = ageAnswers.school_swimmingImpact;
+        result.school_exerciseSweating= ageAnswers.school_exerciseSweating;
+        result.school_scratchStress   = ageAnswers.school_scratchStress;
+      } else if (uiGroup === 'adolescent') {
+        const el = document.getElementById('age-adolescent-burden');
+        result.teen_psychologicalBurden = el ? el.value.trim() : null;
+      }
+      return result;
     }
 
     // スコア選択
@@ -670,7 +1071,10 @@
         infectionSigns: infectionSigns,
         triggers: triggers,
         triggerNote: document.getElementById('trigger-note').value.trim(),
-        topicalUse: topicalUse
+        topicalUse: topicalUse,
+        ageSpecific: collectAgeSpecificData(),
+        profileChanged: profileChanged,
+        profileData: profileChanged ? collectProfileData() : null
       };
 
       if (FIXED_MODE) {

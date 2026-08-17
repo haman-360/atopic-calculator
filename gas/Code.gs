@@ -298,8 +298,55 @@ function buildPatientContextPayload_(patientNo, birthdate, notes) {
     ageLabel: calcAgeLabel_(birthdate),
     ageGroup: calcAgeGroup_(birthdate),
     notes: notes || '',
-    lastVisit: lastVisit
+    lastVisit: lastVisit,
+    profile: getPatientProfile_(patientNo)
   };
+}
+
+// ===== 患者プロフィール取得（最新1件を返す。未登録の場合は null） =====
+function getPatientProfile_(patientNo) {
+  const sheet = getSheet_('PatientProfile');
+  if (!sheet) return null;
+  const data = sheet.getDataRange().getValues();
+  let latest = null;
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][1]) !== String(patientNo)) continue;
+    if (!latest || String(data[i][2]) > String(latest.updatedAt)) {
+      let comorbiditiesJson = [], envFactorsJson = [];
+      try { comorbiditiesJson = data[i][5] ? JSON.parse(data[i][5]) : []; } catch(e) {}
+      try { envFactorsJson    = data[i][7] ? JSON.parse(data[i][7]) : []; } catch(e) {}
+      latest = {
+        profileId:        String(data[i][0]),
+        updatedAt:        String(data[i][2]),
+        foodAllergyText:  String(data[i][3] || ''),
+        familyHistoryText:String(data[i][4] || ''),
+        comorbiditiesJson:comorbiditiesJson,
+        txHistoryText:    String(data[i][6] || ''),
+        envFactorsJson:   envFactorsJson
+      };
+    }
+  }
+  return latest;
+}
+
+// ===== 患者プロフィール保存（新規行として append し、変更履歴を保持） =====
+function savePatientProfile_(patientNo, profileData) {
+  const sheet = getSheet_('PatientProfile');
+  if (!sheet) return;
+  const profileId = Utilities.getUuid();
+  sheet.appendRow([
+    profileId,
+    String(patientNo),
+    new Date().toISOString(),
+    profileData.foodAllergyText  || '',
+    profileData.familyHistoryText|| '',
+    JSON.stringify(profileData.comorbiditiesJson || []),
+    profileData.txHistoryText    || '',
+    JSON.stringify(profileData.envFactorsJson    || [])
+  ]);
+  const newRow = sheet.getLastRow();
+  sheet.getRange(newRow, 2).setNumberFormat('@');
+  sheet.getRange(newRow, 2).setValue(String(patientNo));
 }
 
 // ===== 患者フォーム送信 =====
@@ -325,12 +372,17 @@ function submitPatientReport(reportData) {
     'pending',                                                    // [12] M status
     JSON.stringify(reportData.triggers || []),                    // [13] N triggersJson
     reportData.triggerNote || '',                                 // [14] O triggerNote
-    JSON.stringify(reportData.topicalUse || [])                   // [15] P topicalUseJson
+    JSON.stringify(reportData.topicalUse || []),                  // [15] P topicalUseJson
+    reportData.ageSpecific ? JSON.stringify(reportData.ageSpecific) : '' // [16] Q ageSpecificJson
   ]);
   // B列（patientNo）をテキスト書式に設定（先頭0を保持するため）
   const newRow = sheet.getLastRow();
   sheet.getRange(newRow, 2).setNumberFormat('@');
   sheet.getRange(newRow, 2).setValue(String(reportData.patientNo));
+  // プロフィール変更があれば保存
+  if (reportData.profileChanged && reportData.profileData) {
+    savePatientProfile_(String(reportData.patientNo), reportData.profileData);
+  }
   return { ok: true, reportId: reportId };
 }
 
@@ -470,11 +522,16 @@ function submitPatientReportFixed2(patientNo, pin, reportData) {
     'pending',
     JSON.stringify(reportData.triggers || []),
     reportData.triggerNote || '',
-    JSON.stringify(reportData.topicalUse || [])
+    JSON.stringify(reportData.topicalUse || []),
+    reportData.ageSpecific ? JSON.stringify(reportData.ageSpecific) : ''
   ]);
   const newRow = sheet.getLastRow();
   sheet.getRange(newRow, 2).setNumberFormat('@');
   sheet.getRange(newRow, 2).setValue(String(patientNo));
+  // プロフィール変更があれば保存
+  if (reportData.profileChanged && reportData.profileData) {
+    savePatientProfile_(String(patientNo), reportData.profileData);
+  }
   auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_submit_ok');
   return { ok: true, reportId: reportId };
 }
@@ -1120,7 +1177,8 @@ function calcAgeGroup_(birthdate) {
   if (months < 36)  return 'child1';
   if (months < 72)  return 'child3';
   if (months < 132) return 'child10';
-  return 'adult';
+  if (months < 156) return 'teen';   // 11〜12歳（学童後期〜思春期前）
+  return 'adult';                    // 13歳〜
 }
 
 // ===== ユーティリティ =====
@@ -1232,7 +1290,8 @@ function setupSheets() {
   const sheets = {
     'PatientRegistry': ['patientNo', 'birthdate', 'notes', 'tokenHash', 'tokenSalt', 'tokenExpiresAt', 'isActive'],
     'VisitHistory':    ['patientNo', 'visitDate', 'nextVisitDate', 'drugsJson', 'rxSummaryText', 'prescriptionImageBase64', 'shareTokenHash', 'shareTokenSalt', 'shareTokenExpiresAt'],
-    'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status', 'triggersJson', 'triggerNote', 'topicalUseJson'],
+    'PatientReports':  ['reportId', 'patientNo', 'submittedAt', 'symptomScore', 'nrsScore', 'infectionSignsJson', 'symptomNotes', 'poemJson', 'medicationJson', 'doctorComment', 'nextAppointment', 'commentAt', 'status', 'triggersJson', 'triggerNote', 'topicalUseJson', 'ageSpecificJson'],
+    'PatientProfile':  ['profileId', 'patientNo', 'updatedAt', 'foodAllergyText', 'familyHistoryText', 'comorbiditiesJson', 'txHistoryText', 'envFactorsJson'],
     'AuditLog':              ['timestamp', 'patientNo', 'action'],
     'ClinicalAssessments':   ['assessmentId', 'patientNo', 'visitDate', 'assessedAt', 'easiHead', 'easiTrunk', 'easiUpperLimb', 'easiLowerLimb', 'easiTotal', 'easiSeverity', 'iga', 'lesionMapJson', 'notes', 'easiRawJson'],
     'DailyPIN':              ['date', 'pin', 'enabled']
@@ -1249,7 +1308,7 @@ function setupSheets() {
     // PatientRegistry・VisitHistory: A列, PatientReports・AuditLog: B列
     if (['PatientRegistry', 'VisitHistory', 'DailyPIN'].includes(name)) {
       sheet.getRange('A:A').setNumberFormat('@');
-    } else if (['PatientReports', 'AuditLog', 'ClinicalAssessments'].includes(name)) {
+    } else if (['PatientReports', 'AuditLog', 'ClinicalAssessments', 'PatientProfile'].includes(name)) {
       sheet.getRange('B:B').setNumberFormat('@');
     }
   }
@@ -1361,6 +1420,34 @@ function addTriggersColumns() {
   Logger.log('triggersJson / triggerNote 列を追加しました');
 }
 
+// ===== PatientReports: ageSpecificJson 列追加（既存シート用・1回のみ実行） =====
+function addAgeSpecificJsonColumn() {
+  const sheet = getSheet_('PatientReports');
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  if (!headers.includes('ageSpecificJson')) {
+    sheet.getRange(1, headers.length + 1).setValue('ageSpecificJson');
+    Logger.log('ageSpecificJson 列を追加しました');
+  } else {
+    Logger.log('ageSpecificJson 列はすでに存在します');
+  }
+}
+
+// ===== PatientProfile シート追加（既存デプロイ用・1回のみ実行） =====
+function addPatientProfileSheet() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  let sheet = ss.getSheetByName('PatientProfile');
+  if (!sheet) {
+    sheet = ss.insertSheet('PatientProfile');
+    const headers = ['profileId', 'patientNo', 'updatedAt', 'foodAllergyText', 'familyHistoryText', 'comorbiditiesJson', 'txHistoryText', 'envFactorsJson'];
+    sheet.appendRow(headers);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e8f5e9');
+    sheet.getRange('B:B').setNumberFormat('@');
+    Logger.log('PatientProfile シートを作成しました');
+  } else {
+    Logger.log('PatientProfile シートはすでに存在します');
+  }
+}
+
 // ===== PatientReports: topicalUseJson 列追加（既存シート用・1回のみ実行） =====
 function addTopicalUseColumn() {
   const sheet = getSheet_('PatientReports');
@@ -1432,7 +1519,8 @@ function registerDirectVisit_(patientNo, visitDate) {
     'pending',   // M status
     '[]',        // N triggersJson
     '',          // O triggerNote
-    '[]'         // P topicalUseJson
+    '[]',        // P topicalUseJson
+    ''           // Q ageSpecificJson
   ]);
   const newRow = sheet.getLastRow();
   sheet.getRange(newRow, 2).setNumberFormat('@');
