@@ -1104,30 +1104,34 @@ function saveAssessment(reportId, patientNo) {
 // ===== スコア推移グラフ =====
 
 function loadPatientChart(reportId, patientNo) {
-  // POEM/NRS: dashboardData からメモリ内で取得
-  const allReports = (dashboardData.pending || []).concat(dashboardData.reviewed || []);
-  const poemData = allReports
-    .filter(function(r) { return r.patientNo === patientNo && r.submittedAt; })
-    .map(function(r) {
-      return {
-        date: r.submittedAt.slice(0, 10),
-        poemTotal: Object.values(r.poemScores || {}).reduce(function(s,v){ return s+(v||0); }, 0),
-        nrsScore: (r.nrsScore !== null && r.nrsScore !== undefined) ? r.nrsScore : null
-      };
+  // POEM/NRS: GASから患者別全件取得（dashboardDataの14日制限を回避）
+  var poemDataRef = [];
+  var assessmentsRef = [];
+  var pending = 2;
+
+  function tryRender() {
+    if (--pending === 0) renderChart(reportId, poemDataRef, assessmentsRef);
+  }
+
+  google.script.run
+    .withSuccessHandler(function(res) {
+      poemDataRef = (res && res.scores ? res.scores : []).map(function(s) {
+        return { date: s.submittedAt, poemTotal: s.poemTotal, nrsScore: s.nrsScore };
+      });
+      tryRender();
     })
-    .sort(function(a, b) { return a.date.localeCompare(b.date); });
+    .withFailureHandler(function() { tryRender(); })
+    .getPatientScoreHistory(patientNo);
 
   // EASI/IGA: google.script.run で非同期取得
   google.script.run
     .withSuccessHandler(function(res) {
-      const assessments = (res && res.assessments ? res.assessments : [])
+      assessmentsRef = (res && res.assessments ? res.assessments : [])
         .slice()
         .sort(function(a, b) { return (a.visitDate||'').localeCompare(b.visitDate||''); });
-      renderChart(reportId, poemData, assessments);
+      tryRender();
     })
-    .withFailureHandler(function() {
-      renderChart(reportId, poemData, []);
-    })
+    .withFailureHandler(function() { tryRender(); })
     .getAssessmentList(patientNo);
 }
 

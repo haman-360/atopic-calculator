@@ -862,6 +862,31 @@ function getDashboardData(reviewedDays) {
   return { pending, reviewed };
 }
 
+// ===== 患者別スコア履歴取得（グラフ用・全件） =====
+function getPatientScoreHistory(patientNo) {
+  if (!patientNo) return { ok: false, scores: [] };
+  const pno = String(patientNo).trim();
+  const sheet = getSheet_('PatientReports');
+  const data = sheet.getDataRange().getValues();
+  const scores = [];
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (String(row[1]).trim() !== pno) continue;
+    if (!row[2]) continue;
+    let poemScores = {};
+    try { poemScores = row[7] ? JSON.parse(row[7]) : {}; } catch(e) {}
+    const poemTotal = Object.values(poemScores).reduce(function(s, v) { return s + (Number(v) || 0); }, 0);
+    const nrsScore = row[4] !== '' && row[4] !== null && row[4] !== undefined ? Number(row[4]) : null;
+    scores.push({
+      submittedAt: Utilities.formatDate(new Date(row[2]), 'Asia/Tokyo', 'yyyy-MM-dd'),
+      poemTotal: poemTotal,
+      nrsScore: nrsScore
+    });
+  }
+  scores.sort(function(a, b) { return a.submittedAt.localeCompare(b.submittedAt); });
+  return { ok: true, scores: scores };
+}
+
 // ===== 医師コメント保存 =====
 function saveComment(reportId, comment, nextAppointment) {
   const sheet = getSheet_('PatientReports');

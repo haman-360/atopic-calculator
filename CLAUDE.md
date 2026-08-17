@@ -439,6 +439,7 @@ clasp push
 | 2026-08-09 | feat: 共有ページのメニュー冒頭に、iPhoneで✕を押して閉じても再アクセスできるようiOS/Android別の保存案内バナー（リーディングリスト/ブックマーク誘導）を追加。リーディングリストのタイトルに受診日を追加（`${visitDate} お薬の使い方`） |
 | 2026-08-09 | feat: 共有ページに「毎週リマインダーを設定」機能を追加。`?page=reminderIcs`から.icsカレンダーファイル（週次繰り返し予定・共有ページへの戻りリンク付き）をダウンロードできる。繰り返し終了日は次回受診日と共有トークン有効期限（14日後）の早い方に丸める |
 | 2026-08-09 | fix: 「毎週リマインダーを設定」タップでiPhoneのGoogleカレンダー/Driveアプリに横取りされ「アクセス権が必要です」画面が出る不具合を回避。`reminder-link`に`target="_blank" rel="noopener"`を追加してSafari自身に処理させるよう修正 |
+| 2026-08-17 | fix: ダッシュボードのスコア推移グラフでPOEMが直近14日分しか表示されない不具合を修正。`getDashboardData`のreviewed取得が14日に限定されるため古いPOEMが欠落していた。`getPatientScoreHistory(patientNo)`を`Code.gs`に追加し患者別全件のPOEM/NRSを返すAPIを新設。`loadPatientChart()`を`dashboardData`参照から`getPatientScoreHistory`非同期呼び出し（`getAssessmentList`と並列）に変更。ページ読み込みへの影響なし |
 
 ---
 
