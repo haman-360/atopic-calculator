@@ -122,6 +122,30 @@
     .gantt-legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; }
     .gantt-legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
     .gantt-notice { font-size: 12px; color: var(--teal); display: none; margin-bottom: 8px; }
+    .rule-box {
+      font-size: 12px;
+      color: var(--text2);
+      line-height: 1.7;
+    }
+    .rule-box .rule-lead { font-weight: 700; color: var(--text); }
+    .rule-box .rule-icons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+    .rule-box .rule-icon-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .sibling-hint {
+      font-size: 11px;
+      color: var(--text3);
+      margin-top: 5px;
+      line-height: 1.5;
+    }
   </style>
 </head>
 
@@ -172,6 +196,14 @@
     <!-- 薬と部位別 -->
     <div id="view-bydrug" style="display:none;">
       <button class="back-btn" onclick="showView('menu')">‹ メニューに戻る</button>
+      <div class="card rule-box">
+        <div class="rule-lead">色が違うお薬は同時に使ってOKです。同じ色の中では、基本的に1つだけを選んで使います。</div>
+        <div class="rule-icons">
+          <span class="rule-icon-item">💧 保湿剤</span>
+          <span class="rule-icon-item">🔴 ステロイド</span>
+          <span class="rule-icon-item">🔵 非ステロイド</span>
+        </div>
+      </div>
       <div class="card">
         <p style="font-size:12px;color:var(--text2);line-height:1.6;">
           ステロイドと非ステロイドは効き方や使い方が異なるお薬です。<br>
@@ -214,6 +246,23 @@
     const AREA_ICONS  = { face: '🙂', other: '🧍' };
     // 表示順は「保湿→ステロイド→非ステロイド」で固定。その他（手入力薬）は該当があれば末尾に追加
     const CATEGORY_ORDER = ['moisturizer', 'steroid', 'nonsteroid'];
+
+    // カテゴリ別の既知薬剤リスト（「同じグループの仲間」表示に使用）
+    const KNOWN_SIBLINGS = {
+      steroid: ['ロコイド軟膏', 'リンデロン軟膏', 'リンデロンクリーム', 'アンテベート軟膏', 'ロコイド/ヘパリン混合軟膏', 'リンデロン/ヘパリン混合軟膏'],
+      nonsteroid: ['モイゼルト軟膏', 'コレクチム軟膏'],
+    };
+
+    // 処方中の薬剤名セットから、同カテゴリの未使用薬を抽出して「仲間」ヒントHTMLを生成
+    function siblingHintHtml(cat, prescribedNamesSet) {
+      const known = KNOWN_SIBLINGS[cat];
+      if (!known) return '';
+      const others = known.filter(n => !prescribedNamesSet.has(n));
+      if (!others.length) return '';
+      const catLabel = CATEGORY_LABELS[cat];
+      const names = others.slice(0, 2).join('・') + 'など';
+      return `<div class="sibling-hint">同じ${catLabel}の仲間：${escapeHtml(names)}</div>`;
+    }
 
     // 混合軟膏（例:「リンデロン/ヘパリン混合軟膏」）は1本でステロイドと保湿を兼ねるため、
     // 「◯◯/△△混合軟膏 の◯◯」の形でステロイド行・保湿行の両方に表示する
@@ -281,6 +330,7 @@
         if (!areaDrugs.length) return;
 
         const entries = { moisturizer: [], steroid: [], nonsteroid: [], other: [] };
+        const prescribedNames = new Set(areaDrugs.map(d => d.name));
         areaDrugs.forEach(d => {
           const parts = d[partsKey];
           const freq = d.freqLabel || '';
@@ -298,6 +348,9 @@
           let content;
           if (entries[cat].length) {
             content = entries[cat].map(drugEntryHtml).join('');
+            if (cat === 'steroid' || cat === 'nonsteroid') {
+              content += siblingHintHtml(cat, prescribedNames);
+            }
           } else if (cat === 'moisturizer') {
             content = `<div class="cat-empty">好きなものでOK</div>`;
           } else {
