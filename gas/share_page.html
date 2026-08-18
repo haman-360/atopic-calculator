@@ -303,6 +303,12 @@
       const a = document.getElementById('reminder-link');
       if (!token || !EXEC_URL) { return; }
       a.href = `${EXEC_URL}?page=reminderIcs&p=${encodeURIComponent(patientNo)}&t=${encodeURIComponent(token)}`;
+      // iOSのQRスキャン後アプリ内ブラウザでは .ics が開けないため、Safariで開き直す案内を表示
+      const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent || '');
+      if (isIOS) {
+        const sub = a.querySelector('.sub');
+        if (sub) sub.innerHTML = 'Safariで開き直すと使えます（リーディングリストに保存 → Safariで開く）';
+      }
       card.style.display = '';
     }
 
