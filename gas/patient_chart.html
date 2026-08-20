@@ -1054,6 +1054,7 @@ function buildVisitCard(visit, reports, assessment) {
     }
     // ミニGantt
     var ganttHtml = buildGanttHtmlFromDrugsJson(drugs, visit.nextVisitDate || '');
+    var scheduleDateHtml = buildDateScheduleHtml(drugs, visit.visitDate, visit.nextVisitDate || '');
     var imgHtml = '';
     if (visit.prescriptionImageBase64 && visit.prescriptionImageBase64.startsWith('data:image/')) {
       imgHtml = '<div style="margin-top:10px;"><img src="' + visit.prescriptionImageBase64 + '" alt="塗布図" ' +
@@ -1064,6 +1065,7 @@ function buildVisitCard(visit, reports, assessment) {
       '<div class="rx-summary">' + esc(display) + '</div>' +
       drugsDetailHtml +
       ganttHtml +
+      scheduleDateHtml +
       imgHtml;
   }
 
@@ -1312,13 +1314,13 @@ function buildGanttHtmlFromDrugsJson(drugs, fallbackEndDate) {
     if (drugDays <= 0) drugDays = totalDays;
 
     var barsHtml = '';
-    if (d.taperPhases && d.taperPhases.phase1 && d.taperPhases.phase2) {
-      var p1 = d.taperPhases.phase1, p2 = d.taperPhases.phase2;
-      var p1pct = (p1.days / totalDays * 100).toFixed(1);
-      var p2pct = (p2.days / totalDays * 100).toFixed(1);
-      barsHtml =
-        '<div class="mg-bar" style="width:' + p1pct + '%;background:' + col.bg + ';color:' + col.fg + ';" title="' + esc(p1.freqLabel) + '">' + esc(p1.freqLabel) + '</div>' +
-        '<div class="mg-bar mg-bar-p2" style="width:' + p2pct + '%;background:' + col.bg + 'aa;color:' + col.fg + ';" title="' + esc(p2.freqLabel) + '">' + esc(p2.freqLabel) + '</div>';
+    if (d.taperPhases && Array.isArray(d.taperPhases) && d.taperPhases.length > 1) {
+      barsHtml = d.taperPhases.map(function(p, pi) {
+        var pct = (p.days / totalDays * 100).toFixed(1);
+        var cls = 'mg-bar' + (pi > 0 ? ' mg-bar-p2' : '');
+        var alpha = pi === 0 ? '' : 'aa';
+        return '<div class="' + cls + '" style="width:' + pct + '%;background:' + col.bg + alpha + ';color:' + col.fg + ';" title="' + esc(p.freqLabel) + '">' + esc(p.freqLabel) + '</div>';
+      }).join('');
     } else {
       var fullPct = (drugDays / totalDays * 100).toFixed(1);
       var freqLbl = d.freqLabel || '';
@@ -1332,6 +1334,55 @@ function buildGanttHtmlFromDrugsJson(drugs, fallbackEndDate) {
   }).join('');
 
   return '<div class="mini-gantt">' + headerHtml + rowsHtml + '</div>';
+}
+
+// ===== 日付別スケジュールテキスト生成 =====
+function buildDateScheduleHtml(drugs, visitDate, nextVisitDate) {
+  function fmtJa(s) {
+    if (!s) return '';
+    var m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? parseInt(m[2]) + '月' + parseInt(m[3]) + '日' : s;
+  }
+
+  var rows = drugs.map(function(d) {
+    var sd = d.startDate || visitDate;
+    var ed = d.endDate || nextVisitDate;
+    if (!sd && !ed) return '';
+
+    var phases = [];
+    if (d.taperPhases && Array.isArray(d.taperPhases) && d.taperPhases.length > 0) {
+      d.taperPhases.forEach(function(p) {
+        phases.push({ start: p.startDate, end: p.endDate, days: p.days, label: p.freqLabel });
+      });
+    } else {
+      var days = (sd && ed) ? Math.round((new Date(ed) - new Date(sd)) / 86400000) : null;
+      phases.push({ start: sd, end: ed, days: days, label: d.freqLabel || '' });
+    }
+
+    var phaseRows = phases.map(function(p, pi) {
+      var color = pi === 0 ? 'var(--teal)' : '#c07a20';
+      return '<div style="display:flex;align-items:baseline;gap:6px;padding:1px 0;font-size:12px;">' +
+        (phases.length > 1 ? '<span style="color:var(--text3);font-size:10px;min-width:14px;">第' + (pi + 1) + '段階</span>' : '<span style="min-width:14px;"></span>') +
+        '<span style="color:var(--text2);">' + esc(fmtJa(p.start)) + '〜' + esc(fmtJa(p.end)) + '</span>' +
+        '<span style="font-weight:700;color:' + color + ';">' + esc(p.label) + '</span>' +
+        (p.days != null ? '<span style="color:var(--text3);font-size:11px;">（' + p.days + '日間）</span>' : '') +
+        '</div>';
+    }).join('');
+
+    return '<div style="margin-bottom:7px;">' +
+      '<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:2px;">' +
+        esc(d.name) + (d.partLabel ? ' <span style="font-weight:400;color:var(--text2);">（' + esc(d.partLabel) + '）</span>' : '') +
+      '</div>' +
+      phaseRows +
+      '</div>';
+  }).filter(Boolean).join('');
+
+  if (!rows) return '';
+
+  return '<div style="margin:8px 0 4px;padding:8px 10px;background:var(--surface2);border-radius:var(--radius-sm);">' +
+    '<div style="font-size:10px;font-weight:700;color:var(--text2);letter-spacing:.05em;margin-bottom:6px;">📅 日付別スケジュール</div>' +
+    rows +
+    '</div>';
 }
 
 // ===== 過去受診スケジュールHTML書き出し =====
@@ -1509,26 +1560,30 @@ function buildScheduleInnerHtml(visit) {
     var barHtml = '';
     if (drugDays > 0 && totalDays > 0) {
       var offsetPct = (Math.round((new Date(sd) - new Date(globalStart)) / 86400000) / totalDays * 100).toFixed(1);
-      if (d.taperPhases && d.taperPhases.phase1 && d.taperPhases.phase2) {
-        var p1 = d.taperPhases.phase1, p2 = d.taperPhases.phase2;
-        var p1pct = (p1.days / totalDays * 100).toFixed(1);
-        var p2pct = (p2.days / totalDays * 100).toFixed(1);
-        // 切り替え日を計算（phase1.days後）
-        var switchDate = new Date(new Date(sd).getTime() + p1.days * 86400000);
-        var switchDateStr = fmtDate(switchDate.toISOString().slice(0, 10));
-        // 切り替え日ラベルの左位置（%）= offset + p1pct
-        var switchLabelLeft = (parseFloat(offsetPct) + parseFloat(p1pct)).toFixed(1);
+      if (d.taperPhases && Array.isArray(d.taperPhases) && d.taperPhases.length > 1) {
+        // 切り替え日ラベル（中間フェーズの区切り日）
+        var switchLabels = '';
+        var cumPct = parseFloat(offsetPct);
+        d.taperPhases.slice(0, -1).forEach(function(p) {
+          cumPct += parseFloat((p.days / totalDays * 100).toFixed(1));
+          switchLabels += '<span style="position:absolute;left:' + cumPct.toFixed(1) + '%;transform:translateX(-50%);color:#e07b39;font-weight:700;">' + esc2(fmtDate(p.endDate)) + '</span>';
+        });
+        var barsInner = d.taperPhases.map(function(p, pi) {
+          var pct = (p.days / totalDays * 100).toFixed(1);
+          var alpha = pi === 0 ? '' : '88';
+          var border = pi > 0 ? 'border-left:2px dashed rgba(0,0,0,0.2);' : '';
+          return '<div style="width:' + pct + '%;background:' + col.bg + alpha + ';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:' + col.fg + ';' + border + 'flex-shrink:0;">' + esc2(p.freqLabel) + '</div>';
+        }).join('');
         barHtml =
           '<div style="position:relative;display:flex;justify-content:space-between;font-size:11px;color:#9b9890;margin-bottom:4px;">' +
             '<span>' + esc2(fmtDate(sd)) + '</span>' +
             '<span>' + drugDays + '日間</span>' +
             '<span>' + esc2(fmtDate(ed)) + '</span>' +
-            '<span style="position:absolute;left:' + switchLabelLeft + '%;transform:translateX(-50%);color:#e07b39;font-weight:700;">' + esc2(switchDateStr) + '</span>' +
+            switchLabels +
           '</div>' +
           '<div style="height:20px;display:flex;border-radius:6px;overflow:hidden;background:#e0ddd4;margin-bottom:6px;">' +
             (offsetPct > 0 ? '<div style="width:' + offsetPct + '%;flex-shrink:0;"></div>' : '') +
-            '<div style="width:' + p1pct + '%;background:' + col.bg + ';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:' + col.fg + ';flex-shrink:0;">' + esc2(p1.freqLabel) + '</div>' +
-            '<div style="width:' + p2pct + '%;background:' + col.bg + '88;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:' + col.fg + ';border-left:2px dashed rgba(0,0,0,0.2);flex-shrink:0;">' + esc2(p2.freqLabel) + '</div>' +
+            barsInner +
           '</div>';
       } else {
         var drugPct = (drugDays / totalDays * 100).toFixed(1);
@@ -1545,6 +1600,19 @@ function buildScheduleInnerHtml(visit) {
       }
     }
 
+    // 日付別スケジュールテキスト（段階ごとの詳細）
+    var phaseTextHtml = '';
+    if (d.taperPhases && Array.isArray(d.taperPhases) && d.taperPhases.length > 0) {
+      var phaseLines = d.taperPhases.map(function(p, pi) {
+        var prefix = d.taperPhases.length > 1 ? '第' + (pi + 1) + '段階 ' : '';
+        return '<div style="font-size:11px;color:#6b6760;padding:1px 0;">' +
+          prefix + esc2(fmtDate(p.startDate)) + '〜' + esc2(fmtDate(p.endDate)) + '（' + p.days + '日間）' +
+          '<strong style="color:#0f6e56;">' + esc2(p.freqLabel) + '</strong>' +
+          '</div>';
+      }).join('');
+      phaseTextHtml = '<div style="margin-bottom:6px;">' + phaseLines + '</div>';
+    }
+
     return '<div style="border-left:6px solid ' + col.bg + ';padding:14px 16px;margin-bottom:12px;background:#ffffff;border-radius:0 10px 10px 0;box-shadow:0 1px 3px rgba(0,0,0,0.08);">' +
       '<div style="font-size:17px;font-weight:700;color:#1a1916;margin-bottom:8px;">' + esc2(d.name) + '</div>' +
       '<div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">' +
@@ -1552,6 +1620,7 @@ function buildScheduleInnerHtml(visit) {
         (d.freqLabel ? '<div><span style="font-size:11px;color:#9b9890;display:block;margin-bottom:2px;">頻度</span><span style="font-size:16px;font-weight:700;color:#0f6e56;">' + esc2(d.freqLabel) + '</span></div>' : '') +
       '</div>' +
       barHtml +
+      phaseTextHtml +
     '</div>';
   }).join('');
 
