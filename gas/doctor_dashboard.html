@@ -425,9 +425,16 @@ body { max-width: none; }
     <h1>🌿 カルテダッシュボード</h1>
     <div style="font-size:11px;color:var(--text2);margin-top:2px;">はまこどもクリニック</div>
   </div>
-  <div style="display:flex;gap:8px;align-items:center;">
-    <button class="refresh-btn" onclick="loadData()">🔄 更新</button>
-    <button class="refresh-btn" onclick="openClaudeModal(null)" style="background:var(--teal);color:white;">🤖 Claude相談</button>
+  <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-end;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <button class="refresh-btn" onclick="loadData()">🔄 更新</button>
+      <button class="refresh-btn" onclick="openClaudeModal(null)" style="background:var(--teal);color:white;">🤖 Claude相談</button>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center;">
+      <input type="date" id="md-date-input"
+        style="font-size:12px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;font-family:inherit;background:var(--surface);color:var(--text);">
+      <button class="refresh-btn" onclick="downloadDailyScoresMd()" style="white-space:nowrap;font-size:12px;">📄 MDダウンロード</button>
+    </div>
   </div>
 </div>
 
@@ -542,8 +549,11 @@ let dashboardData = { pending: [], reviewed: [] };
 
 // ===== 直接受診登録 =====
 (function initDirectDate() {
+  const today = new Date().toISOString().slice(0, 10);
   const el = document.getElementById('direct-date');
-  if (el) el.value = new Date().toISOString().slice(0, 10);
+  if (el) el.value = today;
+  const mdEl = document.getElementById('md-date-input');
+  if (mdEl) mdEl.value = today;
 })();
 
 function registerDirectVisit() {
@@ -1495,6 +1505,103 @@ function showToast(msg) {
 
 function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ===== 日別スコアMDダウンロード =====
+function downloadDailyScoresMd() {
+  const dateEl = document.getElementById('md-date-input');
+  const targetDate = dateEl ? dateEl.value : new Date().toISOString().slice(0, 10);
+
+  const allReports = [...(dashboardData.pending || []), ...(dashboardData.reviewed || [])];
+  const filtered = allReports.filter(function(r) {
+    return r.submittedAt ? r.submittedAt.slice(0, 10) === targetDate : false;
+  });
+
+  if (filtered.length === 0) {
+    showToast('該当日のレポートがありません（' + targetDate + '）');
+    return;
+  }
+
+  const EASI_SEV_MAP = { clear: 'Clear', mild: 'Mild', moderate: 'Moderate', severe: 'Severe', very_severe: 'Very Severe' };
+  const NRS_SEV = function(n) {
+    return n === 0 ? 'なし' : n <= 3 ? '軽度' : n <= 6 ? '中等度' : n <= 8 ? '重度' : '非常に重度';
+  };
+  const POEM_SEV = function(t) {
+    return t <= 2 ? 'ほぼ正常' : t <= 7 ? '軽症' : t <= 16 ? '中等症' : t <= 24 ? '重症' : '最重症';
+  };
+
+  const dateLabel = targetDate;
+  const lines = [
+    '# ' + dateLabel + ' スコアサマリー',
+    '',
+    '患者数: ' + filtered.length + '人',
+    ''
+  ];
+
+  filtered.forEach(function(r) {
+    const poemTotal = Object.values(r.poemScores || {}).reduce(function(s, v) { return s + (Number(v) || 0); }, 0);
+    const nrs = r.nrsScore;
+
+    lines.push('---');
+    lines.push('');
+    lines.push('## 診察券 ' + r.patientNo + '（' + (r.ageLabel || '—') + '）');
+    lines.push('');
+    lines.push('- 症状スコア: ' + (SYMPTOM_LABELS[r.symptomScore] || '—') + '（' + r.symptomScore + '）');
+
+    if (nrs !== null && nrs !== undefined) {
+      lines.push('- かゆみNRS: ' + nrs + '/10（' + NRS_SEV(nrs) + '）');
+    }
+
+    lines.push('- POEM: ' + poemTotal + '/28（' + POEM_SEV(poemTotal) + '）');
+    const poemDetail = Object.entries(POEM_LABELS).map(function(e) {
+      const v = (r.poemScores || {})[e[0]];
+      return e[1] + ':' + (v !== null && v !== undefined ? v : '—');
+    }).join(' / ');
+    lines.push('  - ' + poemDetail);
+
+    if (r.lastAssessment) {
+      const a = r.lastAssessment;
+      const assessDate = String(a.visitDate || '').slice(0, 10);
+      const dateSuffix = assessDate && assessDate !== targetDate ? '（' + assessDate + '評価）' : '';
+      const sev = EASI_SEV_MAP[a.easiSeverity] || (a.easiSeverity || '');
+      lines.push('- EASI: ' + a.easiTotal + '（' + sev + '）' + dateSuffix);
+      if (a.iga !== null && a.iga !== undefined && a.iga !== '') {
+        lines.push('- IGA: ' + a.iga + dateSuffix);
+      }
+    }
+
+    if (r.infectionSigns && r.infectionSigns.length > 0) {
+      const infText = r.infectionSigns.map(function(k) { return INFECTION_LABELS[k] || k; }).join('、');
+      lines.push('- ⚠️ 感染徴候: ' + infText);
+    }
+
+    if (r.triggers && r.triggers.length > 0) {
+      const trText = r.triggers.map(function(k) { return TRIGGER_LABELS[k] || k; }).join('、');
+      lines.push('- 悪化因子: ' + trText + (r.triggerNote ? '、' + r.triggerNote : ''));
+    }
+
+    if (r.symptomNotes) {
+      lines.push('- 患者メモ: ' + r.symptomNotes);
+    }
+
+    if (r.doctorComment) {
+      lines.push('- 医師コメント: ' + r.doctorComment);
+    }
+
+    lines.push('');
+  });
+
+  const md = lines.join('\n');
+  const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'scores_' + targetDate + '.md';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(filtered.length + '人のスコアをMD出力しました');
 }
 
 // ===== Claude相談モーダル =====
