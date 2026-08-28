@@ -386,8 +386,9 @@ function submitPatientReport(reportData) {
   return { ok: true, reportId: reportId };
 }
 
-// ===== 固定QR認証（新フロー）: 診察券番号 + PINのみで認証。初診は別途birthdate入力 =====
-function validateFixedAuthNew(patientNo, pin) {
+// ===== 固定QR認証（3段階）: 診察券番号(5桁) + PIN + 生年月日で一括認証・登録 =====
+// 再診: 3要素すべて一致で通過。初診(registry未登録 or birthdate空): 生年月日を自己登録してフォームへ。
+function validateFixedAuthNew(patientNo, pin, birthdate) {
   // 1. DailyPIN チェック
   const pinSheet = getSheet_('DailyPIN');
   if (!pinSheet) {
@@ -424,18 +425,27 @@ function validateFixedAuthNew(patientNo, pin) {
       ? Utilities.formatDate(rawBd, 'Asia/Tokyo', 'yyyy-MM-dd')
       : String(rawBd || '').trim();
     if (bdStr) {
-      // 既存患者（birthdate あり）: そのままコンテキスト返却
+      // 再診患者（birthdate 登録済み）: 入力された生年月日と照合
+      if (String(birthdate).trim() !== bdStr) {
+        auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_fail_birthdate');
+        return { valid: false, reason: 'birthdate_mismatch' };
+      }
       auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_ok');
       return Object.assign({ status: 'existing' }, buildPatientContextPayload_(String(patientNo), bdStr, regData[i][2] || ''));
     } else {
-      // 初診患者（birthdate なし）: birthdate 入力が必要
-      auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_auth_new_patient');
-      return { valid: true, status: 'new' };
+      // registry に行はあるが birthdate 未登録: 初診扱いで自己登録
+      regSheet.getRange(i + 1, 2).setValue(String(birthdate).trim());
+      auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_birthdate_registered');
+      return Object.assign({ status: 'existing' }, buildPatientContextPayload_(String(patientNo), String(birthdate).trim(), regData[i][2] || ''));
     }
   }
-  // PatientRegistryに存在しない患者も、PINが正しければ生年月日入力へ進む
-  auditLog_(getSheet_('AuditLog'), patientNo || 'unknown', 'fixed_auth_new_patient');
-  return { valid: true, status: 'new' };
+  // PatientRegistryに存在しない患者: 新規行を作成して登録
+  regSheet.appendRow([String(patientNo), String(birthdate).trim(), '', '', '', '', true]);
+  const newRow = regSheet.getLastRow();
+  regSheet.getRange(newRow, 1).setNumberFormat('@');
+  regSheet.getRange(newRow, 1).setValue(String(patientNo));
+  auditLog_(getSheet_('AuditLog'), patientNo, 'fixed_new_patient_registered');
+  return Object.assign({ status: 'existing' }, buildPatientContextPayload_(String(patientNo), String(birthdate).trim(), ''));
 }
 
 // ===== 初診患者: 生年月日を登録してコンテキストを返す =====
