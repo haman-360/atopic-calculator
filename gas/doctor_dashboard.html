@@ -1166,6 +1166,25 @@ function updateEasiDisplay(reportId) {
 }
 
 // ===== EASI/IGA 保存 =====
+// 症状スコアが入力されているのに面積(A)が0の部位がある場合は警告
+// true: 続行可、false: ユーザーがキャンセル
+function confirmEasiAreaWarning(state) {
+  const PART_JA = { head: '頭頸部', trunk: '体幹', upperLimb: '上肢', lowerLimb: '下肢' };
+  const missingArea = ['head','trunk','upperLimb','lowerLimb'].filter(function(p) {
+    const pt = state[p] || {};
+    const hasSign = (pt.E||0) + (pt.I||0) + (pt.Ex||0) + (pt.L||0) > 0;
+    return hasSign && (pt.A||0) === 0;
+  });
+  if (missingArea.length === 0) return true;
+  return confirm(
+    '以下の部位で症状スコアが入力されていますが、面積（A）が0のままです。\n' +
+    '面積が0だとEASI合計が0になります。\n\n' +
+    '対象部位: ' + missingArea.map(function(p) { return PART_JA[p]; }).join('、') + '\n\n' +
+    '面積スコアを入力してから保存することをお勧めします。\n' +
+    'このまま保存しますか？'
+  );
+}
+
 function saveAssessment(reportId, patientNo) {
   const state = easiState[reportId];
   if (!state) { showToast('評価データが見つかりません'); return; }
@@ -1181,6 +1200,9 @@ function saveAssessment(reportId, patientNo) {
       return;
     }
   }
+
+  // 症状あり・面積0 の部位がある場合は警告
+  if (!confirmEasiAreaWarning(state)) return;
 
   // 既存評価を上書きする場合は確認ダイアログ
   if (state.assessmentId) {
@@ -1453,6 +1475,11 @@ function unifiedSave(reportId, patientNo) {
 
   if (hasEasiInput(reportId)) {
     const s = easiState[reportId];
+    // 症状あり・面積0 の部位がある場合は警告
+    if (!confirmEasiAreaWarning(s)) {
+      if (btn) { btn.textContent = '💾 保存'; btn.disabled = false; }
+      return;
+    }
     const visitDate = s.visitDate || new Date().toISOString().slice(0, 10);
     const notesEl = document.getElementById('easi-notes-' + reportId);
     const payload = {
