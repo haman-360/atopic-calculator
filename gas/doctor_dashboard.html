@@ -1064,7 +1064,15 @@ function initEasiState(reportId, lastAssessment, birthdate, currentVisitDate) {
   const today = currentVisitDate || new Date().toISOString().slice(0, 10);
   // 同じ受診日に既存評価があれば編集モード（assessmentId再利用）
   // 前回受診日の評価は参考にしない（新規作成）
-  const sameVisit = lastAssessment && lastAssessment.visitDate === today;
+  // ※ visitDateがcurrentVisitDateと最大1日ずれる場合（翌日入力・タイムゾーン差）も同一受診とみなす
+  const sameVisit = lastAssessment && (() => {
+    if (!lastAssessment.visitDate) return false;
+    if (lastAssessment.visitDate === today) return true;
+    const assessMs = new Date(lastAssessment.visitDate + 'T00:00:00Z').getTime();
+    const visitMs  = new Date(today + 'T00:00:00Z').getTime();
+    const diffDays = (assessMs - visitMs) / (1000 * 60 * 60 * 24);
+    return diffDays >= 0 && diffDays <= 1; // 0〜1日後は同一受診
+  })();
   const raw = sameVisit ? lastAssessment.easiRawJson : null;
   const defaultPart = { E: 0, I: 0, Ex: 0, L: 0, A: 0 };
   easiState[reportId] = {
