@@ -725,7 +725,11 @@ function buildReportCard(r, type) {
         partNames: d.partNames || [],
         freqVal: d.freqVal,
         taper: !!(d.taperPhases),
-        taperFreqLabel: d.taperPhases ? d.taperPhases.phase2.freqLabel : null
+        taperFreqLabel: d.taperPhases
+          ? (Array.isArray(d.taperPhases)
+              ? (d.taperPhases.length > 1 ? d.taperPhases[d.taperPhases.length - 1].freqLabel : null)
+              : (d.taperPhases.phase2 ? d.taperPhases.phase2.freqLabel : null))
+          : null
       }))
     : [];
   const calcUrl = 'https://haman-360.github.io/atopic-calculator/atopic_calculator.html'
