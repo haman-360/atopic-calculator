@@ -1945,8 +1945,8 @@
         // 消費ペースの目安（非混合のみ）
         if (!r.isMixed && r.tubeg > 0 && r.hasFTU) {
           const onceTotalG = calcPartDetails(r.drugRef, document.getElementById('globalAge').value).reduce((s, p) => s + p.gOnce, 0);
-          const avgFreqVal = taperPhases && nextDays > 0
-            ? taperPhases.reduce((s, p) => s + p.freqVal * p.days, 0) / nextDays
+          const avgFreqVal = r.taperPhases && nextDays > 0
+            ? r.taperPhases.reduce((s, p) => s + p.freqVal * p.days, 0) / nextDays
             : r.freqVal;
           const daysPerTube = onceTotalG > 0 ? r.tubeg / (onceTotalG * avgFreqVal) : 0;
           if (daysPerTube > 0) {
@@ -4778,10 +4778,11 @@
           // phase境界チェック
           let isPhBorder = false;
           let offset = i;
+          let phaseIdx = 0;
           if (r.taperPhases) {
             // 多段漸減：どのフェーズに属するか計算
             let runningTotal = 0;
-            let phaseIdx = r.taperPhases.length - 1;
+            phaseIdx = r.taperPhases.length - 1;
             let phaseOffset = i;
             for (let k = 0; k < r.taperPhases.length; k++) {
               if (i < runningTotal + r.taperPhases[k].days) {
