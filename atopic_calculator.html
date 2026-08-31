@@ -2051,7 +2051,7 @@
       document.getElementById('panel-schedule').style.display = id === 'schedule' ? 'block' : 'none';
       document.getElementById('panel-patient').style.display = id === 'patient' ? 'block' : 'none';
       if (id === 'patient') renderPatientCard();
-      if (id === 'schedule') renderScheduleGantt();
+      if (id === 'schedule') calc();
     }
     function copyText() {
       const ta = document.getElementById('text-output');
