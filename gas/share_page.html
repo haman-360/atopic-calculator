@@ -418,7 +418,7 @@
       if (v >= 1) return 1;
       if (v >= 0.5) return 2;
       if (v >= 3 / 7 - 0.01) return 2;
-      if (v >= 2 / 7 - 0.01) return 4;
+      if (v >= 1 / 4 - 0.01) return 4; // 4日に1回
       return 7;
     }
 
@@ -469,9 +469,10 @@
           let freqVal, fillRatio;
           let isPhBorder = false;
           let offset = i;
+          let phaseIdx = 0;
           if (d.taperPhases) {
             let runningTotal = 0;
-            let phaseIdx = d.taperPhases.length - 1;
+            phaseIdx = d.taperPhases.length - 1;
             let phaseOffset = i;
             for (let k = 0; k < d.taperPhases.length; k++) {
               if (i < runningTotal + d.taperPhases[k].days) {
@@ -496,7 +497,10 @@
           }
           fillRatio = freqVal >= 2 ? 1.0 : 0.5;
           const showEvery = freqValToShowEvery(freqVal);
-          const show = offset % showEvery === 0;
+          const phaseStartOffset = d.taperPhases
+            ? (d.taperPhases[phaseIdx] ? (d.taperPhases[phaseIdx].startOffset || 0) : 0)
+            : (d.startOffset || 0);
+          const show = offset >= phaseStartOffset && (offset - phaseStartOffset) % showEvery === 0;
           const cellH = 36;
           const fillH = Math.round((cellH - 4) * fillRatio);
           const borderClass = isPhBorder ? ' phase-border' : '';
