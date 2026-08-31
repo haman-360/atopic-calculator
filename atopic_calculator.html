@@ -1224,7 +1224,8 @@
         preset: pi, tubeg: PRESETS[pi].tubeg, customName: "",
         givenG: PRESETS[pi].tubeg * 4, remainG: 0, freqIdx: 0, parts,
         // 漸減設定
-        tapers: [],         // 多段漸減ステップ配列: [{ date: "", freqIdx: 1 }, ...]
+        startOffset: 0,     // 第1段階の最初に塗る日オフセット（0=受診日当日）
+        tapers: [],         // 多段漸減ステップ配列: [{ date: "", freqIdx: 1, startOffset: 0 }, ...]
         // 混合軟膏プラン選択
         mixedPlanIdx: 0,    // 選択中のプランインデックス
         // 直接入力モード用
@@ -1448,6 +1449,21 @@
       <div style="margin-top:10px;">
         <label>塗布頻度${d.tapers.length > 0 ? '（第1段階）' : ''}</label>
         <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;">${freqPills}</div>
+        ${(() => {
+          const so = d.startOffset || 0;
+          const period = freqValToShowEvery(FREQS[d.freqIdx].val);
+          const tv = document.getElementById('todayDate')?.value || '';
+          const firstApply = tv
+            ? (() => { const dd = new Date(tv); dd.setDate(dd.getDate() + so); return `${dd.getMonth()+1}/${dd.getDate()}`; })()
+            : '—';
+          return `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;">
+          <span style="color:var(--text2);">最初に塗る日:</span>
+          <span style="font-weight:600;">${firstApply}</span>
+          <button onclick="shiftDrugOffset(${i},-1)" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px;">◀ 前日</button>
+          <button onclick="shiftDrugOffset(${i},+1)" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px;">翌日 ▶</button>
+          <span style="color:var(--text3);font-size:11px;">(${so}日後 / 周期${period}日)</span>
+        </div>`;
+        })()}
       </div>
       ${(() => {
         let tapersHtml = '';
@@ -1645,8 +1661,8 @@
       const dates = [tv, ...d.tapers.map(t => t.date), nv];
       // freqIdxs[0]=初期頻度, [1..n]=各テーパーの頻度
       const freqIdxs = [d.freqIdx, ...d.tapers.map(t => t.freqIdx)];
-      // startOffsets[0]=0（初期フェーズは受診日当日開始）, [1..n]=各テーパーのoffset
-      const startOffsets = [0, ...d.tapers.map(t => t.startOffset || 0)];
+      // startOffsets[0]=d.startOffset（初期フェーズ）, [1..n]=各テーパーのoffset
+      const startOffsets = [d.startOffset || 0, ...d.tapers.map(t => t.startOffset || 0)];
       const phases = [];
       for (let k = 0; k < freqIdxs.length; k++) {
         const start = dates[k], end = dates[k+1];
@@ -1669,6 +1685,13 @@
       const t = drugs[drugIdx].tapers[taperIdx];
       const period = freqValToShowEvery(FREQS[t.freqIdx].val);
       t.startOffset = (((t.startOffset || 0) + delta) % period + period) % period;
+      renderDrugs(); calc();
+    }
+    // 第1段階の開始日オフセットを1日単位でシフト
+    function shiftDrugOffset(drugIdx, delta) {
+      const d = drugs[drugIdx];
+      const period = freqValToShowEvery(FREQS[d.freqIdx].val);
+      d.startOffset = (((d.startOffset || 0) + delta) % period + period) % period;
       renderDrugs(); calc();
     }
 
@@ -1849,7 +1872,7 @@
           neededG, netG, prescribeG: rxCellG, prescribeB: rxCellB, rounded: rxCellRounded,
           perDayG, freq: FREQS[d.freqIdx].label, freqVal: FREQS[d.freqIdx].val,
           ftuG, hasFTU, gPerFTU: PRESETS[d.preset].gPerFTU,
-          drugRef: d, taperPhases,
+          drugRef: d, taperPhases, startOffset: d.startOffset || 0,
           isMixed: isMixed(d),
           mixedPlan: mixedPlanSel ? mixedPlanSel.plan : null,
           partNames: getAllParts().filter(p => d.parts[p.key]?.checked).map(p => {
@@ -4810,7 +4833,7 @@
           const showEvery = freqValToShowEvery(freqVal);
           const phaseStartOffset = r.taperPhases
             ? (r.taperPhases[phaseIdx] ? (r.taperPhases[phaseIdx].startOffset || 0) : 0)
-            : 0;
+            : (r.startOffset || 0);
           const show = offset >= phaseStartOffset && (offset - phaseStartOffset) % showEvery === 0;
           const cellH = 36;
           const fillH = Math.round((cellH - 4) * fillRatio);
@@ -5081,7 +5104,8 @@
 
         // テーパリング設定（日付はクリアして頻度のみコピー）
         if (pd.taperPhases && pd.taperPhases.length > 0) {
-          // 新形式: フェーズ配列（フェーズ0は初期頻度なのでスキップ）
+          // 新形式: フェーズ配列（フェーズ0は初期頻度・startOffset を復元）
+          d.startOffset = pd.taperPhases[0].startOffset || 0;
           d.tapers = pd.taperPhases.slice(1).map(p => {
             const fi = FREQS.findIndex(f => f.label === p.freqLabel);
             return { date: '', freqIdx: fi >= 0 ? fi : 1, startOffset: p.startOffset || 0 };
