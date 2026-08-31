@@ -1117,7 +1117,7 @@
     const FREQS = [
       { label: "1日2回", val: 2 }, { label: "1日1回", val: 1 },
       { label: "2日に1回", val: 0.5 }, { label: "週3回", val: 3 / 7 },
-      { label: "週2回", val: 2 / 7 }, { label: "週1回", val: 1 / 7 },
+      { label: "4日に1回", val: 1 / 4 }, { label: "週1回", val: 1 / 7 },
     ];
     // FTU値: 大塚製薬モイゼルト資料（1FTU=0.35g）に準拠
     // arm = 片腕（腕＆手）統合、leg = 片足（大腿〜足）統合
@@ -1464,20 +1464,34 @@
         <input type="date" value="${t.date}"
           min="${document.getElementById('todayDate')?.value || ''}"
           max="${document.getElementById('nextDate')?.value || ''}"
-          oninput="drugs[${i}].tapers[${ti}].date=this.value;calc()">
+          onchange="drugs[${i}].tapers[${ti}].date=this.value;renderDrugs();calc()">
         <div class="input-note" id="taper-days-${i}-${ti}"></div>
       </div>
       <div>
         <label>この日から塗布頻度</label>
-        <select onchange="drugs[${i}].tapers[${ti}].freqIdx=parseInt(this.value);renderDrugs();calc()">
+        <select onchange="drugs[${i}].tapers[${ti}].freqIdx=parseInt(this.value);drugs[${i}].tapers[${ti}].startOffset=0;renderDrugs();calc()">
           ${FREQS.map((f, fi) => `<option value="${fi}"${fi === t.freqIdx ? ' selected' : ''}>${f.label}</option>`).join('')}
         </select>
       </div>
     </div>
+    ${(() => {
+      const so = t.startOffset || 0;
+      const period = freqValToShowEvery(FREQS[t.freqIdx].val);
+      const firstApply = t.date
+        ? (() => { const dd = new Date(t.date); dd.setDate(dd.getDate() + so); return `${dd.getMonth()+1}/${dd.getDate()}`; })()
+        : '—';
+      return `<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:12px;">
+      <span style="color:var(--text2);">最初に塗る日:</span>
+      <span style="font-weight:600;">${firstApply}</span>
+      <button onclick="shiftTaperOffset(${i},${ti},-1)" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px;">◀ 前日</button>
+      <button onclick="shiftTaperOffset(${i},${ti},+1)" style="background:none;border:1px solid var(--border);border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px;">翌日 ▶</button>
+      <span style="color:var(--text3);font-size:11px;">(${so}日後 / 周期${period}日)</span>
+    </div>`;
+    })()}
   </div>`;
         });
         const addTaperBtn = `<div style="margin-top:10px;">
-  <button onclick="drugs[${i}].tapers.push({date:'',freqIdx:Math.max(0,${d.tapers.length > 0 ? d.tapers[d.tapers.length-1].freqIdx : d.freqIdx}-1)});renderDrugs();calc()"
+  <button onclick="drugs[${i}].tapers.push({date:'',freqIdx:Math.max(0,${d.tapers.length > 0 ? d.tapers[d.tapers.length-1].freqIdx : d.freqIdx}-1),startOffset:0});renderDrugs();calc()"
     style="background:none;border:1px dashed var(--amber);color:var(--amber-text);border-radius:var(--radius-sm);padding:6px 14px;cursor:pointer;font-size:12px;width:100%;">
     ＋ 途中で頻度を減らす
   </button>
@@ -1627,8 +1641,12 @@
     // 多段漸減の内訳を配列で返す（患者向け表示用）
     function calcTaperPhases(d, ageKey, tv, nv) {
       if (!d.tapers || d.tapers.length === 0 || !tv || !nv) return null;
+      // dates[0]=受診日, dates[1..n]=切り替え日, dates[n+1]=次回受診日
       const dates = [tv, ...d.tapers.map(t => t.date), nv];
+      // freqIdxs[0]=初期頻度, [1..n]=各テーパーの頻度
       const freqIdxs = [d.freqIdx, ...d.tapers.map(t => t.freqIdx)];
+      // startOffsets[0]=0（初期フェーズは受診日当日開始）, [1..n]=各テーパーのoffset
+      const startOffsets = [0, ...d.tapers.map(t => t.startOffset || 0)];
       const phases = [];
       for (let k = 0; k < freqIdxs.length; k++) {
         const start = dates[k], end = dates[k+1];
@@ -1638,12 +1656,21 @@
         phases.push({
           startDate: start, endDate: end, days,
           freqLabel: FREQS[freqIdxs[k]].label,
-          freqVal: FREQS[freqIdxs[k]].val
+          freqVal: FREQS[freqIdxs[k]].val,
+          startOffset: startOffsets[k]
         });
       }
       return phases.length > 0 ? phases : null;
     }
     function dateDiff(a, b) { if (!a || !b) return null; return Math.round((new Date(b) - new Date(a)) / 86400000); }
+
+    // テーパー開始日オフセットを1日単位でシフト（周期でラップ）
+    function shiftTaperOffset(drugIdx, taperIdx, delta) {
+      const t = drugs[drugIdx].tapers[taperIdx];
+      const period = freqValToShowEvery(FREQS[t.freqIdx].val);
+      t.startOffset = (((t.startOffset || 0) + delta) % period + period) % period;
+      renderDrugs(); calc();
+    }
 
     // 混合軟膏かどうか判定
     function isMixed(d) { return !!PRESETS[d.preset].mixed; }
@@ -2016,6 +2043,7 @@
       document.getElementById('panel-schedule').style.display = id === 'schedule' ? 'block' : 'none';
       document.getElementById('panel-patient').style.display = id === 'patient' ? 'block' : 'none';
       if (id === 'patient') renderPatientCard();
+      if (id === 'schedule') calc();
     }
     function copyText() {
       const ta = document.getElementById('text-output');
@@ -4687,12 +4715,12 @@
     }
 
     function freqValToShowEvery(v) {
-      if (v >= 2) return 1;   // 1日2回: 毎日
-      if (v >= 1) return 1;   // 1日1回: 毎日
-      if (v >= 0.5) return 2; // 2日に1回
+      if (v >= 2) return 1;          // 1日2回: 毎日
+      if (v >= 1) return 1;          // 1日1回: 毎日
+      if (v >= 0.5) return 2;        // 2日に1回
       if (v >= 3/7 - 0.01) return 2; // 週3回: 2日おき近似
-      if (v >= 2/7 - 0.01) return 4; // 週2回: 4日おき近似
-      return 7; // 週1回
+      if (v >= 1/4 - 0.01) return 4; // 4日に1回
+      return 7;                       // 週1回
     }
 
     function buildScheduleText(r, visitDate, nextVisitDate) {
@@ -4779,7 +4807,10 @@
           }
           fillRatio = freqVal >= 2 ? 1.0 : 0.5;
           const showEvery = freqValToShowEvery(freqVal);
-          const show = offset % showEvery === 0;
+          const phaseStartOffset = r.taperPhases
+            ? (r.taperPhases[phaseIdx] ? (r.taperPhases[phaseIdx].startOffset || 0) : 0)
+            : 0;
+          const show = offset >= phaseStartOffset && (offset - phaseStartOffset) % showEvery === 0;
           const cellH = 36;
           const fillH = Math.round((cellH - 4) * fillRatio);
           const borderClass = isPhBorder ? ' phase-border' : '';
@@ -5052,7 +5083,7 @@
           // 新形式: フェーズ配列（フェーズ0は初期頻度なのでスキップ）
           d.tapers = pd.taperPhases.slice(1).map(p => {
             const fi = FREQS.findIndex(f => f.label === p.freqLabel);
-            return { date: '', freqIdx: fi >= 0 ? fi : 1 };
+            return { date: '', freqIdx: fi >= 0 ? fi : 1, startOffset: p.startOffset || 0 };
           });
         } else if (pd.taper && pd.taperFreqLabel) {
           // 旧形式: 単一漸減
@@ -5608,7 +5639,7 @@
         <div style="margin-top:10px;line-height:2.1;">
           <b>再診日:</b> 「再診は<u>2週間後</u>」「再診は<u>14日後</u>」<br>
           <b>部位:</b> 顔・首 ／ 両腕・片腕 ／ 体幹前（お腹） ／ 体幹後（背中） ／ 両足・片足 ／ 全身<br>
-          <b>頻度:</b> 1日1回 ／ 1日2回 ／ 隔日 ／ 週2回 ／ 週1回<br>
+          <b>頻度:</b> 1日1回 ／ 1日2回 ／ 隔日 ／ 4日に1回 ／ 週1回<br>
           <b>例文:</b>「両腕にリンデロン軟膏を1日1回。両足にも1日1回。」<br>
           「顔にモイゼルト軟膏を1日1回。背中にロコイド軟膏を1日2回。」
         </div>
