@@ -446,6 +446,13 @@ clasp push
 | 2026-08-18 | feat: 患者向け共有ページ（gas/share_page.html）「薬と部位別の塗り方」に2点追加。①カード最上部に「色が違うお薬は同時に使ってOK、同じ色の中では1つを選んで使う」ルール説明ボックス（💧🔴🔵アイコン付き）を追加。②ステロイド・非ステロイド枠に薬剤がある場合、薬名下にグレー小文字で「同じ〇〇の仲間：△△など」ヒントを表示（`KNOWN_SIBLINGS`定数 + `siblingHintHtml()`関数で実装、フロントエンドのみ・データ構造変更なし）。「なし」の場合はヒント非表示 |
 | 2026-08-19 | fix: 共有ページのiOS向け「毎週リマインダーを設定」カードに、QRスキャン後アプリ内ブラウザでは.icsが開けないためSafariで開き直す案内を追加。iOS判定時のみカードのサブテキストを「Safariで開き直すと使えます（リーディングリストに保存 → Safariで開く）」に変更（`renderReminderLink()`内でUA判定） |
 | 2026-08-20 | feat: カルテビュー（`gas/patient_chart.html`）の処方内容表示に日付別スケジュール欄を追加。`buildDateScheduleHtml()`を新規追加し、薬ごとに「◯月◯日〜◯月◯日 1日2回（N日間）」形式で段階を表示。`buildGanttHtmlFromDrugsJson()`の`taperPhases`判定を旧`phase1/phase2`形式から配列形式（`Array.isArray`）に修正（多段漸減のガントバー表示が機能していなかった不具合も修正）。`buildScheduleInnerHtml()`（PNG/HTML書き出し用）も同様に配列形式対応＋日付テキスト追加 |
+| 2026-08-31 | fix: ダッシュボードのカード生成エラーを修正。`taperPhases`が配列形式（新）にもかかわらず旧オブジェクト形式（`.phase2.freqLabel`）で参照していたため`Cannot read properties of undefined`が発生。`Array.isArray()`で分岐して後方互換性を維持 |
+| 2026-08-31 | feat: 塗布頻度に`4日に1回`（val=1/4, showEvery=4）を追加し`週2回`（val=2/7, 非整数）を廃止。整数日ベースのGantt描画が正確になった |
+| 2026-08-31 | feat: テーパー開始日シフトボタン（◀ 前日 / 翌日 ▶）を追加。第1段階（`drugs[i].startOffset`）・各テーパーフェーズ（`tapers[k].startOffset`）の両方に対応。`shiftDrugOffset()`・`shiftTaperOffset()`で周期内でサイクル。初診など前回記録のない患者で「今の塗り方のリズムに合わせる」ために使用 |
+| 2026-08-31 | fix: `renderScheduleGantt()`で`phaseIdx`が`if(r.taperPhases)`ブロック内の`let`宣言のためブロック外から参照すると`ReferenceError`となりGantt描画が中断する不具合を修正（`let`宣言をループ先頭に移動）。同じバグが`gas/share_page.html`にも存在したため同時修正 |
+| 2026-08-31 | fix: テキスト出力の消費ペース計算で`taperPhases`が未定義変数（`r.taperPhases`が正しい）を参照しエラーになっていた不具合を修正 |
+| 2026-08-31 | fix: `gas/share_page.html`の共有ページGanttに`startOffset`を反映。`startOffset`未対応のためシフトボタンで調整した塗布開始日が共有ページに反映されない不具合を修正。`calcTaperPhases()`が保存する`taperPhases[k].startOffset`を参照するよう変更 |
+| 2026-08-31 | fix: `switchTab('schedule')`で`renderScheduleGantt()`の代わりに`calc()`を呼ぶよう変更し、スケジュールタブ表示時に`currentRxSnapshot`を必ず最新化するよう修正 |
 
 ---
 
@@ -499,6 +506,15 @@ feat: 疾患固定QRルートと初診患者フローを追加
 ### 「毎日のスケジュール」の画像保存/共有で一部の日付列しか写らない（2026-08-09発見）
 - **原因：** ガントチャートは `.gantt-outer { overflow-x: auto; }` で画面幅に収まるよう横スクロールさせているが、`html2canvas` はデフォルトでは要素の見た目上の表示範囲（コンテナのclientWidth）しか撮影せず、横スクロールで隠れている列は画像に含まれない。PCではウィンドウ幅が広く全列が一度に見えていたため発覚しなかったが、iPhoneでは画面に収まらない日付列のほとんどが切れて保存された（`gas/share_page.html`の患者向け共有ページ、`atopic_calculator.html`のスケジュールタブ双方で同じ実装ミス）
 - **対策：** `captureGanttPng()`（share_page.html）／`_captureSchedule()`（atopic_calculator.html）で、テーブルの実幅（`table.gantt`の`scrollWidth`）を計算して`html2canvas`の`width`/`windowWidth`オプションに渡し、`onclone`コールバックで複製DOM内の`.gantt-outer`の`overflow`を`visible`に（share_page.htmlはさらに`.container`の`max-width`制限も解除）してから撮影するよう修正。`overflow-x:auto`な要素をhtml2canvasで撮影する場合、常に「実際に表示されている範囲＝撮影範囲」になる点に注意する
+
+### Ganttで漸減（taperPhases）が反映されず以前の図が残る（2026-08-31発見）
+- **原因：** `renderScheduleGantt()`の日付ループ内で、`phaseIdx`を`if(r.taperPhases){...}`ブロック内で`let`宣言していたため、ブロック外（`startOffset`参照箇所）から参照すると`ReferenceError`が発生。エラーで描画処理が中断し、DOMが書き換わらないため古い図が表示され続けた。同じバグが`gas/share_page.html`にも存在。また`currentRxSnapshot`が古い（`switchTab`でスナップショットを更新していなかった）問題も複合していた
+- **対策：** `let phaseIdx = 0`をループ先頭の`if`の外に移動。`switchTab('schedule')`で`renderScheduleGantt()`の代わりに`calc()`を呼び常にスナップショットを最新化。`share_page.html`にも同様の修正を適用
+- **教訓：** ブロックスコープ`let`の変数を外側で参照するパターンはJSではsilentではなくReferenceErrorになる。Ganttが「古い表示のまま」の場合はまずDevToolsのコンソールエラーを確認する
+
+### 共有ページのGanttにstartOffsetが反映されない（2026-08-31発見）
+- **原因：** `atopic_calculator.html`の`saveVisit()`は`taperPhases`（`startOffset`含む）をdrugsJsonに保存するが、`gas/share_page.html`の`renderGantt()`が`startOffset`を参照せず常にoffset=0から描画していた
+- **対策：** `share_page.html`の`renderGantt()`に`phaseStartOffset`参照を追加（`atopic_calculator.html`の`renderScheduleGantt()`と同じロジック）。再保存（「共有リンクを発行」前に保存）が必要
 
 ### 「毎週リマインダーを設定」タップでGoogleドライブの「アクセス権が必要です」画面が出る（2026-08-09発見）
 - **原因：** GAS側（`?page=reminderIcs`）は`curl`での検証で認証なしに正常応答することを確認済みで、デプロイ設定やコードの問題ではなかった。iPhoneにGoogleカレンダー／Google Driveアプリが入っている環境では、`.ics`（`text/calendar`）へのリンクを同一ウィンドウ内で遷移させると、iOSのユニバーサルリンク機能によりSafariではなくGoogleカレンダーアプリの「URLからインポート」機能に横取りされ、そちらの処理がGoogle Drive経由のドキュメントとして扱おうとしてアクセス権エラーを出していたと推定される
