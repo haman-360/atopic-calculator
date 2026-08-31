@@ -1225,6 +1225,7 @@
         givenG: PRESETS[pi].tubeg * 4, remainG: 0, freqIdx: 0, parts,
         // 漸減設定
         tapers: [],         // 多段漸減ステップ配列: [{ date: "", freqIdx: 1 }, ...]
+        startOffset: 0,     // 最初の塗布日オフセット（0=受診日から、1=翌日から等）
         // 混合軟膏プラン選択
         mixedPlanIdx: 0,    // 選択中のプランインデックス
         // 直接入力モード用
@@ -1625,21 +1626,54 @@
     }
 
     // 多段漸減の内訳を配列で返す（患者向け表示用）
+    // 各フェーズに startOffset（フェーズ開始日から最初の塗布日までの日数）を付加する。
+    // フェーズ境界で塗布日が連続しないよう、前フェーズの最終塗布日から
+    // 新フェーズの間隔分だけ空けた日を次の塗布日として計算する。
     function calcTaperPhases(d, ageKey, tv, nv) {
       if (!d.tapers || d.tapers.length === 0 || !tv || !nv) return null;
       const dates = [tv, ...d.tapers.map(t => t.date), nv];
       const freqIdxs = [d.freqIdx, ...d.tapers.map(t => t.freqIdx)];
       const phases = [];
+      let lastApplyAbs = null; // visit開始からの絶対日インデックス
+      let cumulativeDays = 0;
+
       for (let k = 0; k < freqIdxs.length; k++) {
         const start = dates[k], end = dates[k+1];
         if (!start || !end) return null;
         const days = dateDiff(start, end);
         if (days <= 0) return null;
+
+        const freqVal = FREQS[freqIdxs[k]].val;
+        const S = freqValToShowEvery(freqVal);
+        // 1回あたりの日数（週2回=3.5→3日、2日に1回=2日 等）
+        const period = Math.max(1, Math.floor(1 / freqVal));
+
+        let startOffset = 0;
+        if (k === 0) {
+          // 初期フェーズ: d.startOffset（前回処方から計算済み）を使用
+          startOffset = d.startOffset || 0;
+        } else if (lastApplyAbs !== null) {
+          // 後続フェーズ: 前フェーズ最終塗布日 + 新間隔 = 次の塗布日
+          const desiredFirstApplyAbs = lastApplyAbs + period;
+          const raw = desiredFirstApplyAbs - cumulativeDays;
+          startOffset = ((raw % S) + S) % S; // [0, S) に正規化
+        }
+
+        // このフェーズの最終塗布日（絶対インデックス）を計算して次フェーズへ引き継ぐ
+        if (startOffset < days) {
+          const lastInPhase = startOffset + Math.floor((days - 1 - startOffset) / S) * S;
+          lastApplyAbs = cumulativeDays + lastInPhase;
+        }
+        // else: このフェーズで塗布なし → lastApplyAbs 更新しない
+
         phases.push({
           startDate: start, endDate: end, days,
           freqLabel: FREQS[freqIdxs[k]].label,
-          freqVal: FREQS[freqIdxs[k]].val
+          freqVal,
+          startOffset
         });
+
+        cumulativeDays += days;
       }
       return phases.length > 0 ? phases : null;
     }
@@ -1822,6 +1856,7 @@
           neededG, netG, prescribeG: rxCellG, prescribeB: rxCellB, rounded: rxCellRounded,
           perDayG, freq: FREQS[d.freqIdx].label, freqVal: FREQS[d.freqIdx].val,
           ftuG, hasFTU, gPerFTU: PRESETS[d.preset].gPerFTU,
+          startOffset: d.startOffset || 0,
           drugRef: d, taperPhases,
           isMixed: isMixed(d),
           mixedPlan: mixedPlanSel ? mixedPlanSel.plan : null,
@@ -4779,7 +4814,11 @@
           }
           fillRatio = freqVal >= 2 ? 1.0 : 0.5;
           const showEvery = freqValToShowEvery(freqVal);
-          const show = offset % showEvery === 0;
+          // フェーズごとの塗布開始オフセットを取得（0=フェーズ初日から）
+          const phaseStartOffset = r.taperPhases
+            ? (r.taperPhases[phaseIdx].startOffset || 0)
+            : (r.startOffset || 0);
+          const show = offset >= phaseStartOffset && (offset - phaseStartOffset) % showEvery === 0;
           const cellH = 36;
           const fillH = Math.round((cellH - 4) * fillRatio);
           const borderClass = isPhBorder ? ' phase-border' : '';
@@ -5058,6 +5097,29 @@
           // 旧形式: 単一漸減
           const tfi = FREQS.findIndex(f => f.label === pd.taperFreqLabel);
           d.tapers = [{ date: '', freqIdx: tfi >= 0 ? tfi : 1 }];
+        }
+
+        // 前回処方の最終塗布日から今回処方の startOffset を計算
+        // 「前回の塗り方を踏襲」で塗布パターンが自然に継続するようにする
+        const tvCurrent = document.getElementById('todayDate').value;
+        if (tvCurrent && pd.taperPhases && pd.taperPhases.length > 0) {
+          const lastPhase = pd.taperPhases[pd.taperPhases.length - 1];
+          const S_prev = freqValToShowEvery(lastPhase.freqVal);
+          const prevPhaseOffset = lastPhase.startOffset || 0;
+          // 前回最終フェーズの最後の塗布日（フェーズ内オフセット）
+          const lastApplyInPhase = prevPhaseOffset < lastPhase.days
+            ? prevPhaseOffset + Math.floor((lastPhase.days - 1 - prevPhaseOffset) / S_prev) * S_prev
+            : 0;
+          // 前回最終塗布日から今回受診日までの日数
+          const daysSincePrev = dateDiff(lastPhase.startDate, tvCurrent) - lastApplyInPhase;
+          if (daysSincePrev >= 0) {
+            const freqVal = FREQS[d.freqIdx].val;
+            const S = freqValToShowEvery(freqVal);
+            const period = Math.max(1, Math.floor(1 / freqVal));
+            // 今回処方開始日（tvCurrent）からの最初の塗布日オフセット
+            const desired = period - daysSincePrev;
+            d.startOffset = ((desired % S) + S) % S;
+          }
         }
 
         drugs.push(d);
