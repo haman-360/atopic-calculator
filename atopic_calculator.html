@@ -1465,7 +1465,7 @@
         <input type="date" value="${t.date}"
           min="${document.getElementById('todayDate')?.value || ''}"
           max="${document.getElementById('nextDate')?.value || ''}"
-          oninput="drugs[${i}].tapers[${ti}].date=this.value;calc()">
+          onchange="drugs[${i}].tapers[${ti}].date=this.value;calc()">
         <div class="input-note" id="taper-days-${i}-${ti}"></div>
       </div>
       <div>
@@ -2051,6 +2051,7 @@
       document.getElementById('panel-schedule').style.display = id === 'schedule' ? 'block' : 'none';
       document.getElementById('panel-patient').style.display = id === 'patient' ? 'block' : 'none';
       if (id === 'patient') renderPatientCard();
+      if (id === 'schedule') renderScheduleGantt();
     }
     function copyText() {
       const ta = document.getElementById('text-output');
