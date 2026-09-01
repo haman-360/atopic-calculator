@@ -146,6 +146,68 @@
       margin-top: 5px;
       line-height: 1.5;
     }
+    /* ===== 薬の説明ページ ===== */
+    .druginfo-section-title {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid var(--border);
+      line-height: 1.5;
+    }
+    .druginfo-cat-header {
+      font-size: 14px;
+      font-weight: 700;
+      margin: 18px 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .druginfo-cat-header.steroid { color: var(--red-text); }
+    .druginfo-cat-header.nonsteroid { color: var(--blue-text); }
+    .druginfo-cat-header.moisturizer { color: var(--green-text); }
+    .druginfo-p {
+      font-size: 14px;
+      line-height: 1.85;
+      color: var(--text);
+      margin: 0 0 10px;
+    }
+    .druginfo-p:last-child { margin-bottom: 0; }
+    .druginfo-sep {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 16px 0;
+    }
+    .druginfo-notice {
+      font-size: 13px;
+      color: var(--text2);
+      background: var(--surface2);
+      border-radius: var(--radius-sm);
+      padding: 12px 14px;
+      line-height: 1.75;
+      margin-top: 4px;
+    }
+    .druginfo-jump {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+    .druginfo-jump-btn {
+      flex: 1;
+      min-width: 80px;
+      padding: 9px 6px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      font-size: 12px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      color: var(--text);
+      text-align: center;
+      -webkit-tap-highlight-color: transparent;
+    }
   </style>
 </head>
 
@@ -211,6 +273,134 @@
         </p>
       </div>
       <div id="bydrug-groups"></div>
+
+      <div class="card" style="padding:0;overflow:hidden;margin-top:8px;">
+        <div class="menu-link" onclick="showView('druginfo')">
+          <div class="icon">📖</div>
+          <div>
+            <div class="title">薬について詳しく知りたい方へ</div>
+            <div class="sub">3種類の役割・使い方をわかりやすく解説</div>
+          </div>
+          <div class="arrow">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 薬の説明 -->
+    <div id="view-druginfo" style="display:none;">
+      <button class="back-btn" onclick="showView('bydrug')">‹ 薬と部位別に戻る</button>
+
+      <!-- ジャンプボタン -->
+      <div class="card" style="padding:12px 14px;">
+        <div style="font-size:12px;color:var(--text2);margin-bottom:10px;">読みたいところへ移動：</div>
+        <div class="druginfo-jump">
+          <button class="druginfo-jump-btn" onclick="document.getElementById('di-overview').scrollIntoView({behavior:'smooth'})">💊 3種類のまとめ</button>
+          <button class="druginfo-jump-btn" onclick="document.getElementById('di-moist').scrollIntoView({behavior:'smooth'})">💧 保湿剤</button>
+          <button class="druginfo-jump-btn" onclick="document.getElementById('di-steroid').scrollIntoView({behavior:'smooth'})">🔴 ステロイド</button>
+          <button class="druginfo-jump-btn" onclick="document.getElementById('di-nonst').scrollIntoView({behavior:'smooth'})">🔵 非ステロイド</button>
+        </div>
+      </div>
+
+      <!-- Section 1: 3種類の概要 -->
+      <div class="card" id="di-overview">
+        <div class="druginfo-section-title">塗り薬は、大きく3種類あります</div>
+        <p class="druginfo-p">アトピー性皮膚炎の塗り薬には、それぞれ違う役割があります。</p>
+
+        <div class="druginfo-cat-header moisturizer">💧 保湿剤</div>
+        <p class="druginfo-p"><strong>皮膚を乾燥から守る薬です。</strong></p>
+        <p class="druginfo-p">皮膚から水分が逃げるのを防ぎ、皮膚のバリアを助けます。</p>
+        <p class="druginfo-p">アトピー性皮膚炎を「火事」にたとえるなら、保湿剤は、<strong>家の壁を整えて火事が起こりにくくするもの</strong>です。</p>
+
+        <hr class="druginfo-sep">
+
+        <div class="druginfo-cat-header steroid">🔴 ステロイド</div>
+        <p class="druginfo-p"><strong>赤み・かゆみ・ザラザラなど、今起きている炎症をしっかりおさえる薬です。</strong></p>
+        <p class="druginfo-p">アトピー性皮膚炎を「火事」にたとえるなら、ステロイドは<strong>火を消すための消火器</strong>です。</p>
+        <p class="druginfo-p">炎症が強いときはしっかり使い、良くなってきたら塗る回数を減らしていきます。</p>
+
+        <hr class="druginfo-sep">
+
+        <div class="druginfo-cat-header nonsteroid">🔵 非ステロイド</div>
+        <p class="druginfo-p"><strong>ステロイドではない方法で、皮膚の炎症をおさえる薬です。</strong></p>
+        <p class="druginfo-p">今ある炎症を治療するためにも使いますが、良くなった皮膚がまた悪くならないように、しばらく続けて使うこともあります。</p>
+        <p class="druginfo-p">火事にたとえるなら、<strong>残っている火種をおさえて、また燃え上がりにくくする薬</strong>です。</p>
+
+        <hr class="druginfo-sep">
+
+        <p class="druginfo-p" style="font-weight:700;">大切なのは「どれが一番強いか」ではありません</p>
+        <p class="druginfo-p">3種類の薬は、目的が違います。その日の皮膚の状態や、顔・首・体などの場所によって使い分けます。</p>
+        <div class="druginfo-notice">この画面に表示されている「塗る場所」「薬」「回数」に合わせて使用してください。</div>
+      </div>
+
+      <!-- Section 2: 保湿剤 -->
+      <div class="card" id="di-moist">
+        <div class="druginfo-section-title">💧 保湿剤について</div>
+
+        <p class="druginfo-p" style="font-weight:700;">保湿剤は何のために塗るの？</p>
+        <p class="druginfo-p">保湿剤は、<strong>皮膚の乾燥を防ぎ、皮膚のバリアを助けるための薬</strong>です。</p>
+        <p class="druginfo-p">アトピー性皮膚炎の皮膚は、見た目にはきれいでも水分が逃げやすく、乾燥しやすいことがあります。保湿剤を続けることで、皮膚を良い状態に保ち、湿疹が再び悪くなるのを防ぐ助けになります。</p>
+
+        <hr class="druginfo-sep">
+
+        <p class="druginfo-p" style="font-weight:700;">ワセリンとヘパリン類似物質</p>
+        <p class="druginfo-p"><strong>ワセリン</strong>は、皮膚の表面に膜を作り、皮膚の水分が逃げるのを防ぎます。「皮膚にふたをする」イメージです。</p>
+        <p class="druginfo-p"><strong>ヘパリン類似物質</strong>は、皮膚が水分を保つのを助けます。ヒルドイド®などがこの仲間です。</p>
+        <p class="druginfo-p">どちらかが必ず優れているというわけではありません。皮膚の状態、季節、べたつきなどの好みに合わせて選びます。</p>
+
+        <hr class="druginfo-sep">
+
+        <p class="druginfo-p" style="font-weight:700;">良くなってからは？</p>
+        <p class="druginfo-p">皮膚が落ち着いてからも、乾燥しやすい場合は保湿を続けることをおすすめします。</p>
+        <p class="druginfo-p">皮膚が安定していれば、<strong>低刺激で使いやすい市販の保湿剤</strong>を使えることもあります。大切なのは、「高価なもの」「強いもの」ではなく、<strong>皮膚に合っていて無理なく続けられるもの</strong>を選ぶことです。</p>
+
+        <hr class="druginfo-sep">
+
+        <div class="druginfo-notice">保湿剤は皮膚を守る薬ですが、赤みやかゆみなどの炎症そのものを十分におさえる薬ではありません。赤い、かゆい、ザラザラしているなどの症状がある場合には、ステロイドなど炎症をおさえる薬も必要になります。</div>
+      </div>
+
+      <!-- Section 3: ステロイド -->
+      <div class="card" id="di-steroid">
+        <div class="druginfo-section-title">🔴 ステロイドについて</div>
+
+        <p class="druginfo-p" style="font-weight:700;">ステロイドは何のために塗るの？</p>
+        <p class="druginfo-p">ステロイドは、<strong>赤み・かゆみ・ザラザラなど、アトピー性皮膚炎の炎症をしっかりおさえる薬</strong>です。アトピー性皮膚炎を火事にたとえるなら、ステロイドは<strong>「消火器」</strong>です。火が燃えているときには、まずしっかり消すことが大切です。</p>
+
+        <hr class="druginfo-sep">
+
+        <p class="druginfo-p" style="font-weight:700;">ステロイドには強さがあります</p>
+        <p class="druginfo-p">ロコイド®など比較的おだやかなものから、より強いものまであり、<strong>顔なのか、体なのか、どのくらい炎症が強いのか</strong>によって使い分けます。</p>
+        <p class="druginfo-p">強い薬が悪い薬というわけではありません。必要な場所に、必要な強さの薬を、必要な期間使うことが大切です。</p>
+
+        <hr class="druginfo-sep">
+
+        <p class="druginfo-p" style="font-weight:700;">良くなったらどうするの？</p>
+        <p class="druginfo-p">炎症が強い間は、指示された回数をしっかり塗ります。良くなってきたら、<strong>1日2回 → 1日1回 → さらに減らす</strong>など、皮膚の状態をみながら減らしていきます。</p>
+        <p class="druginfo-p">ただし、再発しやすい場所では、良くなった後もしばらく週に数回塗ることがあります。</p>
+
+        <hr class="druginfo-sep">
+
+        <div class="druginfo-notice">炎症があるのに少量だけを長期間塗り続けるより、必要な時期に適切な量を使って、早く炎症をおさえることが大切です。塗る量や回数は、この画面に表示されている指示を目安にしてください。</div>
+      </div>
+
+      <!-- Section 4: 非ステロイド -->
+      <div class="card" id="di-nonst">
+        <div class="druginfo-section-title">🔵 非ステロイドについて</div>
+
+        <p class="druginfo-p" style="font-weight:700;">非ステロイドとは？</p>
+        <p class="druginfo-p">ここでいう「非ステロイド」は、<strong>ステロイドではない方法で、皮膚の炎症をおさえる塗り薬</strong>のことです。プロトピック®、コレクチム®、モイゼルト®などがあります。薬によって働き方は違いますが、どれもアトピー性皮膚炎の治療に使われます。</p>
+
+        <hr class="druginfo-sep">
+
+        <p class="druginfo-p" style="font-weight:700;">どんなときに使うの？</p>
+        <p class="druginfo-p">ステロイドと同じように、今ある皮膚炎を治療するために使うことがあります。また、<strong>いったん良くなった皮膚が、また悪くならないように良い状態を保つ</strong>ために使うこともあります。特に、顔など繰り返し湿疹が出やすい場所で使うことがあります。</p>
+        <p class="druginfo-p">アトピー性皮膚炎を火事にたとえるなら、<strong>「残っている火種をおさえて、また大きな火事になりにくくする薬」</strong>というイメージです。</p>
+
+        <hr class="druginfo-sep">
+
+        <div class="druginfo-notice">非ステロイドの薬は、種類や治療の目的によって塗り方が違います。「良くなったから今日から半分にする」など、自分で毎日の回数を調節するのではなく、<strong>画面に表示された回数で使ってください。</strong></div>
+      </div>
+
+      <button class="back-btn" style="margin-top:4px;" onclick="showView('bydrug')">‹ 薬と部位別に戻る</button>
     </div>
 
     <!-- 毎日のスケジュール -->
@@ -272,7 +462,7 @@
     }
 
     function showView(name) {
-      ['menu', 'bydrug', 'schedule'].forEach(v => {
+      ['menu', 'bydrug', 'druginfo', 'schedule'].forEach(v => {
         document.getElementById('view-' + v).style.display = (v === name) ? 'block' : 'none';
       });
       window.scrollTo(0, 0);
