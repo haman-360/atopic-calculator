@@ -5080,11 +5080,12 @@
         const d = newDrug(pi);
         if (PRESETS[pi].custom) d.customName = pd.name;
 
-        // 部位設定: "片腕（腕＆手）（両側）" → label="片腕（腕＆手）", sides=2
+        // 部位設定: "片腕（腕＆手）(両側)" → label="片腕（腕＆手）", sides=2
+        // ※ partNames 保存時は半角 () を使うため半角でマッチ
         (pd.partNames || []).forEach(pn => {
-          const sidesMatch = pn.match(/（(両側|片側)）$/);
+          const sidesMatch = pn.match(/\((両側|片側)\)$/);
           const sides = sidesMatch ? (sidesMatch[1] === '片側' ? 1 : 2) : 2;
-          const base = pn.replace(/（(両側|片側)）$/, '');
+          const base = pn.replace(/\((両側|片側)\)$/, '');
           const part = getAllParts().find(p => p.label === base);
           if (part && d.parts[part.key]) {
             d.parts[part.key].checked = true;
