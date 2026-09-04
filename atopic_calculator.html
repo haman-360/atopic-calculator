@@ -5249,7 +5249,9 @@
 
     function _scheduleFilename() {
       const today = document.getElementById('todayDate')?.value || '';
-      return `塗布スケジュール_${today}.png`;
+      const pid = document.getElementById('patientId')?.value.trim() || '';
+      const prefix = pid ? `${pid}_` : '';
+      return `塗布スケジュール_${prefix}${today}.png`;
     }
 
     async function shareScheduleOnly() {

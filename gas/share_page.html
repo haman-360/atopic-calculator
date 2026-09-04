@@ -735,7 +735,8 @@
     }
 
     function ganttFilename() {
-      return `塗布スケジュール_${visitDate || 'share'}.png`;
+      const prefix = patientNo ? `${patientNo}_` : '';
+      return `塗布スケジュール_${prefix}${visitDate || 'share'}.png`;
     }
 
     function showGanttNotice(msg, ms) {

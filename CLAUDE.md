@@ -453,6 +453,7 @@ clasp push
 | 2026-08-31 | fix: テキスト出力の消費ペース計算で`taperPhases`が未定義変数（`r.taperPhases`が正しい）を参照しエラーになっていた不具合を修正 |
 | 2026-08-31 | fix: `gas/share_page.html`の共有ページGanttに`startOffset`を反映。`startOffset`未対応のためシフトボタンで調整した塗布開始日が共有ページに反映されない不具合を修正。`calcTaperPhases()`が保存する`taperPhases[k].startOffset`を参照するよう変更 |
 | 2026-08-31 | fix: `switchTab('schedule')`で`renderScheduleGantt()`の代わりに`calc()`を呼ぶよう変更し、スケジュールタブ表示時に`currentRxSnapshot`を必ず最新化するよう修正 |
+| 2026-09-04 | fix: 塗布スケジュール画像のファイル名に患者IDを追加。`atopic_calculator.html`の`_scheduleFilename()`・`gas/share_page.html`の`ganttFilename()`でファイル名を`塗布スケジュール_{患者ID}_{日付}.png`形式に変更。患者IDが未入力の場合は日付のみにフォールバック |
 | 2026-09-03 | fix: 「前回の塗り方を踏襲」で腕・足が選択されない不具合を修正。`partNames`保存形式が半角括弧`(両側)`なのに`applyPrevRx()`の正規表現が全角`（両側）`を期待していたため、bilateral部位（腕・足など）が常にスキップされていた。正規表現を半角括弧に統一して修正 |
 
 ---
