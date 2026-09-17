@@ -455,6 +455,7 @@ clasp push
 | 2026-08-31 | fix: `switchTab('schedule')`で`renderScheduleGantt()`の代わりに`calc()`を呼ぶよう変更し、スケジュールタブ表示時に`currentRxSnapshot`を必ず最新化するよう修正 |
 | 2026-09-04 | fix: 塗布スケジュール画像のファイル名に患者IDを追加。`atopic_calculator.html`の`_scheduleFilename()`・`gas/share_page.html`の`ganttFilename()`でファイル名を`塗布スケジュール_{患者ID}_{日付}.png`形式に変更。患者IDが未入力の場合は日付のみにフォールバック |
 | 2026-09-03 | fix: 「前回の塗り方を踏襲」で腕・足が選択されない不具合を修正。`partNames`保存形式が半角括弧`(両側)`なのに`applyPrevRx()`の正規表現が全角`（両側）`を期待していたため、bilateral部位（腕・足など）が常にスキップされていた。正規表現を半角括弧に統一して修正 |
+| 2026-09-17 | fix: カルテビュー（`gas/patient_chart.html`）の投与スケジュールPNGでテーパー切替日ラベルと「○日間」テキストが重なる不具合を修正。`buildScheduleInnerHtml()`のタペリングあり時のGanttヘッダー行から中央の「○日間」spanを削除。切替日ラベルが`position:absolute`で同じ行に重ねられていたのが原因。各段階の日数は下の`phaseTextHtml`に表示済みのため情報損失なし |
 
 ---
 
