@@ -1679,6 +1679,15 @@
       return phases.length > 0 ? phases : null;
     }
     function dateDiff(a, b) { if (!a || !b) return null; return Math.round((new Date(b) - new Date(a)) / 86400000); }
+    function addDays(dateStr, n) {
+      const [y, m, d] = dateStr.split('-').map(Number);
+      const dt = new Date(y, m - 1, d + n);
+      return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+    }
+    // 中間フェーズは endDate-1日（最終日inclusive）、最終フェーズは endDate（次回受診日）をそのまま返す
+    function phaseDisplayEnd(phases, idx) {
+      return idx < phases.length - 1 ? addDays(phases[idx].endDate, -1) : phases[idx].endDate;
+    }
 
     // テーパー開始日オフセットを1日単位でシフト（周期でラップ）
     function shiftTaperOffset(drugIdx, taperIdx, delta) {
@@ -1797,7 +1806,7 @@
         const taperHtml = taperPhases
           ? `<div style="margin-top:5px;font-size:11px;background:var(--amber-bg);border-radius:4px;padding:5px 8px;line-height:1.9;">
               <span style="font-weight:600;color:var(--amber-text);">多段漸減：</span><br>
-              ${taperPhases.map((p, pi) => `第${pi+1}段階 ${p.days}日（${p.startDate}〜${p.endDate}）：${p.freqLabel}`).join('<br>')}
+              ${taperPhases.map((p, pi) => `第${pi+1}段階 ${p.days}日（${p.startDate}〜${phaseDisplayEnd(taperPhases, pi)}）：${p.freqLabel}`).join('<br>')}
              </div>` : '';
         const ftuCell = hasFTU
           ? `<div>${ptags}</div>` +
@@ -1930,7 +1939,7 @@
           if (r.taperPhases) {
             txt += `【多段漸減】\n`;
             r.taperPhases.forEach((p, pi) => {
-              txt += `  第${pi+1}段階（${p.startDate}〜${p.endDate}、${p.days}日間）：${p.freqLabel}\n`;
+              txt += `  第${pi+1}段階（${p.startDate}〜${phaseDisplayEnd(r.taperPhases, pi)}、${p.days}日間）：${p.freqLabel}\n`;
             });
             txt += `次回${nextDays}日後再診のため、合計 ${r.ftuG.toFixed(1)}g 必要。\n`;
           } else {
@@ -2245,7 +2254,7 @@
         txt += `${i + 1}. ${name}\n`;
         if (taperPhases) {
           taperPhases.forEach((p, pi) => {
-            txt += `   第${pi+1}段階（${p.startDate}〜${p.endDate}、${p.days}日間）：${p.freqLabel}\n`;
+            txt += `   第${pi+1}段階（${p.startDate}〜${phaseDisplayEnd(taperPhases, pi)}、${p.days}日間）：${p.freqLabel}\n`;
           });
         } else {
           txt += `   ${freq}\n`;
@@ -4754,8 +4763,8 @@
         return `${dt.getMonth()+1}/${dt.getDate()}`;
       };
       if (r.taperPhases) {
-        r.taperPhases.forEach(p => {
-          txt += `、${fmtDate(p.startDate)}〜${fmtDate(p.endDate)}（${p.days}日間）${p.freqLabel}`;
+        r.taperPhases.forEach((p, pi) => {
+          txt += `、${fmtDate(p.startDate)}〜${fmtDate(phaseDisplayEnd(r.taperPhases, pi))}（${p.days}日間）${p.freqLabel}`;
         });
       } else {
         const nd = Math.round((new Date(nextVisitDate) - new Date(visitDate)) / 86400000);

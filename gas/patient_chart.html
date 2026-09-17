@@ -1269,6 +1269,17 @@ function buildVisitCard(visit, reports, assessment) {
     '</div>';
 }
 
+// 日付文字列(YYYY-MM-DD)にn日加算して返す（ローカル時刻ベース・タイムゾーン問題なし）
+function addDays(dateStr, n) {
+  var parts = String(dateStr).split('-').map(Number);
+  var dt = new Date(parts[0], parts[1] - 1, parts[2] + n);
+  return dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0') + '-' + String(dt.getDate()).padStart(2,'0');
+}
+// 中間フェーズは endDate-1日（最終日inclusive）、最終フェーズは endDate そのまま
+function phaseDisplayEnd(phases, idx) {
+  return idx < phases.length - 1 ? addDays(phases[idx].endDate, -1) : phases[idx].endDate;
+}
+
 // ===== ミニGantt生成 =====
 function buildGanttHtmlFromDrugsJson(drugs, fallbackEndDate) {
   var hasStart = drugs.some(function(d) { return d.startDate; });
@@ -1351,8 +1362,10 @@ function buildDateScheduleHtml(drugs, visitDate, nextVisitDate) {
 
     var phases = [];
     if (d.taperPhases && Array.isArray(d.taperPhases) && d.taperPhases.length > 0) {
-      d.taperPhases.forEach(function(p) {
-        phases.push({ start: p.startDate, end: p.endDate, days: p.days, label: p.freqLabel });
+      var tPhases = d.taperPhases;
+      tPhases.forEach(function(p, pi) {
+        var displayEnd = phaseDisplayEnd(tPhases, pi);
+        phases.push({ start: p.startDate, end: displayEnd, days: p.days, label: p.freqLabel });
       });
     } else {
       var days = (sd && ed) ? Math.round((new Date(ed) - new Date(sd)) / 86400000) : null;
@@ -1604,8 +1617,9 @@ function buildScheduleInnerHtml(visit) {
     if (d.taperPhases && Array.isArray(d.taperPhases) && d.taperPhases.length > 0) {
       var phaseLines = d.taperPhases.map(function(p, pi) {
         var prefix = d.taperPhases.length > 1 ? '第' + (pi + 1) + '段階 ' : '';
+        var dispEnd = phaseDisplayEnd(d.taperPhases, pi);
         return '<div style="font-size:11px;color:#6b6760;padding:1px 0;">' +
-          prefix + esc2(fmtDate(p.startDate)) + '〜' + esc2(fmtDate(p.endDate)) + '（' + p.days + '日間）' +
+          prefix + esc2(fmtDate(p.startDate)) + '〜' + esc2(fmtDate(dispEnd)) + '（' + p.days + '日間）' +
           '<strong style="color:#0f6e56;">' + esc2(p.freqLabel) + '</strong>' +
           '</div>';
       }).join('');
